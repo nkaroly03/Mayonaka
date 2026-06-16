@@ -1,0 +1,485 @@
+let TETRIS_WIDTH:     int = 10;
+let TETRIS_HEIGHT:    int = 20;
+let TETRIS_MOVE_TICK: int = 20;
+
+let TETROMINO_SHAPE_IDX_SQR:  int = 0;
+let TETROMINO_SHAPE_IDX_Z0:   int = 1;
+let TETROMINO_SHAPE_IDX_Z1:   int = 2;
+let TETROMINO_SHAPE_IDX_L0:   int = 3;
+let TETROMINO_SHAPE_IDX_L1:   int = 4;
+let TETROMINO_SHAPE_IDX_T:    int = 5;
+let TETROMINO_SHAPE_IDX_I:    int = 6;
+let TETROMINO_SHAPE_IDX_NONE: int = 7;
+
+let TETROMINO_ROTATION_IDX_0:   int = 0;
+let TETROMINO_ROTATION_IDX_90:  int = 1;
+let TETROMINO_ROTATION_IDX_180: int = 2;
+let TETROMINO_ROTATION_IDX_270: int = 3;
+
+let TETROMINO_SHAPE_INFO_TABLE_SIDE_LENGTHS: []int = [8]{};
+TETROMINO_SHAPE_INFO_TABLE_SIDE_LENGTHS[TETROMINO_SHAPE_IDX_SQR ] = 2;
+TETROMINO_SHAPE_INFO_TABLE_SIDE_LENGTHS[TETROMINO_SHAPE_IDX_Z0  ] = 3;
+TETROMINO_SHAPE_INFO_TABLE_SIDE_LENGTHS[TETROMINO_SHAPE_IDX_Z1  ] = 3;
+TETROMINO_SHAPE_INFO_TABLE_SIDE_LENGTHS[TETROMINO_SHAPE_IDX_L0  ] = 3;
+TETROMINO_SHAPE_INFO_TABLE_SIDE_LENGTHS[TETROMINO_SHAPE_IDX_L1  ] = 3;
+TETROMINO_SHAPE_INFO_TABLE_SIDE_LENGTHS[TETROMINO_SHAPE_IDX_T   ] = 3;
+TETROMINO_SHAPE_INFO_TABLE_SIDE_LENGTHS[TETROMINO_SHAPE_IDX_I   ] = 4;
+TETROMINO_SHAPE_INFO_TABLE_SIDE_LENGTHS[TETROMINO_SHAPE_IDX_NONE] = 0;
+
+let TETROMINO_SHAPE_INFO_TABLES: []str = [8]{};
+TETROMINO_SHAPE_INFO_TABLES[TETROMINO_SHAPE_IDX_SQR] =
+    "XX"
+    "XX"
+;
+TETROMINO_SHAPE_INFO_TABLES[TETROMINO_SHAPE_IDX_Z0] =
+    ".XX"
+    "XX."
+    "..."
+;
+TETROMINO_SHAPE_INFO_TABLES[TETROMINO_SHAPE_IDX_Z1] =
+    "XX."
+    ".XX"
+    "..."
+;
+TETROMINO_SHAPE_INFO_TABLES[TETROMINO_SHAPE_IDX_L0] =
+    "..X"
+    "XXX"
+    "..."
+;
+TETROMINO_SHAPE_INFO_TABLES[TETROMINO_SHAPE_IDX_L1] =
+    "X.."
+    "XXX"
+    "..."
+;
+TETROMINO_SHAPE_INFO_TABLES[TETROMINO_SHAPE_IDX_T] =
+    ".X."
+    "XXX"
+    "..."
+;
+TETROMINO_SHAPE_INFO_TABLES[TETROMINO_SHAPE_IDX_I] =
+    "...."
+    "XXXX"
+    "...."
+    "...."
+;
+TETROMINO_SHAPE_INFO_TABLES[TETROMINO_SHAPE_IDX_NONE] = "";
+
+let TETROMINO_SHAPE_INFO_SYMBOL_STRS: []str = [8]{};
+TETROMINO_SHAPE_INFO_SYMBOL_STRS[TETROMINO_SHAPE_IDX_SQR ] = "\x1b[38;2;255;255;0m#";
+TETROMINO_SHAPE_INFO_SYMBOL_STRS[TETROMINO_SHAPE_IDX_Z0  ] = "\x1b[38;2;0;255;0m#";
+TETROMINO_SHAPE_INFO_SYMBOL_STRS[TETROMINO_SHAPE_IDX_Z1  ] = "\x1b[38;2;255;0;0m#";
+TETROMINO_SHAPE_INFO_SYMBOL_STRS[TETROMINO_SHAPE_IDX_L0  ] = "\x1b[38;2;255;127;0m#";
+TETROMINO_SHAPE_INFO_SYMBOL_STRS[TETROMINO_SHAPE_IDX_L1  ] = "\x1b[38;2;255;255;255m#";
+TETROMINO_SHAPE_INFO_SYMBOL_STRS[TETROMINO_SHAPE_IDX_T   ] = "\x1b[38;2;255;0;255m#";
+TETROMINO_SHAPE_INFO_SYMBOL_STRS[TETROMINO_SHAPE_IDX_I   ] = "\x1b[38;2;0;255;255m#";
+TETROMINO_SHAPE_INFO_SYMBOL_STRS[TETROMINO_SHAPE_IDX_NONE] = " ";
+
+// ------------------------------------------------------------------------------------------------
+
+let stop_game: bool = false;
+while (not stop_game){
+    let tetris_field: []int = [TETRIS_WIDTH * TETRIS_HEIGHT]{};
+    for (0..array_size(tetris_field)) |i|
+        tetris_field[i] = TETROMINO_SHAPE_IDX_NONE;
+
+    let current_tetromino_shape_idx:    int = rand() % TETROMINO_SHAPE_IDX_NONE;
+    let current_tetromino_rotation_idx: int = TETROMINO_ROTATION_IDX_0;
+    let current_tetromino_pos_x:        int = TETRIS_WIDTH / 2 - 1;
+    let current_tetromino_pos_y:        int = 0;
+
+    let next_tetromino_shape_idx:    int = rand() % TETROMINO_SHAPE_IDX_NONE;
+    let next_tetromino_rotation_idx: int = TETROMINO_ROTATION_IDX_0;
+    let next_tetromino_pos_x:        int = TETRIS_WIDTH / 2 - 1;
+    let next_tetromino_pos_y:        int = 0;
+
+    let next_tetromino_table: str = "";
+
+    {
+        let next_tetromino_shape_info_table_side_length: int = TETROMINO_SHAPE_INFO_TABLE_SIDE_LENGTHS[next_tetromino_shape_idx];
+        let next_tetromino_shape_info_table:             str = TETROMINO_SHAPE_INFO_TABLES[next_tetromino_shape_idx];
+        let next_tetromino_shape_info_symbol_str:        str = TETROMINO_SHAPE_INFO_SYMBOL_STRS[next_tetromino_shape_idx];
+
+        next_tetromino_table = "";
+        for (0..next_tetromino_shape_info_table_side_length) |y|{
+            for (0..next_tetromino_shape_info_table_side_length) |x|{
+                if (next_tetromino_shape_info_table[y * next_tetromino_shape_info_table_side_length + x] == 'X')
+                    next_tetromino_table = next_tetromino_table + next_tetromino_shape_info_symbol_str;
+                else
+                    next_tetromino_table = next_tetromino_table + ' ';
+            }
+            for (next_tetromino_shape_info_table_side_length..4) |_|
+                next_tetromino_table = next_tetromino_table + ' ';
+            next_tetromino_table = next_tetromino_table + '\n';
+        }
+        for (next_tetromino_shape_info_table_side_length..4) |_|
+            next_tetromino_table = next_tetromino_table + '\n';
+    }
+
+
+    print("\x1b[?25l\x1b[2J\x1b[H");
+
+    let tetris_tick: int = 0;
+    let tetris_is_running: bool = true;
+    while (tetris_is_running){
+        {
+            let keypress: char = poll_char();
+            if (keypress != '\0'){
+                let moved_tetromino_shape_idx:    int = current_tetromino_shape_idx;
+                let moved_tetromino_rotation_idx: int = current_tetromino_rotation_idx;
+                let moved_tetromino_pos_x:        int = current_tetromino_pos_x;
+                let moved_tetromino_pos_y:        int = current_tetromino_pos_y;
+
+                if (keypress == 'S' or keypress == 's')
+                    moved_tetromino_pos_y = moved_tetromino_pos_y + 1;
+                else if (keypress == 'A' or keypress == 'a')
+                    moved_tetromino_pos_x = moved_tetromino_pos_x - 1;
+                else if (keypress == 'D' or keypress == 'd')
+                    moved_tetromino_pos_x = moved_tetromino_pos_x + 1;
+                else if (keypress == ' '){
+                    let fits: bool = true;
+                    while (fits){
+                        moved_tetromino_pos_y = moved_tetromino_pos_y + 1;
+
+                        let moved_tetromino_shape_info_table_side_length: int = TETROMINO_SHAPE_INFO_TABLE_SIDE_LENGTHS[moved_tetromino_shape_idx];
+                        let moved_tetromino_shape_info_table:             str = TETROMINO_SHAPE_INFO_TABLES[moved_tetromino_shape_idx];
+                        let moved_tetromino_shape_info_symbol_str:        str = TETROMINO_SHAPE_INFO_SYMBOL_STRS[moved_tetromino_shape_idx];
+
+                        for (0..moved_tetromino_shape_info_table_side_length) |y|{
+                            for (0..moved_tetromino_shape_info_table_side_length) |x|{
+                                let rotated_idx: int = 0;
+                                if (moved_tetromino_rotation_idx == TETROMINO_ROTATION_IDX_0)
+                                    rotated_idx = y * moved_tetromino_shape_info_table_side_length + x;
+                                else if (moved_tetromino_rotation_idx == TETROMINO_ROTATION_IDX_90)
+                                    rotated_idx = (moved_tetromino_shape_info_table_side_length * (moved_tetromino_shape_info_table_side_length - 1)) + y -
+                                        x * moved_tetromino_shape_info_table_side_length;
+                                else if (moved_tetromino_rotation_idx == TETROMINO_ROTATION_IDX_180)
+                                    rotated_idx = (moved_tetromino_shape_info_table_side_length * moved_tetromino_shape_info_table_side_length - 1) - y *
+                                        moved_tetromino_shape_info_table_side_length - x;
+                                else if (moved_tetromino_rotation_idx == TETROMINO_ROTATION_IDX_270)
+                                    rotated_idx = (moved_tetromino_shape_info_table_side_length - 1) - y + x *
+                                        moved_tetromino_shape_info_table_side_length;
+
+                                if (moved_tetromino_shape_info_table[rotated_idx] == 'X'){
+                                    let pos_x: int = x + moved_tetromino_pos_x;
+                                    let pos_y: int = y + moved_tetromino_pos_y;
+                                    if (
+                                        pos_x < 0 or pos_x >= TETRIS_WIDTH or
+                                        pos_y < 0 or pos_y >= TETRIS_HEIGHT or
+                                        tetris_field[pos_y * TETRIS_WIDTH + pos_x] != TETROMINO_SHAPE_IDX_NONE
+                                    ){
+                                        fits = false;
+                                        x = moved_tetromino_shape_info_table_side_length;
+                                        y = moved_tetromino_shape_info_table_side_length;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    moved_tetromino_pos_y = moved_tetromino_pos_y - 1;
+                    tetris_tick = TETRIS_MOVE_TICK - 1;
+                }
+                else if (keypress == 'R'){
+                    if (moved_tetromino_rotation_idx != TETROMINO_ROTATION_IDX_0)
+                        moved_tetromino_rotation_idx = moved_tetromino_rotation_idx - 1;
+                    else
+                        moved_tetromino_rotation_idx = TETROMINO_ROTATION_IDX_270;
+                }
+                else if (keypress == 'r')
+                    moved_tetromino_rotation_idx = (moved_tetromino_rotation_idx + 1) % (TETROMINO_ROTATION_IDX_270 + 1);
+                else if (keypress == '\x1b')
+                    tetris_is_running = false;
+
+                let fits: bool = true;
+
+                let moved_tetromino_shape_info_table_side_length: int = TETROMINO_SHAPE_INFO_TABLE_SIDE_LENGTHS[moved_tetromino_shape_idx];
+                let moved_tetromino_shape_info_table:             str = TETROMINO_SHAPE_INFO_TABLES[moved_tetromino_shape_idx];
+                let moved_tetromino_shape_info_symbol_str:        str = TETROMINO_SHAPE_INFO_SYMBOL_STRS[moved_tetromino_shape_idx];
+
+                for (0..moved_tetromino_shape_info_table_side_length) |y|{
+                    for (0..moved_tetromino_shape_info_table_side_length) |x|{
+                        let rotated_idx: int = 0;
+                        if (moved_tetromino_rotation_idx == TETROMINO_ROTATION_IDX_0)
+                            rotated_idx = y * moved_tetromino_shape_info_table_side_length + x;
+                        else if (moved_tetromino_rotation_idx == TETROMINO_ROTATION_IDX_90)
+                            rotated_idx = (moved_tetromino_shape_info_table_side_length * (moved_tetromino_shape_info_table_side_length - 1)) + y -
+                                x * moved_tetromino_shape_info_table_side_length;
+                        else if (moved_tetromino_rotation_idx == TETROMINO_ROTATION_IDX_180)
+                            rotated_idx = (moved_tetromino_shape_info_table_side_length * moved_tetromino_shape_info_table_side_length - 1) - y *
+                                moved_tetromino_shape_info_table_side_length - x;
+                        else if (moved_tetromino_rotation_idx == TETROMINO_ROTATION_IDX_270)
+                            rotated_idx = (moved_tetromino_shape_info_table_side_length - 1) - y + x * moved_tetromino_shape_info_table_side_length;
+
+                        if (moved_tetromino_shape_info_table[rotated_idx] == 'X'){
+                            let pos_x: int = x + moved_tetromino_pos_x;
+                            let pos_y: int = y + moved_tetromino_pos_y;
+                            if (
+                                pos_x < 0 or pos_x >= TETRIS_WIDTH or
+                                pos_y < 0 or pos_y >= TETRIS_HEIGHT or
+                                tetris_field[pos_y * TETRIS_WIDTH + pos_x] != TETROMINO_SHAPE_IDX_NONE
+                            ){
+                                fits = false;
+                                x = moved_tetromino_shape_info_table_side_length;
+                                y = moved_tetromino_shape_info_table_side_length;
+                            }
+                        }
+                    }
+                }
+                if (fits){
+                    current_tetromino_shape_idx    = moved_tetromino_shape_idx;
+                    current_tetromino_rotation_idx = moved_tetromino_rotation_idx;
+                    current_tetromino_pos_x        = moved_tetromino_pos_x;
+                    current_tetromino_pos_y        = moved_tetromino_pos_y;
+                }
+            }
+        }
+
+        let reached_end: bool = false;
+        if ((tetris_tick + 1) % TETRIS_MOVE_TICK == 0){
+            let moved_tetromino_shape_idx:    int = current_tetromino_shape_idx;
+            let moved_tetromino_rotation_idx: int = current_tetromino_rotation_idx;
+            let moved_tetromino_pos_x:        int = current_tetromino_pos_x;
+            let moved_tetromino_pos_y:        int = current_tetromino_pos_y + 1;
+
+            let fits: bool = true;
+
+            let moved_tetromino_shape_info_table_side_length: int = TETROMINO_SHAPE_INFO_TABLE_SIDE_LENGTHS[moved_tetromino_shape_idx];
+            let moved_tetromino_shape_info_table:             str = TETROMINO_SHAPE_INFO_TABLES[moved_tetromino_shape_idx];
+            let moved_tetromino_shape_info_symbol_str:        str = TETROMINO_SHAPE_INFO_SYMBOL_STRS[moved_tetromino_shape_idx];
+
+            for (0..moved_tetromino_shape_info_table_side_length) |y|{
+                for (0..moved_tetromino_shape_info_table_side_length) |x|{
+                    let rotated_idx: int = 0;
+                    if (moved_tetromino_rotation_idx == TETROMINO_ROTATION_IDX_0)
+                        rotated_idx = y * moved_tetromino_shape_info_table_side_length + x;
+                    else if (moved_tetromino_rotation_idx == TETROMINO_ROTATION_IDX_90)
+                        rotated_idx = (moved_tetromino_shape_info_table_side_length * (moved_tetromino_shape_info_table_side_length - 1)) + y -
+                            x * moved_tetromino_shape_info_table_side_length;
+                    else if (moved_tetromino_rotation_idx == TETROMINO_ROTATION_IDX_180)
+                        rotated_idx = (moved_tetromino_shape_info_table_side_length * moved_tetromino_shape_info_table_side_length - 1) - y *
+                            moved_tetromino_shape_info_table_side_length - x;
+                    else if (moved_tetromino_rotation_idx == TETROMINO_ROTATION_IDX_270)
+                        rotated_idx = (moved_tetromino_shape_info_table_side_length - 1) - y + x * moved_tetromino_shape_info_table_side_length;
+
+                    if (moved_tetromino_shape_info_table[rotated_idx] == 'X'){
+                        let pos_x: int = x + moved_tetromino_pos_x;
+                        let pos_y: int = y + moved_tetromino_pos_y;
+                        if (
+                            pos_x < 0 or pos_x >= TETRIS_WIDTH or
+                            pos_y < 0 or pos_y >= TETRIS_HEIGHT or
+                            tetris_field[pos_y * TETRIS_WIDTH + pos_x] != TETROMINO_SHAPE_IDX_NONE
+                        ){
+                            fits = false;
+                            x = moved_tetromino_shape_info_table_side_length;
+                            y = moved_tetromino_shape_info_table_side_length;
+                        }
+                    }
+                }
+            }
+            if (fits){
+                current_tetromino_shape_idx    = moved_tetromino_shape_idx;
+                current_tetromino_rotation_idx = moved_tetromino_rotation_idx;
+                current_tetromino_pos_x        = moved_tetromino_pos_x;
+                current_tetromino_pos_y        = moved_tetromino_pos_y;
+            }
+            else
+                reached_end = true;
+        }
+
+        {
+            let current_tetromino_shape_info_table_side_length: int = TETROMINO_SHAPE_INFO_TABLE_SIDE_LENGTHS[current_tetromino_shape_idx];
+            let current_tetromino_shape_info_table:             str = TETROMINO_SHAPE_INFO_TABLES[current_tetromino_shape_idx];
+            let current_tetromino_shape_info_symbol_str:        str = TETROMINO_SHAPE_INFO_SYMBOL_STRS[current_tetromino_shape_idx];
+
+            for (0..current_tetromino_shape_info_table_side_length) |y|{
+                for (0..current_tetromino_shape_info_table_side_length) |x|{
+                    let rotated_idx: int = 0;
+                    if (current_tetromino_rotation_idx == TETROMINO_ROTATION_IDX_0)
+                        rotated_idx = y * current_tetromino_shape_info_table_side_length + x;
+                    else if (current_tetromino_rotation_idx == TETROMINO_ROTATION_IDX_90)
+                        rotated_idx = (current_tetromino_shape_info_table_side_length * (current_tetromino_shape_info_table_side_length - 1)) + y -
+                            x * current_tetromino_shape_info_table_side_length;
+                    else if (current_tetromino_rotation_idx == TETROMINO_ROTATION_IDX_180)
+                        rotated_idx = (current_tetromino_shape_info_table_side_length * current_tetromino_shape_info_table_side_length - 1) - y *
+                            current_tetromino_shape_info_table_side_length - x;
+                    else if (current_tetromino_rotation_idx == TETROMINO_ROTATION_IDX_270)
+                        rotated_idx = (current_tetromino_shape_info_table_side_length - 1) - y + x * current_tetromino_shape_info_table_side_length;
+
+                    if (current_tetromino_shape_info_table[rotated_idx] == 'X'){
+                        let pos_x: int = x + current_tetromino_pos_x;
+                        let pos_y: int = y + current_tetromino_pos_y;
+                        tetris_field[pos_y * TETRIS_WIDTH + pos_x] = current_tetromino_shape_idx;
+                    }
+                }
+            }
+        }
+
+        if (reached_end){
+            let row_is_full: bool = true;
+            while (row_is_full){
+                row_is_full = false;
+
+                let y_start: int = 0;
+                while (not row_is_full and y_start < TETRIS_HEIGHT){
+                    let found_none: bool = false;
+                    for (0..TETRIS_WIDTH) |x|{
+                        if (found_none)
+                            x = TETRIS_WIDTH;
+                        else
+                            found_none = (tetris_field[y_start * TETRIS_WIDTH + x] == TETROMINO_SHAPE_IDX_NONE);
+                    }
+                    row_is_full = not found_none;
+                    y_start = y_start + 1;
+                }
+
+                if (row_is_full){
+                    let y_end: int = (y_start = y_start - 1) + 1;
+                    let found_none: bool = false;
+                    while (not found_none and y_end < TETRIS_HEIGHT){
+                        for (0..TETRIS_WIDTH) |x|{
+                            if (found_none)
+                                x = TETRIS_WIDTH;
+                            else
+                                found_none = (tetris_field[y_end * TETRIS_WIDTH + x] == TETROMINO_SHAPE_IDX_NONE);
+                        }
+                        y_end = y_end + not found_none;
+                    }
+
+                    let diff: int = (y_end - y_start) * TETRIS_WIDTH;
+
+                    while (y_start > 0){
+                        y_start = y_start - 1;
+                        y_end = y_end - 1;
+                        for (0..TETRIS_WIDTH) |x|
+                            tetris_field[y_end * TETRIS_WIDTH + x] = tetris_field[(y_end - 1) * TETRIS_WIDTH + x];
+                    }
+                    for (0..diff) |x|
+                        tetris_field[x] = TETROMINO_SHAPE_IDX_NONE;
+                }
+            }
+        }
+
+        let table: str = "";
+        for (0..TETRIS_HEIGHT) |y|{
+            table = table + '#';
+            for (0..TETRIS_WIDTH) |x|
+                table = table + TETROMINO_SHAPE_INFO_SYMBOL_STRS[tetris_field[y * TETRIS_WIDTH + x]];
+            table = table + "\x1b[0m#\n";
+        }
+        for (0..TETRIS_WIDTH + 2) |_|
+            table = table + '#';
+
+        print("next:\n" + next_tetromino_table + "\x1b[0m\n" + table + "\x1b[H");
+
+        if (reached_end){
+            current_tetromino_shape_idx    = next_tetromino_shape_idx;
+            current_tetromino_rotation_idx = next_tetromino_rotation_idx;
+            current_tetromino_pos_x        = next_tetromino_pos_x;
+            current_tetromino_pos_y        = next_tetromino_pos_y;
+
+            next_tetromino_shape_idx    = rand() % TETROMINO_SHAPE_IDX_NONE;
+            next_tetromino_rotation_idx = TETROMINO_ROTATION_IDX_0;
+            next_tetromino_pos_x        = TETRIS_WIDTH / 2 - 1;
+            next_tetromino_pos_y        = 0;
+
+            let fits: bool = true;
+
+            let current_tetromino_shape_info_table_side_length: int = TETROMINO_SHAPE_INFO_TABLE_SIDE_LENGTHS[current_tetromino_shape_idx];
+            let current_tetromino_shape_info_table:             str = TETROMINO_SHAPE_INFO_TABLES[current_tetromino_shape_idx];
+            let current_tetromino_shape_info_symbol_str:        str = TETROMINO_SHAPE_INFO_SYMBOL_STRS[current_tetromino_shape_idx];
+
+            for (0..current_tetromino_shape_info_table_side_length) |y|{
+                for (0..current_tetromino_shape_info_table_side_length) |x|{
+                    let rotated_idx: int = 0;
+                    if (current_tetromino_rotation_idx == TETROMINO_ROTATION_IDX_0)
+                        rotated_idx = y * current_tetromino_shape_info_table_side_length + x;
+                    else if (current_tetromino_rotation_idx == TETROMINO_ROTATION_IDX_90)
+                        rotated_idx = (current_tetromino_shape_info_table_side_length * (current_tetromino_shape_info_table_side_length - 1)) + y -
+                            x * current_tetromino_shape_info_table_side_length;
+                    else if (current_tetromino_rotation_idx == TETROMINO_ROTATION_IDX_180)
+                        rotated_idx = (current_tetromino_shape_info_table_side_length * current_tetromino_shape_info_table_side_length - 1) - y *
+                            current_tetromino_shape_info_table_side_length - x;
+                    else if (current_tetromino_rotation_idx == TETROMINO_ROTATION_IDX_270)
+                        rotated_idx = (current_tetromino_shape_info_table_side_length - 1) - y + x * current_tetromino_shape_info_table_side_length;
+
+                    if (current_tetromino_shape_info_table[rotated_idx] == 'X'){
+                        let pos_x: int = x + current_tetromino_pos_x;
+                        let pos_y: int = y + current_tetromino_pos_y;
+                        if (
+                            pos_x < 0 or pos_x >= TETRIS_WIDTH or
+                            pos_y < 0 or pos_y >= TETRIS_HEIGHT or
+                            tetris_field[pos_y * TETRIS_WIDTH + pos_x] != TETROMINO_SHAPE_IDX_NONE
+                        ){
+                            fits = false;
+                            x = current_tetromino_shape_info_table_side_length;
+                            y = current_tetromino_shape_info_table_side_length;
+                        }
+                    }
+                }
+            }
+            tetris_is_running = fits;
+
+            {
+                let next_tetromino_shape_info_table_side_length: int = TETROMINO_SHAPE_INFO_TABLE_SIDE_LENGTHS[next_tetromino_shape_idx];
+                let next_tetromino_shape_info_table:             str = TETROMINO_SHAPE_INFO_TABLES[next_tetromino_shape_idx];
+                let next_tetromino_shape_info_symbol_str:        str = TETROMINO_SHAPE_INFO_SYMBOL_STRS[next_tetromino_shape_idx];
+
+                next_tetromino_table = "";
+                for (0..next_tetromino_shape_info_table_side_length) |y|{
+                    for (0..next_tetromino_shape_info_table_side_length) |x|{
+                        if (next_tetromino_shape_info_table[y * next_tetromino_shape_info_table_side_length + x] == 'X')
+                            next_tetromino_table = next_tetromino_table + next_tetromino_shape_info_symbol_str;
+                        else
+                            next_tetromino_table = next_tetromino_table + ' ';
+                    }
+                    for (next_tetromino_shape_info_table_side_length..4) |_|
+                        next_tetromino_table = next_tetromino_table + ' ';
+                    next_tetromino_table = next_tetromino_table + '\n';
+                }
+                for (next_tetromino_shape_info_table_side_length..4) |_|
+                    next_tetromino_table = next_tetromino_table + '\n';
+            }
+        }
+        else{
+            let current_tetromino_shape_info_table_side_length: int = TETROMINO_SHAPE_INFO_TABLE_SIDE_LENGTHS[current_tetromino_shape_idx];
+            let current_tetromino_shape_info_table:             str = TETROMINO_SHAPE_INFO_TABLES[current_tetromino_shape_idx];
+            let current_tetromino_shape_info_symbol_str:        str = TETROMINO_SHAPE_INFO_SYMBOL_STRS[current_tetromino_shape_idx];
+
+            for (0..current_tetromino_shape_info_table_side_length) |y|{
+                for (0..current_tetromino_shape_info_table_side_length) |x|{
+                    let rotated_idx: int = 0;
+                    if (current_tetromino_rotation_idx == TETROMINO_ROTATION_IDX_0)
+                        rotated_idx = y * current_tetromino_shape_info_table_side_length + x;
+                    else if (current_tetromino_rotation_idx == TETROMINO_ROTATION_IDX_90)
+                        rotated_idx = (current_tetromino_shape_info_table_side_length * (current_tetromino_shape_info_table_side_length - 1)) + y -
+                            x * current_tetromino_shape_info_table_side_length;
+                    else if (current_tetromino_rotation_idx == TETROMINO_ROTATION_IDX_180)
+                        rotated_idx = (current_tetromino_shape_info_table_side_length * current_tetromino_shape_info_table_side_length - 1) - y *
+                            current_tetromino_shape_info_table_side_length - x;
+                    else if (current_tetromino_rotation_idx == TETROMINO_ROTATION_IDX_270)
+                        rotated_idx = (current_tetromino_shape_info_table_side_length - 1) - y + x * current_tetromino_shape_info_table_side_length;
+
+                    if (current_tetromino_shape_info_table[rotated_idx] == 'X'){
+                        let pos_x: int = x + current_tetromino_pos_x;
+                        let pos_y: int = y + current_tetromino_pos_y;
+                        tetris_field[pos_y * TETRIS_WIDTH + pos_x] = TETROMINO_SHAPE_IDX_NONE;
+                    }
+                }
+            }
+        }
+
+        for (0..50000) |sleep|;
+
+        tetris_tick = tetris_tick + 1;
+    }
+
+    print("\x1b[?25h\x1b[0m");
+
+    print("\x1b[2JDo you wish to restart? (y/n):");
+    let valid_user_input: bool = false;
+    while (not valid_user_input){
+        let user_input: char = poll_char();
+        user_input = user_input - ((user_input >= 'a' and user_input <= 'z') * ('a' - 'A'));
+        valid_user_input = (user_input == 'Y' or user_input == 'N');
+        stop_game = (user_input == 'N');
+    }
+}
