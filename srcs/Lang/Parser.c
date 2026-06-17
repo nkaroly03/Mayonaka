@@ -237,7 +237,13 @@ end:
 }
 
 static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
-    switch (0){
+    const Token *tok = &self->tokens.m_data[self->token_idx++], *tok_temp;
+
+    Parser_state_parse_result arithm_expr_result;
+    AST_node *node, *node_temp;
+    Vec_base sub_nodes = vec_base_init(AST_node*);
+
+    switch (tok->m_type){
         case TOKEN_TYPE_ID: break;
         case TOKEN_TYPE_ARGV: break;
         case TOKEN_TYPE_FALSE: break;
@@ -282,7 +288,109 @@ static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
         case TOKEN_TYPE_EQUALS1: break;
         
         case TOKEN_TYPE_FN: break;
-        case TOKEN_TYPE_LET: break;
+        case TOKEN_TYPE_LET:
+            node = parser_state_ast_node_alloc(self, tok);
+            if (!node)
+                return OOM_ERROR;
+
+            if (self->token_idx >= self->tokens.m_size || (tok_temp = &self->tokens.m_data[self->token_idx++])->m_type != TOKEN_TYPE_ID)
+                return syntax_error("On line <" USIZE_PFMT ">: <let> must be followed by an identifier", tok->m_line_number);
+            tok = tok_temp;
+
+            node_temp = parser_state_ast_node_alloc(self, tok);
+            if (!node_temp || !vec_base_push_back(&sub_nodes, self->alloc, &node_temp))
+                return OOM_ERROR;
+
+            node_temp->m_parent = node;
+
+            if (self->token_idx >= self->tokens.m_size || (tok_temp = &self->tokens.m_data[self->token_idx++])->m_type != TOKEN_TYPE_COLON)
+                return syntax_error("On line <" USIZE_PFMT ">: <%s> must be followed by <:>", tok->m_line_number, str_base_data_const(&tok->m_id));
+            tok = tok_temp;
+
+            if (self->token_idx >= self->tokens.m_size)
+                return syntax_error("On line <" USIZE_PFMT ">: <:> must be followed by a type", tok->m_line_number);
+
+            tok = &self->tokens.m_data[self->token_idx++];
+            switch (tok->m_type){
+                case TOKEN_TYPE_LBRACKET:
+                    if (self->token_idx >= self->tokens.m_size || (tok_temp = &self->tokens.m_data[self->token_idx++])->m_type != TOKEN_TYPE_RBRACKET)
+                        return syntax_error("On line <" USIZE_PFMT ">: After <:> <[> must be followed by <]>", tok->m_line_number);
+
+                    node_temp = parser_state_ast_node_alloc(self, tok);
+                    if (!node_temp || !vec_base_push_back(&sub_nodes, self->alloc, &node_temp))
+                        return OOM_ERROR;
+
+                    node_temp->m_parent = node;
+
+                    if (self->token_idx >= self->tokens.m_size)
+                        return syntax_error("On line <" USIZE_PFMT ">: <[]> must be followed by a type", tok_temp->m_line_number);
+
+                    tok = &self->tokens.m_data[self->token_idx++];
+                    switch (tok->m_type){
+                        case TOKEN_TYPE_BOOL:
+                        case TOKEN_TYPE_CHAR:
+                        case TOKEN_TYPE_INT:
+                        case TOKEN_TYPE_FLOAT:
+                        case TOKEN_TYPE_STR:
+                            {
+                                Vec_base list_type_sub_nodes = vec_base_init(AST_node*);
+                                AST_node *list_type_node = parser_state_ast_node_alloc(self, tok);
+                                if (!list_type_node || !vec_base_push_back(&list_type_sub_nodes, self->alloc, &list_type_node))
+                                    return OOM_ERROR;
+
+                                if (self->token_idx >= self->tokens.m_size || (tok_temp = &self->tokens.m_data[self->token_idx++])->m_type != TOKEN_TYPE_EQUALS1)
+                                    return syntax_error("On line <" USIZE_PFMT ">: <[]%s> must be followed by <=>", tok->m_line_number, str_base_data_const(&tok->m_id));
+                                tok = tok_temp;
+
+                                if (
+                                    self->token_idx >= self->tokens.m_size || (tok_temp = &self->tokens.m_data[self->token_idx++])->m_type != TOKEN_TYPE_LBRACKET ||
+                                    self->token_idx >= self->tokens.m_size || (tok_temp = &self->tokens.m_data[self->token_idx++])->m_type != TOKEN_TYPE_RBRACKET
+                                )
+                                    return syntax_error("On line <" USIZE_PFMT ">: <=> must be followed by <[]>", tok->m_line_number, str_base_data_const(&tok->m_id));
+
+                                list_type_node->m_parent = node_temp;
+                                node_temp->m_sub_nodes = (AST_node_ptr_slice){.m_size = list_type_sub_nodes.m_size, .m_data = list_type_sub_nodes.m_data};
+                            }
+                            break;
+                        
+                        default:
+                            return syntax_error("On line <" USIZE_PFMT ">: <[]> must be followed by a type", tok->m_line_number);
+                    }
+                    break;
+                case TOKEN_TYPE_BOOL:
+                case TOKEN_TYPE_CHAR:
+                case TOKEN_TYPE_INT:
+                case TOKEN_TYPE_FLOAT:
+                case TOKEN_TYPE_STR:
+                    node_temp = parser_state_ast_node_alloc(self, tok);
+                    if (!node_temp || !vec_base_push_back(&sub_nodes, self->alloc, &node_temp))
+                        return OOM_ERROR;
+
+                    node_temp->m_parent = node;
+
+                    if (self->token_idx >= self->tokens.m_size || (tok_temp = &self->tokens.m_data[self->token_idx++])->m_type != TOKEN_TYPE_EQUALS1)
+                        return syntax_error("On line <" USIZE_PFMT ">: <%s> must be followed by <=>", tok->m_line_number, str_base_data_const(&tok->m_id));
+                    tok = tok_temp;
+
+                    arithm_expr_result = parser_state_parse_arithm_expr(self, 0);
+                    if (arithm_expr_result.error != PARSE_ERROR_NONE)
+                        return arithm_expr_result;
+
+                    if (!vec_base_push_back(&sub_nodes, self->alloc, &arithm_expr_result.ast_node_ptr))
+                        return OOM_ERROR;
+
+                    arithm_expr_result.ast_node_ptr->m_parent = node;
+                    break;
+
+                default:
+                    return syntax_error("On line <" USIZE_PFMT ">: <:> must be followed by a type", tok->m_line_number);
+            }
+
+            if (self->token_idx >= self->tokens.m_size || self->tokens.m_data[self->token_idx++].m_type != TOKEN_TYPE_SEMICOLON)
+                return syntax_error("On line <" USIZE_PFMT ">: <let> statement must be closed by <;>", tok->m_line_number);
+
+            node->m_sub_nodes = (AST_node_ptr_slice){.m_size = sub_nodes.m_size, .m_data = sub_nodes.m_data};
+            break;
 
         case TOKEN_TYPE_BOOL: break;
         case TOKEN_TYPE_CHAR: break;
@@ -297,16 +405,18 @@ static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
         case TOKEN_TYPE_FOR: break;
 
         case TOKEN_TYPE_RETURN: break;
+
+        default: break;
     }
 
-    assert(false && "Not implemented");
+    return (Parser_state_parse_result){.ast_node_ptr = node, .error = PARSE_ERROR_NONE};
 }
 
 static void ast_node_print(const AST_node *self, usize indent){
     for (usize i = 0; i < indent; ++i)
         putchar(' ');
-    printf("%s\n", str_base_data_const(&self->m_token->m_id));
-    // printf("%s parent: %s\n", str_base_data_const(&self->m_token->m_id), (self->m_parent) ? str_base_data_const(&self->m_parent->m_token->m_id) : "null");
+    // printf("%s\n", str_base_data_const(&self->m_token->m_id));
+    printf("%s parent: %s\n", str_base_data_const(&self->m_token->m_id), (self->m_parent) ? str_base_data_const(&self->m_parent->m_token->m_id) : "null");
     for (usize i = 0; i < self->m_sub_nodes.m_size; ++i)
         ast_node_print(self->m_sub_nodes.m_data[i], indent + 4);
 }
@@ -331,12 +441,14 @@ Parse_result parse(Arena *arena, Token_slice tokens){
     while (state.token_idx < state.tokens.m_size){
         const Token *tok = &state.tokens.m_data[state.token_idx];
         if (tok->m_type != TOKEN_TYPE_SEMICOLON){
-            Parser_state_parse_result ast_node = parser_state_parse_arithm_expr(&state, 0);
+            // Parser_state_parse_result ast_node = parser_state_parse_arithm_expr(&state, 0);
+            Parser_state_parse_result ast_node = parser_state_parse_expr(&state);
             switch (ast_node.error){
                 case PARSE_ERROR_NONE:
                     break;
                 case PARSE_ERROR_OOM:
                 case PARSE_ERROR_SYNTAX:
+                    fprintf(stderr, "\x1b[38;2;255;0;0m%s\x1b[0m", ast_node.error_info);
                     return (Parse_result){.error_info = ast_node.error_info, .error = ast_node.error};
             }
             if (!vec_base_push_back(&state.ast_node_ptrs, state.alloc, &ast_node.ast_node_ptr))
