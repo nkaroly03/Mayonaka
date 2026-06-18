@@ -71,7 +71,7 @@ static const char SINGLE_LINE_COMMENT_MARKER[] = "//";
 static int is_not_newline(int c){
     return c != '\n';
 }
-static int isspace_not_newline(int c){
+static int is_space_not_newline(int c){
     return isspace(c) && is_not_newline(c);
 }
 static int is_bin_digit(int c){
@@ -152,7 +152,7 @@ Lex_result lex(Arena *arena, const char *path){
     usize lbracket_count = 0, rbracket_count = 0;
     usize lbrace_count   = 0, rbrace_count   = 0;
 
-    for (Str_view sv = str_base_to_str_view(&lines); (sv = str_view_trim_left_while(sv, isspace_not_newline)).m_size > 0;){
+    for (Str_view sv = str_base_to_str_view(&lines); (sv = str_view_trim_left_while(sv, is_space_not_newline)).m_size > 0;){
         const char *punct_match;
         #define punct_match_starts_with(starts_with) match_starts_with(punct_match, starts_with)
         #define punct_match_token_push_back(token_type) match_token_push_back(token_type, punct_match)

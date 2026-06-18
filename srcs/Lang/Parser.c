@@ -420,7 +420,6 @@ static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
 
                     parse_result.ast_node_ptr->m_parent = node;
                     break;
-
                 default:
                     return syntax_error("On line <" USIZE_PFMT ">: <:> must be followed by a type", tok->m_line_number);
             }
@@ -438,7 +437,29 @@ static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
         case TOKEN_TYPE_FOR: break;
         // case TOKEN_TYPE_DOT2: break;
 
-        case TOKEN_TYPE_RETURN: break;
+        case TOKEN_TYPE_RETURN:
+            node = parser_state_ast_node_alloc(self, tok);
+            if (!node)
+                return OOM_ERROR;
+
+            if (self->token_idx >= self->tokens.m_size)
+                return syntax_error("On line <" USIZE_PFMT ">: <return> must be followed by a <;> or an arithmetic expression", tok->m_line_number);
+
+            if (self->tokens.m_data[self->token_idx].m_type != TOKEN_TYPE_SEMICOLON){
+                parse_result = parser_state_parse_arithm_expr(self, 0);
+                if (parse_result.error != PARSE_ERROR_NONE)
+                    return parse_result;
+
+                if (!vec_base_push_back(&sub_nodes, self->alloc, &parse_result.ast_node_ptr))
+                    return OOM_ERROR;
+
+                parse_result.ast_node_ptr->m_parent = node;
+                node->m_sub_nodes = (AST_node_ptr_slice){.m_size = sub_nodes.m_size, .m_data = sub_nodes.m_data};
+            }
+
+            if (self->token_idx >= self->tokens.m_size || self->tokens.m_data[self->token_idx++].m_type != TOKEN_TYPE_SEMICOLON)
+                return syntax_error("On line <" USIZE_PFMT ">: <return> statement must be closed by <;>", tok->m_line_number);
+            break;
 
         default: break;
     }
@@ -494,9 +515,7 @@ Parse_result parse(Arena *arena, Token_slice tokens){
 
     ast_node_ptr_slice_print((AST_node_ptr_slice){.m_size = state.ast_node_ptrs.m_size, .m_data = state.ast_node_ptrs.m_data});
 
-    if (state.tokens.m_size == 0 || state.tokens.m_data[state.tokens.m_size - 1].m_type != TOKEN_TYPE_RETURN){
-        assert(false && "TODO: Add <return 0;> if last statement is not a return");
-    }
+    assert(false);
 
     return (Parse_result){.ast_nodes = {.m_size = state.ast_node_ptrs.m_size, .m_data = state.ast_node_ptrs.m_data}, .error = PARSE_ERROR_NONE};
 }
