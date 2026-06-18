@@ -296,7 +296,7 @@ static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
                 return parse_result;
 
             if (self->token_idx >= self->tokens.m_size || (tok = &self->tokens.m_data[self->token_idx++])->m_type != TOKEN_TYPE_SEMICOLON)
-                return syntax_error("On line <" USIZE_PFMT ">: Statement must be closed by <;>", tok->m_line_number);
+                return syntax_error("On line <" USIZE_PFMT ">: Statement must end with <;>", tok->m_line_number);
 
             node = parse_result.ast_node_ptr;
             break;
@@ -425,25 +425,91 @@ static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
             }
 
             if (self->token_idx >= self->tokens.m_size || self->tokens.m_data[self->token_idx++].m_type != TOKEN_TYPE_SEMICOLON)
-                return syntax_error("On line <" USIZE_PFMT ">: <let> statement must be closed by <;>", tok->m_line_number);
+                return syntax_error("On line <" USIZE_PFMT ">: <let> statement must end with <;>", tok->m_line_number);
 
             node->m_sub_nodes = (AST_node_ptr_slice){.m_size = sub_nodes.m_size, .m_data = sub_nodes.m_data};
             break;
 
-        case TOKEN_TYPE_IF: break;
-        case TOKEN_TYPE_ELSE: break;
+        case TOKEN_TYPE_IF:
+        case TOKEN_TYPE_WHILE:
+            bool is_while = (tok->m_type == TOKEN_TYPE_WHILE);
+            if (self->token_idx >= self->tokens.m_size || self->tokens.m_data[self->token_idx++].m_type != TOKEN_TYPE_LPAREN)
+                return syntax_error("On line <" USIZE_PFMT ">: <%s> must be followed by <(>", tok->m_line_number, str_base_data_const(&tok->m_id));
 
-        case TOKEN_TYPE_WHILE: break;
-        case TOKEN_TYPE_FOR: break;
-        // case TOKEN_TYPE_DOT2: break;
-
-        case TOKEN_TYPE_RETURN:
             node = parser_state_ast_node_alloc(self, tok);
             if (!node)
                 return OOM_ERROR;
 
+            parse_result = parser_state_parse_arithm_expr(self, 0);
+            if (parse_result.error != PARSE_ERROR_NONE)
+                return parse_result;
+
+            parse_result.ast_node_ptr->m_parent = node;
+
+            if (self->token_idx >= self->tokens.m_size || self->tokens.m_data[self->token_idx++].m_type != TOKEN_TYPE_RPAREN)
+                return syntax_error("On line <" USIZE_PFMT ">: <%s> statement's conditional expression must be closed by <)>", tok->m_line_number, str_base_data_const(&tok->m_id));
+
+            if (self->token_idx >= self->tokens.m_size)
+                return syntax_error("On line <" USIZE_PFMT ">: <%s> statement missing body", tok->m_line_number, str_base_data_const(&tok->m_id));
+
+            if (!vec_base_push_back(&sub_nodes, self->alloc, &parse_result.ast_node_ptr))
+                return OOM_ERROR;
+
+            if (self->tokens.m_data[self->token_idx].m_type != TOKEN_TYPE_SEMICOLON){
+                parse_result = parser_state_parse_expr(self);
+                if (parse_result.error != PARSE_ERROR_NONE)
+                    return parse_result;
+
+                if (!vec_base_push_back(&sub_nodes, self->alloc, &parse_result.ast_node_ptr))
+                    return OOM_ERROR;
+
+                parse_result.ast_node_ptr->m_parent = node;
+            }
+            else
+                ++self->token_idx;
+
+            if (self->token_idx < self->tokens.m_size && (tok = &self->tokens.m_data[self->token_idx])->m_type == TOKEN_TYPE_ELSE){
+                if (is_while)
+                    return syntax_error("On line <" USIZE_PFMT ">: <while> statement followed by <else> statement", tok->m_line_number);
+                if (++self->token_idx >= self->tokens.m_size)
+                    return syntax_error("On line <" USIZE_PFMT ">: <else> statement missing body", tok->m_line_number);
+
+                Vec_base else_sub_nodes = vec_base_init(AST_node*);
+                AST_node *else_node = parser_state_ast_node_alloc(self, tok);
+                if (!else_node || !vec_base_push_back(&sub_nodes, self->alloc, &else_node))
+                    return OOM_ERROR;
+
+                else_node->m_parent = node;
+
+                if (self->tokens.m_data[self->token_idx].m_type != TOKEN_TYPE_SEMICOLON){
+                    parse_result = parser_state_parse_expr(self);
+                    if (parse_result.error != PARSE_ERROR_NONE)
+                        return parse_result;
+
+                    if (!vec_base_push_back(&else_sub_nodes, self->alloc, &parse_result.ast_node_ptr))
+                        return OOM_ERROR;
+
+                    parse_result.ast_node_ptr->m_parent = else_node;
+                }
+                else
+                    ++self->token_idx;
+
+                else_node->m_sub_nodes = (AST_node_ptr_slice){.m_size = else_sub_nodes.m_size, .m_data = else_sub_nodes.m_data};
+            }
+
+            node->m_sub_nodes = (AST_node_ptr_slice){.m_size = sub_nodes.m_size, .m_data = sub_nodes.m_data};
+            break;
+
+        case TOKEN_TYPE_FOR: break;
+        // case TOKEN_TYPE_DOT2: break;
+
+        case TOKEN_TYPE_RETURN:
             if (self->token_idx >= self->tokens.m_size)
                 return syntax_error("On line <" USIZE_PFMT ">: <return> must be followed by a <;> or an arithmetic expression", tok->m_line_number);
+
+            node = parser_state_ast_node_alloc(self, tok);
+            if (!node)
+                return OOM_ERROR;
 
             if (self->tokens.m_data[self->token_idx].m_type != TOKEN_TYPE_SEMICOLON){
                 parse_result = parser_state_parse_arithm_expr(self, 0);
@@ -458,10 +524,11 @@ static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
             }
 
             if (self->token_idx >= self->tokens.m_size || self->tokens.m_data[self->token_idx++].m_type != TOKEN_TYPE_SEMICOLON)
-                return syntax_error("On line <" USIZE_PFMT ">: <return> statement must be closed by <;>", tok->m_line_number);
+                return syntax_error("On line <" USIZE_PFMT ">: <return> statement must end with <;>", tok->m_line_number);
             break;
 
-        default: break;
+        default:
+            return syntax_error("On line <" USIZE_PFMT ">: Found unknown or contextually invalid token <%s>", tok->m_line_number, str_base_data_const(&tok->m_id));
     }
 
     return (Parser_state_parse_result){.ast_node_ptr = node, .error = PARSE_ERROR_NONE};
