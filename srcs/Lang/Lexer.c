@@ -54,7 +54,7 @@ static Lex_result lexer_state_syntax_error(Lexer_state *self, const char *fmt, .
 
     lexer_state_cleanup(self);
 
-    return (Lex_result){.error_info = str_base_data(&error_info.result), .error = LEX_ERROR_SYNTAX};
+    return (Lex_result){.error_info = error_info.result, .error = LEX_ERROR_SYNTAX};
 }
 static bool lexer_state_token_push_back(Lexer_state *self, enum Token_type type, const char *id){
     Str_base_result temp = str_base_init_raw(self->alloc, id);
@@ -114,7 +114,7 @@ Lex_result lex(Arena *arena, const char *path){
     if (!state.file){
         Str_base_result error_info = str_base_init_raw(state.alloc, "File not found");
         return (error_info.success)
-            ? (Lex_result){.error_info = str_base_data(&error_info.result), .error = LEX_ERROR_FILE}
+            ? (Lex_result){.error_info = error_info.result, .error = LEX_ERROR_FILE}
             : (Lex_result){.error = LEX_ERROR_OOM}
         ;
     }
@@ -143,7 +143,7 @@ Lex_result lex(Arena *arena, const char *path){
 
                     lexer_state_cleanup(&state);
 
-                    return (Lex_result){.error_info = str_base_data(&error_info.result), .error = LEX_ERROR_FILE};
+                    return (Lex_result){.error_info = error_info.result, .error = LEX_ERROR_FILE};
                 }
         }
     }

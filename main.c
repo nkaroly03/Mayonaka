@@ -52,7 +52,7 @@ int main(const int argc, const char *const *const argv){
             break;
         case LEX_ERROR_FILE:
             fprintf(stderr, "\x1b[38;2;255;0;0m");
-            fprintf(stderr, "%s\n", lex_result.error_info);
+            fprintf(stderr, "%s\n", str_base_data(&lex_result.error_info));
             if (errno != 0){
                 fprintf(stderr, "perror msg:\n\t");
                 perror(argv[1]);
@@ -60,7 +60,7 @@ int main(const int argc, const char *const *const argv){
             fprintf(stderr, "\x1b[0m");
             break;
         case LEX_ERROR_SYNTAX:
-            fprintf(stderr, "\x1b[38;2;255;0;0m%s\x1b[0m", lex_result.error_info);
+            fprintf(stderr, "\x1b[38;2;255;0;0m%s\x1b[0m", str_base_data(&lex_result.error_info));
             break;
     }
 

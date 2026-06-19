@@ -34,7 +34,7 @@ enum Parse_error{
 typedef struct Parse_result{
     union{
         AST_node_ptr_slice ast_nodes;
-        const char *error_info;
+        Str_base error_info;
     };
     enum Parse_error error;
 } Parse_result;

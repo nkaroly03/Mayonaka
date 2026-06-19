@@ -102,7 +102,7 @@ enum Lex_error{
 typedef struct Lex_result{
     union{
         Token_slice tokens;
-        const char *error_info;
+        Str_base error_info;
     };
     enum Lex_error error;
 } Lex_result;

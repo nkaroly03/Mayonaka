@@ -21,5 +21,5 @@ let arr: []int = [0,1,2,3,4,[[],],];
 }
 return;
 
-while (1);
-else;
+for (0..10) |i|
+    print(i);
