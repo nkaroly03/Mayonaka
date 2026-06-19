@@ -270,7 +270,19 @@ end:
     return (Parser_state_parse_result){.ast_node_ptr = lhs, .error = PARSE_ERROR_NONE};
 }
 
+static bool parser_state_for_to_while_tokens_push_back(Parser_state *self, Vec_base *for_to_while_tokens, const char *id, enum Token_type token_type){
+    Str_base_result token_id = str_base_init_raw(self->alloc, id);
+    return token_id.success && vec_base_push_back(for_to_while_tokens, self->alloc, &(Token){.m_type = token_type, .m_id = token_id.result, .m_line_number = 0});
+}
+
 static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
+    Vec_base for_to_while_tokens = vec_base_init(Token);
+    #define for_to_while_push_back(id, token_type) \
+        do{ \
+            if (!parser_state_for_to_while_tokens_push_back(self, &for_to_while_tokens, (id), (token_type))) \
+                return OOM_ERROR; \
+        } while (0)
+
     const Token *tok = &self->tokens.m_data[self->token_idx++], *tok_temp;
 
     Parser_state_parse_result parse_result;
@@ -515,21 +527,27 @@ static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
             if (self->token_idx >= self->tokens.m_size || self->tokens.m_data[self->token_idx++].m_type != TOKEN_TYPE_LPAREN)
                 return syntax_error("On line <" USIZE_PFMT ">: <for> must be followed by <(>", tok->m_line_number);
 
+            usize for_start_expr_start_pos = self->token_idx;
+
             Parser_state_parse_result for_start_expr_node = parser_state_parse_arithm_expr(self, 0);
             if (for_start_expr_node.error != PARSE_ERROR_NONE)
                 return for_start_expr_node;
 
-            tok_temp = &self->tokens.m_data[self->token_idx++];
+            tok_temp = &self->tokens.m_data[self->token_idx];
             if (tok_temp->m_type != TOKEN_TYPE_DOT2)
                 return syntax_error("On line <" USIZE_PFMT ">: <for> statement's start expression must be followed by <..>", tok_temp->m_line_number);
+
+            usize dot2_pos = self->token_idx++;
 
             Parser_state_parse_result for_end_expr_node = parser_state_parse_arithm_expr(self, 0);
             if (for_end_expr_node.error != PARSE_ERROR_NONE)
                 return for_end_expr_node;
 
-            tok_temp = &self->tokens.m_data[self->token_idx++];
+            tok_temp = &self->tokens.m_data[self->token_idx];
             if (tok_temp->m_type != TOKEN_TYPE_RPAREN)
                 return syntax_error("On line <" USIZE_PFMT ">: <for> statement's end expression must be followed by <)>", tok_temp->m_line_number);
+            
+            usize for_end_expr_end_pos = self->token_idx++;
 
             if (
                 self->token_idx >= self->tokens.m_size || (tok_temp = &self->tokens.m_data[self->token_idx++])->m_type != TOKEN_TYPE_PIPE ||
@@ -547,7 +565,8 @@ static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
             if (self->token_idx >= self->tokens.m_size)
                 return syntax_error("On line <" USIZE_PFMT ">: <for> statement is missing body", tok_temp->m_line_number);
 
-            bool for_body_empty = (self->tokens.m_data[self->token_idx].m_type == TOKEN_TYPE_SEMICOLON);
+            usize for_body_start_pos = self->token_idx;
+            bool for_body_empty = (self->tokens.m_data[for_body_start_pos].m_type == TOKEN_TYPE_SEMICOLON);
             if (!for_body_empty){
                 parse_result = parser_state_parse_expr(self);
                 if (parse_result.error != PARSE_ERROR_NONE)
@@ -556,19 +575,72 @@ static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
 
             self->token_idx += for_body_empty;
 
-            /*/
-                for (start_expr..end_exp) |var|
-                    expr;
-                ------------------------------------------------
-                {
-                    let var: int = start_expr;
-                    let $var: int = end_exp;
-                    while (var < $var){
-                        expr;
-                        var = var + 1;
-                    }
+            const char *capture_id = str_base_data_const(&for_capture_node->m_token->m_id);
+
+            Str_base_result for_capture_node_end_id = str_base_init_fmt(self->alloc, "$%s", capture_id);
+            if (!for_capture_node_end_id.success)
+                return OOM_ERROR;
+
+            const char *capture_end_id = str_base_data_const(&for_capture_node_end_id.result);
+
+            for_to_while_push_back("{", TOKEN_TYPE_LBRACE);
+            for_to_while_push_back("let", TOKEN_TYPE_LET);
+            for_to_while_push_back(capture_id, TOKEN_TYPE_ID);
+            for_to_while_push_back(":", TOKEN_TYPE_COLON);
+            for_to_while_push_back("int", TOKEN_TYPE_INT);
+            for_to_while_push_back("=", TOKEN_TYPE_EQUALS1);
+            for (usize i = for_start_expr_start_pos; i < dot2_pos; ++i){
+                const Token *t = &self->tokens.m_data[i];
+                for_to_while_push_back(str_base_data_const(&t->m_id), t->m_type);
+            }
+            for_to_while_push_back(";", TOKEN_TYPE_SEMICOLON);
+            for_to_while_push_back("let", TOKEN_TYPE_LET);
+            for_to_while_push_back(capture_end_id, TOKEN_TYPE_ID);
+            for_to_while_push_back(":", TOKEN_TYPE_COLON);
+            for_to_while_push_back("int", TOKEN_TYPE_INT);
+            for_to_while_push_back("=", TOKEN_TYPE_EQUALS1);
+            for (usize i = dot2_pos + 1; i < for_end_expr_end_pos; ++i){
+                const Token *t = &self->tokens.m_data[i];
+                for_to_while_push_back(str_base_data_const(&t->m_id), t->m_type);
+            }
+            for_to_while_push_back(";", TOKEN_TYPE_SEMICOLON);
+            for_to_while_push_back("while", TOKEN_TYPE_WHILE);
+            for_to_while_push_back("(", TOKEN_TYPE_LPAREN);
+            for_to_while_push_back(capture_id, TOKEN_TYPE_ID);
+            for_to_while_push_back("<", TOKEN_TYPE_LESS_THAN1);
+            for_to_while_push_back(capture_end_id, TOKEN_TYPE_ID);
+            for_to_while_push_back(")", TOKEN_TYPE_RPAREN);
+            for_to_while_push_back("{", TOKEN_TYPE_LBRACE);
+            if (!for_body_empty){
+                for (usize i = for_body_start_pos; i < self->token_idx; ++i){
+                    const Token *t = &self->tokens.m_data[i];
+                    for_to_while_push_back(str_base_data_const(&t->m_id), t->m_type);
                 }
-            /*/
+            }
+            for_to_while_push_back(capture_id, TOKEN_TYPE_ID);
+            for_to_while_push_back("=", TOKEN_TYPE_EQUALS1);
+            for_to_while_push_back(capture_id, TOKEN_TYPE_ID);
+            for_to_while_push_back("+", TOKEN_TYPE_PLUS);
+            for_to_while_push_back("1", TOKEN_TYPE_INT_LIT);
+            for_to_while_push_back(";", TOKEN_TYPE_SEMICOLON);
+            for_to_while_push_back("}", TOKEN_TYPE_RBRACE);
+            for_to_while_push_back("}", TOKEN_TYPE_RBRACE);
+
+            usize current_token_idx = self->token_idx;
+            Token_slice current_token_slice = self->tokens;
+
+            self->token_idx = 0;
+            self->tokens = (Token_slice){.m_size = for_to_while_tokens.m_size, .m_data = for_to_while_tokens.m_data};
+
+            parse_result = parser_state_parse_expr(self);
+
+            self->token_idx = current_token_idx;
+            self->tokens = current_token_slice;
+
+            if (parse_result.error != PARSE_ERROR_NONE)
+                return parse_result;
+
+            node = parse_result.ast_node_ptr;
             break;
 
         case TOKEN_TYPE_RETURN:
