@@ -24,3 +24,5 @@ return;
 for (0..(v = scan("Hello:\n"))) |i|
     for (0..20) |j|
         print("ok\n");
+
+let i: [][][]char = [];
