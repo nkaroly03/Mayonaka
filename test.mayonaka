@@ -21,4 +21,6 @@ let arr: []int = [0,1,2,3,4,[[],],];
 }
 return;
 
-for (0..10) |i|;
+for (0..(v = scan("Hello:\n"))) |i|
+    for (0..20) |j|
+        print("ok\n");

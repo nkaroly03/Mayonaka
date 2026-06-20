@@ -577,11 +577,11 @@ static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
 
             const char *capture_id = str_base_data_const(&for_capture_node->m_token->m_id);
 
-            Str_base_result for_capture_node_end_id = str_base_init_fmt(self->alloc, "$%s", capture_id);
-            if (!for_capture_node_end_id.success)
+            Str_base_result end_var_id = str_base_init_fmt(self->alloc, "$%s", capture_id);
+            if (!end_var_id.success)
                 return OOM_ERROR;
 
-            const char *capture_end_id = str_base_data_const(&for_capture_node_end_id.result);
+            const char *end_var = str_base_data_const(&end_var_id.result);
 
             for_to_while_push_back("{", TOKEN_TYPE_LBRACE);
             for_to_while_push_back("let", TOKEN_TYPE_LET);
@@ -589,34 +589,30 @@ static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
             for_to_while_push_back(":", TOKEN_TYPE_COLON);
             for_to_while_push_back("int", TOKEN_TYPE_INT);
             for_to_while_push_back("=", TOKEN_TYPE_EQUALS1);
-            for (usize i = for_start_expr_start_pos; i < dot2_pos; ++i){
-                const Token *t = &self->tokens.m_data[i];
-                for_to_while_push_back(str_base_data_const(&t->m_id), t->m_type);
-            }
+            for (usize i = for_start_expr_start_pos; i < dot2_pos; ++i)
+                if (!vec_base_push_back(&for_to_while_tokens, self->alloc, &self->tokens.m_data[i]))
+                    return OOM_ERROR;
             for_to_while_push_back(";", TOKEN_TYPE_SEMICOLON);
             for_to_while_push_back("let", TOKEN_TYPE_LET);
-            for_to_while_push_back(capture_end_id, TOKEN_TYPE_ID);
+            for_to_while_push_back(end_var, TOKEN_TYPE_ID);
             for_to_while_push_back(":", TOKEN_TYPE_COLON);
             for_to_while_push_back("int", TOKEN_TYPE_INT);
             for_to_while_push_back("=", TOKEN_TYPE_EQUALS1);
-            for (usize i = dot2_pos + 1; i < for_end_expr_end_pos; ++i){
-                const Token *t = &self->tokens.m_data[i];
-                for_to_while_push_back(str_base_data_const(&t->m_id), t->m_type);
-            }
+            for (usize i = dot2_pos + 1; i < for_end_expr_end_pos; ++i)
+                if (!vec_base_push_back(&for_to_while_tokens, self->alloc, &self->tokens.m_data[i]))
+                    return OOM_ERROR;
             for_to_while_push_back(";", TOKEN_TYPE_SEMICOLON);
             for_to_while_push_back("while", TOKEN_TYPE_WHILE);
             for_to_while_push_back("(", TOKEN_TYPE_LPAREN);
             for_to_while_push_back(capture_id, TOKEN_TYPE_ID);
             for_to_while_push_back("<", TOKEN_TYPE_LESS_THAN1);
-            for_to_while_push_back(capture_end_id, TOKEN_TYPE_ID);
+            for_to_while_push_back(end_var, TOKEN_TYPE_ID);
             for_to_while_push_back(")", TOKEN_TYPE_RPAREN);
             for_to_while_push_back("{", TOKEN_TYPE_LBRACE);
-            if (!for_body_empty){
-                for (usize i = for_body_start_pos; i < self->token_idx; ++i){
-                    const Token *t = &self->tokens.m_data[i];
-                    for_to_while_push_back(str_base_data_const(&t->m_id), t->m_type);
-                }
-            }
+            if (!for_body_empty)
+                for (usize i = for_body_start_pos; i < self->token_idx; ++i)
+                    if (!vec_base_push_back(&for_to_while_tokens, self->alloc, &self->tokens.m_data[i]))
+                        return OOM_ERROR;
             for_to_while_push_back(capture_id, TOKEN_TYPE_ID);
             for_to_while_push_back("=", TOKEN_TYPE_EQUALS1);
             for_to_while_push_back(capture_id, TOKEN_TYPE_ID);
