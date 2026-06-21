@@ -350,6 +350,7 @@ Lex_result lex(Arena *arena, const char *path){
             else if (keyword_match_starts_with("not"   )) keyword_match_token_push_back(TOKEN_TYPE_NOT);
             else if (keyword_match_starts_with("fn"    )) keyword_match_token_push_back(TOKEN_TYPE_FN);
             else if (keyword_match_starts_with("let"   )) keyword_match_token_push_back(TOKEN_TYPE_LET);
+            else if (keyword_match_starts_with("void"  )) keyword_match_token_push_back(TOKEN_TYPE_VOID);
             else if (keyword_match_starts_with("bool"  )) keyword_match_token_push_back(TOKEN_TYPE_BOOL);
             else if (keyword_match_starts_with("char"  )) keyword_match_token_push_back(TOKEN_TYPE_CHAR);
             else if (keyword_match_starts_with("int"   )) keyword_match_token_push_back(TOKEN_TYPE_INT);

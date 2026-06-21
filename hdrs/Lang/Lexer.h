@@ -57,6 +57,7 @@ enum Token_type{
     TOKEN_TYPE_FN,
     TOKEN_TYPE_LET,
 
+    TOKEN_TYPE_VOID,
     TOKEN_TYPE_BOOL,
     TOKEN_TYPE_CHAR,
     TOKEN_TYPE_INT,

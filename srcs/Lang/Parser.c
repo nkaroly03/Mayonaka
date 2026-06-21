@@ -99,8 +99,8 @@ static AST_node* parser_state_ast_node_alloc(Parser_state *self, const Token *to
 
     return ast_node;
 }
-
 #define syntax_error(...) parser_state_syntax_error(self, __VA_ARGS__)
+
 static Parser_state_parse_result parser_state_parse_arithm_expr(Parser_state *self, usize prev_rhs_bp){
     if (self->token_idx >= self->tokens.m_size)
         return syntax_error("On line <" USIZE_PFMT ">: No tokens are available", self->tokens.m_data[self->tokens.m_size - 1].m_line_number);
@@ -290,11 +290,15 @@ static Parser_state_parse_result parser_state_parse_type(Parser_state *self){
             if (parse_result.error != PARSE_ERROR_NONE)
                 return parse_result;
 
+            if (parse_result.ast_node_ptr->m_token->m_type == TOKEN_TYPE_VOID)
+                return syntax_error("On line <" USIZE_PFMT ">: List of type <void> is not allowed", self->tokens.m_data[self->token_idx - 1].m_line_number);
+
             if (!vec_base_push_back(&sub_nodes, self->alloc, &parse_result.ast_node_ptr))
                 return OOM_ERROR;
 
             parse_result.ast_node_ptr->m_parent = node;
             break;
+        case TOKEN_TYPE_VOID:
         case TOKEN_TYPE_BOOL:
         case TOKEN_TYPE_CHAR:
         case TOKEN_TYPE_INT:
@@ -686,7 +690,6 @@ Parse_result parse(Arena *arena, Token_slice tokens){
                     break;
                 case PARSE_ERROR_OOM:
                 case PARSE_ERROR_SYNTAX:
-                    fprintf(stderr, "\x1b[38;2;255;0;0m%s\x1b[0m", str_base_data_const(&ast_node.error_info));
                     return (Parse_result){.error_info = ast_node.error_info, .error = ast_node.error};
             }
             if (!vec_base_push_back(&state.ast_node_ptrs, state.alloc, &ast_node.ast_node_ptr))
@@ -695,10 +698,6 @@ Parse_result parse(Arena *arena, Token_slice tokens){
         else
             ++state.token_idx;
     }
-
-    ast_node_ptr_slice_print((AST_node_ptr_slice){.m_size = state.ast_node_ptrs.m_size, .m_data = state.ast_node_ptrs.m_data});
-
-    assert(false);
 
     return (Parse_result){.ast_nodes = {.m_size = state.ast_node_ptrs.m_size, .m_data = state.ast_node_ptrs.m_data}, .error = PARSE_ERROR_NONE};
 }
