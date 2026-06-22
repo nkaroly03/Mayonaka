@@ -5,6 +5,8 @@ Type_info unary_op_result_type_info(enum Unary_op op, Type_info type_info){
 
     if (type_info.m_dimensions == 0){
         switch (op){
+            case UNARY_OP_NONE:
+                break;
             case UNARY_OP_PLUS:
             case UNARY_OP_MINUS:
             case UNARY_OP_NOT:
@@ -26,20 +28,20 @@ Type_info binary_op_result_type_info(enum Binary_op op, Type_info lhs, Type_info
 
     if (lhs.m_tag > TYPE_INFO_TAG_VOID && rhs.m_tag > TYPE_INFO_TAG_VOID){
         switch (op){
+            case BINARY_OP_NONE:
+                break;
+
             case BINARY_OP_EQ:
             case BINARY_OP_NEQ:
             case BINARY_OP_LE:
             case BINARY_OP_LEQ:
             case BINARY_OP_GE:
             case BINARY_OP_GEQ:
-                if (lhs.m_dimensions == 0 && rhs.m_dimensions == 0){
-                    if (lhs.m_tag == TYPE_INFO_TAG_STR || rhs.m_tag == TYPE_INFO_TAG_STR){
-                        if (lhs.m_tag == TYPE_INFO_TAG_STR && rhs.m_tag == TYPE_INFO_TAG_STR)
-                            result = (Type_info){.m_tag = TYPE_INFO_TAG_BOOL, .m_dimensions = 0};
-                    }
-                    else
-                        result = (Type_info){.m_tag = TYPE_INFO_TAG_BOOL, .m_dimensions = 0};
-                }
+                if (
+                    (lhs.m_dimensions == 0 && rhs.m_dimensions == 0) &&
+                    ((lhs.m_tag == TYPE_INFO_TAG_STR && rhs.m_tag == TYPE_INFO_TAG_STR) || (lhs.m_tag != TYPE_INFO_TAG_STR && rhs.m_tag != TYPE_INFO_TAG_STR))
+                )
+                    result = (Type_info){.m_tag = TYPE_INFO_TAG_BOOL, .m_dimensions = 0};
                 break;
 
             case BINARY_OP_SUBSCRIPT:
@@ -63,7 +65,7 @@ Type_info binary_op_result_type_info(enum Binary_op op, Type_info lhs, Type_info
             case BINARY_OP_ADD:
                 if (lhs.m_dimensions == 0 && rhs.m_dimensions == 0){
                     if (lhs.m_tag == TYPE_INFO_TAG_STR || rhs.m_tag == TYPE_INFO_TAG_STR){
-                        if ((lhs.m_tag == TYPE_INFO_TAG_STR && rhs.m_tag == TYPE_INFO_TAG_STR) || (lhs.m_tag == TYPE_INFO_TAG_CHAR || rhs.m_tag == TYPE_INFO_TAG_CHAR))
+                        if (lhs.m_tag == rhs.m_tag || (lhs.m_tag == TYPE_INFO_TAG_CHAR || rhs.m_tag == TYPE_INFO_TAG_CHAR))
                             result = (Type_info){.m_tag = TYPE_INFO_TAG_STR, .m_dimensions = 0};
                     }
                     else

@@ -22,7 +22,13 @@ typedef struct Type_info{
     usize m_dimensions;
 } Type_info;
 
+typedef struct Type_info_slice{
+    usize m_size;
+    const Type_info *m_data;
+} Type_info_slice;
+
 enum Unary_op{
+    UNARY_OP_NONE,
     UNARY_OP_PLUS,
     UNARY_OP_MINUS,
     UNARY_OP_BNEG,
@@ -32,6 +38,8 @@ enum Unary_op{
 Type_info unary_op_result_type_info(enum Unary_op op, Type_info type_info);
 
 enum Binary_op{
+    BINARY_OP_NONE,
+
     BINARY_OP_EQ,
     BINARY_OP_NEQ,
     BINARY_OP_LE,
