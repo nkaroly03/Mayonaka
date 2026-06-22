@@ -25,4 +25,4 @@ for (0..(v = scan("Hello:\n"))) |i|
         print("ok\n");
 /*/
 
-let i: float = argv;
+let i: int = 10;

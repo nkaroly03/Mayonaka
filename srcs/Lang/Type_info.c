@@ -24,6 +24,9 @@ Type_info unary_op_result_type_info(enum Unary_op op, Type_info type_info){
 }
 
 Type_info binary_op_result_type_info(enum Binary_op op, Type_info lhs, Type_info rhs){
+    if (op == BINARY_OP_ASSIGNMENT && lhs.m_tag > TYPE_INFO_TAG_VOID && lhs.m_dimensions > 0 && rhs.m_tag == TYPE_INFO_TAG_VOID && rhs.m_dimensions == 1)
+        return lhs;
+
     Type_info result = {0};
 
     if (lhs.m_tag > TYPE_INFO_TAG_VOID && rhs.m_tag > TYPE_INFO_TAG_VOID){

@@ -39,6 +39,8 @@ typedef struct Compiler_state_to_IR_result{
 
 static const Compiler_state_to_IR_result OOM_ERROR = {.error = COMPILE_ERROR_OOM};
 
+#define INDENT "    "
+
 static const char SP_SYMBOL[] = "sp";
 
 static Compiler_state_to_IR_result compiler_state_syntax_error(Compiler_state *self, const char *fmt, ...){
@@ -54,10 +56,32 @@ static Compiler_state_to_IR_result compiler_state_syntax_error(Compiler_state *s
 }
 #define syntax_error(...) compiler_state_syntax_error(self, "On line <" USIZE_PFMT ">: " __VA_ARGS__)
 
+static bool compiler_state_pop_on_discarded_expression(Compiler_state *self, const AST_node *ast_node){
+    if (!ast_node->m_parent)
+        goto pop;
+    else{
+        switch (ast_node->m_parent->m_token->m_type){
+            case TOKEN_TYPE_LBRACE:
+            case TOKEN_TYPE_IF:
+            case TOKEN_TYPE_ELSE:
+            case TOKEN_TYPE_WHILE:
+                goto pop;
+            default:
+                break;
+        }
+    }
+
+    return true;
+
+pop:
+    vec_base_pop_back_discard(&self->type_info_stack);
+    return str_base_append_fmt(&self->IR, self->alloc, INDENT "%s\n", op_code_to_str(OP_CODE_POP));
+}
+
 static Compiler_state_to_IR_result compiler_state_to_IR(Compiler_state *self, const AST_node *ast_node){
     #define add_instruction(...) \
         do{ \
-            if (!str_base_append_fmt(&self->IR, self->alloc, "    " __VA_ARGS__) || !str_base_push_back(&self->IR, self->alloc, '\n')) \
+            if (!str_base_append_fmt(&self->IR, self->alloc, INDENT __VA_ARGS__) || !str_base_push_back(&self->IR, self->alloc, '\n')) \
                 return OOM_ERROR; \
         } while (0)
 
@@ -68,12 +92,16 @@ static Compiler_state_to_IR_result compiler_state_to_IR(Compiler_state *self, co
             if (!vec_base_push_back(&self->type_info_stack, self->alloc, &(Type_info){.m_tag = TYPE_INFO_TAG_STR, .m_dimensions = 1}))
                 return OOM_ERROR;
             add_instruction("%s %s", op_code_to_str(OP_CODE_PUSH), str_base_data_const(&ast_node->m_token->m_id));
+            if (!compiler_state_pop_on_discarded_expression(self, ast_node))
+                return OOM_ERROR;
             break;
         case TOKEN_TYPE_FALSE:
         case TOKEN_TYPE_TRUE:
             if (!vec_base_push_back(&self->type_info_stack, self->alloc, &(Type_info){.m_tag = TYPE_INFO_TAG_BOOL, .m_dimensions = 0}))
                 return OOM_ERROR;
             add_instruction("%s %s", op_code_to_str(OP_CODE_PUSH), str_base_data_const(&ast_node->m_token->m_id));
+            if (!compiler_state_pop_on_discarded_expression(self, ast_node))
+                return OOM_ERROR;
             break;
         case TOKEN_TYPE_CHAR_LIT:
         case TOKEN_TYPE_INT_LIT:
@@ -86,10 +114,19 @@ static Compiler_state_to_IR_result compiler_state_to_IR(Compiler_state *self, co
             ))
                 return OOM_ERROR;
             add_instruction("%s %s", op_code_to_str(OP_CODE_PUSH), str_base_data_const(&ast_node->m_token->m_id));
+            if (!compiler_state_pop_on_discarded_expression(self, ast_node))
+                return OOM_ERROR;
             break;
         case TOKEN_TYPE_INIT_LIST:
-            fprintf(stderr, "Initilizer list is not implemented");
-            abort();
+            add_instruction("%s []", op_code_to_str(OP_CODE_PUSH));
+            if (ast_node->m_sub_nodes.m_size > 0){
+                fprintf(stderr, "Initilizer list with elements is not implemented");
+                abort();
+            }
+            else if (!vec_base_push_back(&self->type_info_stack, self->alloc, &(Type_info){.m_tag = TYPE_INFO_TAG_VOID, .m_dimensions = 1}))
+                return OOM_ERROR;
+            if (!compiler_state_pop_on_discarded_expression(self, ast_node))
+                return OOM_ERROR;
             break;
 
         case TOKEN_TYPE_COMMA:
@@ -160,29 +197,22 @@ static Compiler_state_to_IR_result compiler_state_to_IR(Compiler_state *self, co
                         return syntax_error("Identifier <%s> is already in use", id_node->m_token->m_line_number, str_base_data_const(&id_node->m_token->m_id));
                 }
 
-                if (let_decl_type_info.m_dimensions > 0){
-                    if (expr_node->m_token->m_type != TOKEN_TYPE_INIT_LIST || expr_node->m_sub_nodes.m_size > 0)
-                        return syntax_error("Expression must be an empty Initilizer list", expr_node->m_token->m_line_number);
-
-                    if (!vec_base_push_back(&self->type_info_stack, self->alloc, &let_decl_type_info))
-                        return OOM_ERROR;
-
-                    add_instruction("%s []", op_code_to_str(OP_CODE_PUSH));
-                }
-                else{
-                    Compiler_state_to_IR_result to_IR_result = compiler_state_to_IR(self, expr_node);
-                    if (to_IR_result.error != COMPILE_ERROR_NONE)
-                        return to_IR_result;
-
-                    *(Type_info*)vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1) = let_decl_type_info;
-
-                    add_instruction("%s", op_code_to_str((enum Op_code)(OP_CODE_TO_BOOL + let_decl_type_info.m_tag - TYPE_INFO_TAG_BOOL)));
-                }
-
+                Compiler_state_to_IR_result to_IR_result = compiler_state_to_IR(self, expr_node);
+                if (to_IR_result.error != COMPILE_ERROR_NONE)
+                    return to_IR_result;
+                
                 if (!vec_base_push_back(&self->id_stack, self->alloc, &id_node->m_token->m_id))
                     return OOM_ERROR;
 
+                Type_info *last_type_info_ptr = vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1), last_type_info = *last_type_info_ptr;
+                if (binary_op_result_type_info(BINARY_OP_ASSIGNMENT, let_decl_type_info, last_type_info).m_tag == TYPE_INFO_TAG_NONE)
+                    return syntax_error("Expression's type is incompatible with the type of the destination", expr_node->m_token->m_line_number);
+
+                *last_type_info_ptr = let_decl_type_info;
                 ++*(usize*)vec_base_at(&self->let_decl_counts, self->let_decl_counts.m_size - 1);
+
+                if (last_type_info.m_tag >= TYPE_INFO_TAG_BOOL && last_type_info.m_tag <= TYPE_INFO_TAG_STR)
+                    add_instruction("%s", op_code_to_str((enum Op_code)(OP_CODE_TO_BOOL + let_decl_type_info.m_tag - TYPE_INFO_TAG_BOOL)));
             }
             break;
 
@@ -190,7 +220,6 @@ static Compiler_state_to_IR_result compiler_state_to_IR(Compiler_state *self, co
         case TOKEN_TYPE_ELSE:
 
         case TOKEN_TYPE_WHILE:
-        case TOKEN_TYPE_FOR:
             break;
 
         case TOKEN_TYPE_RETURN:
