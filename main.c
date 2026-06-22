@@ -29,6 +29,7 @@
 #include "hdrs/Utils/Num.h"
 #include "hdrs/Utils/Utils.h"
 
+#include "hdrs/Lang/Compiler.h"
 #include "hdrs/Lang/Lexer.h"
 #include "hdrs/Lang/Parser.h"
 
@@ -64,6 +65,7 @@ int main(const int argc, const char *const *const argv){
     }
 
     token_slice_print(lex_result.tokens);
+    printf("------------------------------------------------------------------------------------------------\n");
 
     Parse_result parse_result = parse(&arena, lex_result.tokens);
     switch (parse_result.error){
@@ -77,6 +79,22 @@ int main(const int argc, const char *const *const argv){
     }
 
     ast_node_ptr_slice_print(parse_result.ast_nodes);
+    printf("------------------------------------------------------------------------------------------------\n");
+
+    Compile_to_IR_result compile_to_IR_result = compile_to_IR(&arena, parse_result.ast_nodes);
+
+    switch (compile_to_IR_result.error){
+        case COMPILE_ERROR_NONE:
+            break;
+        case COMPILE_ERROR_OOM:
+            goto oom_error;
+        case COMPILE_ERROR_SYNTAX:
+            error_info = compile_to_IR_result.error_info;
+            goto syntax_error;
+    }
+
+    printf("%s", str_base_data(&compile_to_IR_result.IR));
+    printf("------------------------------------------------------------------------------------------------\n");
 
     arena_deinit(&arena);
 

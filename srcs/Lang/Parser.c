@@ -16,7 +16,7 @@
 // ------------------------------------------------------------------------------------------------
 
 static bool token_type_is_atom(enum Token_type token_type){
-    return token_type >= TOKEN_TYPE_ID && token_type <= TOKEN_TYPE_LIST_LIT;
+    return token_type >= TOKEN_TYPE_ID && token_type <= TOKEN_TYPE_INIT_LIST;
 }
 static bool token_type_is_operation(enum Token_type token_type){
     return token_type >= TOKEN_TYPE_EQUALS2 && token_type <= TOKEN_TYPE_EQUALS1;
@@ -99,11 +99,11 @@ static AST_node* parser_state_ast_node_alloc(Parser_state *self, const Token *to
 
     return ast_node;
 }
-#define syntax_error(...) parser_state_syntax_error(self, __VA_ARGS__)
+#define syntax_error(...) parser_state_syntax_error(self, "On line <" USIZE_PFMT ">: " __VA_ARGS__)
 
 static Parser_state_parse_result parser_state_parse_arithm_expr(Parser_state *self, usize prev_rhs_bp){
     if (self->token_idx >= self->tokens.m_size)
-        return syntax_error("On line <" USIZE_PFMT ">: No tokens are available", self->tokens.m_data[self->tokens.m_size - 1].m_line_number);
+        return syntax_error("No tokens are available", self->tokens.m_data[self->tokens.m_size - 1].m_line_number);
 
     AST_node *lhs;
 
@@ -123,7 +123,7 @@ static Parser_state_parse_result parser_state_parse_arithm_expr(Parser_state *se
         if (!list_tok_id.success)
             return OOM_ERROR;
 
-        *list_tok = (Token){.m_type = TOKEN_TYPE_LIST_LIT, .m_id = list_tok_id.result, .m_line_number = tok->m_line_number};
+        *list_tok = (Token){.m_type = TOKEN_TYPE_INIT_LIST, .m_id = list_tok_id.result, .m_line_number = tok->m_line_number};
 
         lhs = parser_state_ast_node_alloc(self, list_tok);
         if (!lhs)
@@ -157,7 +157,7 @@ static Parser_state_parse_result parser_state_parse_arithm_expr(Parser_state *se
 
         tok = &self->tokens.m_data[self->token_idx++];
         if (tok->m_type != TOKEN_TYPE_RPAREN)
-            return syntax_error("On line <" USIZE_PFMT ">: Expected <)>", tok->m_line_number);
+            return syntax_error("Expected <)>", tok->m_line_number);
     }
     else{
         switch (tok->m_type){
@@ -180,13 +180,13 @@ static Parser_state_parse_result parser_state_parse_arithm_expr(Parser_state *se
                 }
                 break;
             default:
-                return syntax_error("On line <" USIZE_PFMT ">: Found invalid token <%s>", tok->m_line_number, str_base_data_const(&tok->m_id));
+                return syntax_error("Found invalid token <%s>", tok->m_line_number, str_base_data_const(&tok->m_id));
         }
     }
 
     while (true){
         if (self->token_idx >= self->tokens.m_size)
-            return syntax_error("On line <" USIZE_PFMT ">: No tokens are available", self->tokens.m_data[self->tokens.m_size - 1].m_line_number);
+            return syntax_error("No tokens are available", self->tokens.m_data[self->tokens.m_size - 1].m_line_number);
 
         Parser_state_parse_result rhs_result;
         AST_node *new_lhs;
@@ -214,7 +214,7 @@ static Parser_state_parse_result parser_state_parse_arithm_expr(Parser_state *se
 
                 op = &self->tokens.m_data[self->token_idx++];
                 if (op->m_type != TOKEN_TYPE_RBRACKET)
-                    return syntax_error("On line <" USIZE_PFMT ">: <[> must be closed by <]>", op->m_line_number);
+                    return syntax_error("<[> must be closed by <]>", op->m_line_number);
 
                 rhs_result.ast_node_ptr->m_parent = new_lhs;
                 break;
@@ -241,7 +241,7 @@ static Parser_state_parse_result parser_state_parse_arithm_expr(Parser_state *se
                 break;
             default:
                 if (!token_type_is_operation(op->m_type))
-                    return syntax_error("On line <" USIZE_PFMT ">: Found invalid token <%s>", op->m_line_number, str_base_data_const(&op->m_id));
+                    return syntax_error("Found invalid token <%s>", op->m_line_number, str_base_data_const(&op->m_id));
 
                 Binding_powers bps = token_type_binding_powers(op->m_type);
                 if (bps.lhs < prev_rhs_bp)
@@ -270,9 +270,9 @@ end:
     return (Parser_state_parse_result){.ast_node_ptr = lhs, .error = PARSE_ERROR_NONE};
 }
 
-static Parser_state_parse_result parser_state_parse_type(Parser_state *self){
+static Parser_state_parse_result parser_state_parse_type(Parser_state *self, bool void_is_allowed){
     if (self->token_idx >= self->tokens.m_size)
-        return syntax_error("On line <" USIZE_PFMT ">: No tokens are available", self->tokens.m_data[self->tokens.m_size - 1].m_line_number);
+        return syntax_error("No tokens are available", self->tokens.m_data[self->tokens.m_size - 1].m_line_number);
 
     const Token *tok = &self->tokens.m_data[self->token_idx++];
 
@@ -284,14 +284,11 @@ static Parser_state_parse_result parser_state_parse_type(Parser_state *self){
     switch (tok->m_type){
         case TOKEN_TYPE_LBRACKET:
             if (self->token_idx >= self->tokens.m_size || (tok = &self->tokens.m_data[self->token_idx++])->m_type != TOKEN_TYPE_RBRACKET)
-                return syntax_error("On line <" USIZE_PFMT ">: <[> must be closed by <]>", tok->m_line_number);
+                return syntax_error("<[> must be closed by <]>", tok->m_line_number);
 
-            Parser_state_parse_result parse_result = parser_state_parse_type(self);
+            Parser_state_parse_result parse_result = parser_state_parse_type(self, false);
             if (parse_result.error != PARSE_ERROR_NONE)
                 return parse_result;
-
-            if (parse_result.ast_node_ptr->m_token->m_type == TOKEN_TYPE_VOID)
-                return syntax_error("On line <" USIZE_PFMT ">: List of type <void> is not allowed", self->tokens.m_data[self->token_idx - 1].m_line_number);
 
             if (!vec_base_push_back(&sub_nodes, self->alloc, &parse_result.ast_node_ptr))
                 return OOM_ERROR;
@@ -299,6 +296,8 @@ static Parser_state_parse_result parser_state_parse_type(Parser_state *self){
             parse_result.ast_node_ptr->m_parent = node;
             break;
         case TOKEN_TYPE_VOID:
+            if (!void_is_allowed)
+                return syntax_error("<void> is not allowed as a type in the current context", tok->m_line_number);
         case TOKEN_TYPE_BOOL:
         case TOKEN_TYPE_CHAR:
         case TOKEN_TYPE_INT:
@@ -306,7 +305,7 @@ static Parser_state_parse_result parser_state_parse_type(Parser_state *self){
         case TOKEN_TYPE_STR:
             break;
         default:
-            return syntax_error("On line <" USIZE_PFMT ">: Found unknown or contextually invalid token <%s>", tok->m_line_number, str_base_data_const(&tok->m_id));
+            return syntax_error("Found unknown or contextually invalid token <%s>", tok->m_line_number, str_base_data_const(&tok->m_id));
     }
 
     node->m_sub_nodes = (AST_node_ptr_slice){.m_size = sub_nodes.m_size, .m_data = sub_nodes.m_data};
@@ -341,7 +340,7 @@ static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
         case TOKEN_TYPE_INT_LIT:
         case TOKEN_TYPE_FLOAT_LIT:
         case TOKEN_TYPE_STR_LIT:
-        case TOKEN_TYPE_LIST_LIT:
+        case TOKEN_TYPE_INIT_LIST:
         case TOKEN_TYPE_LPAREN:
         case TOKEN_TYPE_LBRACKET:
         case TOKEN_TYPE_PLUS:
@@ -355,7 +354,7 @@ static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
                 return parse_result;
 
             if (self->token_idx >= self->tokens.m_size || (tok = &self->tokens.m_data[self->token_idx++])->m_type != TOKEN_TYPE_SEMICOLON)
-                return syntax_error("On line <" USIZE_PFMT ">: Statement must end with <;>", tok->m_line_number);
+                return syntax_error("Statement must end with <;>", tok->m_line_number);
 
             node = parse_result.ast_node_ptr;
             break;
@@ -390,7 +389,7 @@ static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
                 return OOM_ERROR;
 
             if (self->token_idx >= self->tokens.m_size || (tok = &self->tokens.m_data[self->token_idx++])->m_type != TOKEN_TYPE_ID)
-                return syntax_error("On line <" USIZE_PFMT ">: <let> must be followed by an identifier", tok->m_line_number);
+                return syntax_error("<let> must be followed by an identifier", tok->m_line_number);
 
             node_temp = parser_state_ast_node_alloc(self, tok);
             if (!node_temp || !vec_base_push_back(&sub_nodes, self->alloc, &node_temp))
@@ -399,10 +398,10 @@ static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
             node_temp->m_parent = node;
 
             if (self->token_idx >= self->tokens.m_size || (tok_temp = &self->tokens.m_data[self->token_idx++])->m_type != TOKEN_TYPE_COLON)
-                return syntax_error("On line <" USIZE_PFMT ">: <%s> must be followed by <:>", tok->m_line_number, str_base_data_const(&tok->m_id));
+                return syntax_error("<%s> must be followed by <:>", tok->m_line_number, str_base_data_const(&tok->m_id));
             tok = tok_temp;
 
-            parse_result = parser_state_parse_type(self);
+            parse_result = parser_state_parse_type(self, false);
             if (parse_result.error != PARSE_ERROR_NONE)
                 return parse_result;
 
@@ -413,7 +412,7 @@ static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
 
             tok = &self->tokens.m_data[self->tokens.m_size - 1];
             if (self->token_idx >= self->tokens.m_size || (tok = &self->tokens.m_data[self->token_idx++])->m_type != TOKEN_TYPE_EQUALS1)
-                return syntax_error("On line <" USIZE_PFMT ">: Type must be followed by <=>", tok->m_line_number);
+                return syntax_error("Type must be followed by <=>", tok->m_line_number);
 
             parse_result = parser_state_parse_arithm_expr(self, 0);
             if (parse_result.error != PARSE_ERROR_NONE)
@@ -426,7 +425,7 @@ static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
 
             tok = &self->tokens.m_data[self->tokens.m_size - 1];
             if (self->token_idx >= self->tokens.m_size || (tok = &self->tokens.m_data[self->token_idx++])->m_type != TOKEN_TYPE_SEMICOLON)
-                return syntax_error("On line <" USIZE_PFMT ">: <let> statement must end with <;>", tok->m_line_number);
+                return syntax_error("<let> statement must end with <;>", tok->m_line_number);
 
             node->m_sub_nodes = (AST_node_ptr_slice){.m_size = sub_nodes.m_size, .m_data = sub_nodes.m_data};
             break;
@@ -436,7 +435,7 @@ static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
             bool is_while = (tok->m_type == TOKEN_TYPE_WHILE);
 
             if (self->token_idx >= self->tokens.m_size || self->tokens.m_data[self->token_idx++].m_type != TOKEN_TYPE_LPAREN)
-                return syntax_error("On line <" USIZE_PFMT ">: <%s> must be followed by <(>", tok->m_line_number, str_base_data_const(&tok->m_id));
+                return syntax_error("<%s> must be followed by <(>", tok->m_line_number, str_base_data_const(&tok->m_id));
 
             node = parser_state_ast_node_alloc(self, tok);
             if (!node)
@@ -451,14 +450,14 @@ static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
             tok_temp = &self->tokens.m_data[self->token_idx++];
             if (tok_temp->m_type != TOKEN_TYPE_RPAREN){
                 return syntax_error(
-                    "On line <" USIZE_PFMT ">: <%s> statement's conditional expression must be closed by <)>",
+                    "<%s> statement's conditional expression must be closed by <)>",
                     tok_temp->m_line_number,
                     str_base_data_const(&tok->m_id)
                 );
             }
 
             if (self->token_idx >= self->tokens.m_size)
-                return syntax_error("On line <" USIZE_PFMT ">: <%s> statement is missing body", tok_temp->m_line_number, str_base_data_const(&tok->m_id));
+                return syntax_error("<%s> statement is missing body", tok_temp->m_line_number, str_base_data_const(&tok->m_id));
 
             if (!vec_base_push_back(&sub_nodes, self->alloc, &parse_result.ast_node_ptr))
                 return OOM_ERROR;
@@ -478,9 +477,9 @@ static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
 
             if (self->token_idx < self->tokens.m_size && (tok = &self->tokens.m_data[self->token_idx])->m_type == TOKEN_TYPE_ELSE){
                 if (is_while)
-                    return syntax_error("On line <" USIZE_PFMT ">: <while> statement followed by <else> statement", tok->m_line_number);
+                    return syntax_error("<while> statement followed by <else> statement", tok->m_line_number);
                 if (++self->token_idx >= self->tokens.m_size)
-                    return syntax_error("On line <" USIZE_PFMT ">: <else> statement is missing body", tok->m_line_number);
+                    return syntax_error("<else> statement is missing body", tok->m_line_number);
 
                 Vec_base else_sub_nodes = vec_base_init(AST_node*);
                 AST_node *else_node = parser_state_ast_node_alloc(self, tok);
@@ -510,7 +509,7 @@ static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
 
         case TOKEN_TYPE_FOR:
             if (self->token_idx >= self->tokens.m_size || self->tokens.m_data[self->token_idx++].m_type != TOKEN_TYPE_LPAREN)
-                return syntax_error("On line <" USIZE_PFMT ">: <for> must be followed by <(>", tok->m_line_number);
+                return syntax_error("<for> must be followed by <(>", tok->m_line_number);
 
             usize for_start_expr_start_pos = self->token_idx;
 
@@ -520,7 +519,7 @@ static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
 
             tok = &self->tokens.m_data[self->token_idx];
             if (tok->m_type != TOKEN_TYPE_DOT2)
-                return syntax_error("On line <" USIZE_PFMT ">: <for> statement's start expression must be followed by <..>", tok->m_line_number);
+                return syntax_error("<for> statement's start expression must be followed by <..>", tok->m_line_number);
 
             usize dot2_pos = self->token_idx++;
 
@@ -530,7 +529,7 @@ static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
 
             tok = &self->tokens.m_data[self->token_idx];
             if (tok->m_type != TOKEN_TYPE_RPAREN)
-                return syntax_error("On line <" USIZE_PFMT ">: <for> statement's end expression must be followed by <)>", tok->m_line_number);
+                return syntax_error("<for> statement's end expression must be followed by <)>", tok->m_line_number);
             
             usize for_end_expr_end_pos = self->token_idx++;
 
@@ -538,17 +537,17 @@ static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
                 self->token_idx >= self->tokens.m_size || (tok = &self->tokens.m_data[self->token_idx++])->m_type != TOKEN_TYPE_PIPE ||
                 self->token_idx >= self->tokens.m_size || (tok = &self->tokens.m_data[self->token_idx++])->m_type != TOKEN_TYPE_ID
             )
-                return syntax_error("On line <" USIZE_PFMT ">: <for> statement's range expression must be followed by a capture expression <|id|>", tok->m_line_number);
+                return syntax_error("<for> statement's range expression must be followed by a capture expression <|identifier|>", tok->m_line_number);
 
             AST_node *for_capture_node = parser_state_ast_node_alloc(self, tok);
             if (!for_capture_node)
                 return OOM_ERROR;
 
             if (self->token_idx >= self->tokens.m_size || (tok = &self->tokens.m_data[self->token_idx++])->m_type != TOKEN_TYPE_PIPE)
-                return syntax_error("On line <" USIZE_PFMT ">: <for> statement's range expression must be followed by a capture expression <|id|>", tok->m_line_number);
+                return syntax_error("<for> statement's range expression must be followed by a capture expression <|identifier|>", tok->m_line_number);
 
             if (self->token_idx >= self->tokens.m_size)
-                return syntax_error("On line <" USIZE_PFMT ">: <for> statement is missing body", tok->m_line_number);
+                return syntax_error("<for> statement is missing body", tok->m_line_number);
 
             usize for_body_start_pos = self->token_idx;
             bool for_body_empty = (self->tokens.m_data[for_body_start_pos].m_type == TOKEN_TYPE_SEMICOLON);
@@ -626,7 +625,7 @@ static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
 
         case TOKEN_TYPE_RETURN:
             if (self->token_idx >= self->tokens.m_size)
-                return syntax_error("On line <" USIZE_PFMT ">: <return> must be followed by a <;> or an arithmetic expression", tok->m_line_number);
+                return syntax_error("<return> must be followed by a <;> or an arithmetic expression", tok->m_line_number);
 
             node = parser_state_ast_node_alloc(self, tok);
             if (!node)
@@ -645,11 +644,11 @@ static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
             }
 
             if (self->token_idx >= self->tokens.m_size || self->tokens.m_data[self->token_idx++].m_type != TOKEN_TYPE_SEMICOLON)
-                return syntax_error("On line <" USIZE_PFMT ">: <return> statement must end with <;>", tok->m_line_number);
+                return syntax_error("<return> statement must end with <;>", tok->m_line_number);
             break;
 
         default:
-            return syntax_error("On line <" USIZE_PFMT ">: Found unknown or contextually invalid token <%s>", tok->m_line_number, str_base_data_const(&tok->m_id));
+            return syntax_error("Found unknown or contextually invalid token <%s>", tok->m_line_number, str_base_data_const(&tok->m_id));
     }
 
     return (Parser_state_parse_result){.ast_node_ptr = node, .error = PARSE_ERROR_NONE};
@@ -685,13 +684,8 @@ Parse_result parse(Arena *arena, Token_slice tokens){
         const Token *tok = &state.tokens.m_data[state.token_idx];
         if (tok->m_type != TOKEN_TYPE_SEMICOLON){
             Parser_state_parse_result ast_node = parser_state_parse_expr(&state);
-            switch (ast_node.error){
-                case PARSE_ERROR_NONE:
-                    break;
-                case PARSE_ERROR_OOM:
-                case PARSE_ERROR_SYNTAX:
-                    return (Parse_result){.error_info = ast_node.error_info, .error = ast_node.error};
-            }
+            if (ast_node.error != PARSE_ERROR_NONE)
+                return (Parse_result){.error_info = ast_node.error_info, .error = ast_node.error};
             if (!vec_base_push_back(&state.ast_node_ptrs, state.alloc, &ast_node.ast_node_ptr))
                 return (Parse_result){.error = PARSE_ERROR_OOM};
         }
