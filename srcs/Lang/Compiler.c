@@ -153,20 +153,16 @@ static Compiler_state_to_IR_result compiler_state_to_IR(Compiler_state *self, co
         case TOKEN_TYPE_SEMICOLON:
         case TOKEN_TYPE_LPAREN:
         case TOKEN_TYPE_RPAREN:
-        case TOKEN_TYPE_LBRACKET:
-        case TOKEN_TYPE_RBRACKET:
         case TOKEN_TYPE_LBRACE:
         case TOKEN_TYPE_RBRACE:
 
-        case TOKEN_TYPE_DOT2:
+        case TOKEN_TYPE_LBRACKET:
         case TOKEN_TYPE_EQUALS2:
         case TOKEN_TYPE_NOT_EQUALS:
         case TOKEN_TYPE_LESS_THAN1:
         case TOKEN_TYPE_LESS_THAN1_EQUALS:
         case TOKEN_TYPE_GREATER_THAN1:
         case TOKEN_TYPE_GREATER_THAN1_EQUALS:
-        case TOKEN_TYPE_PLUS:
-        case TOKEN_TYPE_MINUS:
         case TOKEN_TYPE_ASTERISK1:
         case TOKEN_TYPE_ASTERISK2:
         case TOKEN_TYPE_SLASH:
@@ -176,11 +172,93 @@ static Compiler_state_to_IR_result compiler_state_to_IR(Compiler_state *self, co
         case TOKEN_TYPE_AMPERSAND:
         case TOKEN_TYPE_PIPE:
         case TOKEN_TYPE_CARET:
-        case TOKEN_TYPE_TILDE:
+            {
+                const AST_node *lhs_node = ast_node->m_sub_nodes.m_data[0];
+                const AST_node *rhs_node = ast_node->m_sub_nodes.m_data[1];
+
+                Compiler_state_to_IR_result to_IR_result;
+                if (
+                    (to_IR_result = compiler_state_to_IR(self, lhs_node)).error != COMPILE_ERROR_NONE ||
+                    (to_IR_result = compiler_state_to_IR(self, rhs_node)).error != COMPILE_ERROR_NONE
+                )
+                    return to_IR_result;
+
+                enum Binary_op bin_op;
+                enum Op_code op_code;
+
+                enum Token_type tok_type = ast_node->m_token->m_type;
+                switch (tok_type){
+                    case TOKEN_TYPE_LBRACKET:
+                        bin_op = BINARY_OP_SUBSCRIPT;
+                        op_code = OP_CODE_DEREF;
+                        break;
+                    case TOKEN_TYPE_EQUALS2:
+                    case TOKEN_TYPE_NOT_EQUALS:
+                    case TOKEN_TYPE_LESS_THAN1:
+                    case TOKEN_TYPE_LESS_THAN1_EQUALS:
+                    case TOKEN_TYPE_GREATER_THAN1:
+                    case TOKEN_TYPE_GREATER_THAN1_EQUALS:
+                        bin_op = (enum Binary_op)(BINARY_OP_EQ + tok_type - TOKEN_TYPE_EQUALS2);
+                        op_code = (enum Op_code)(OP_CODE_CMP_EQ + tok_type - TOKEN_TYPE_EQUALS2);
+                        break;
+                    case TOKEN_TYPE_ASTERISK1:
+                    case TOKEN_TYPE_SLASH:
+                    case TOKEN_TYPE_PERCENT:
+                    case TOKEN_TYPE_ASTERISK2:
+                    case TOKEN_TYPE_LESS_THAN2:
+                    case TOKEN_TYPE_GREATER_THAN2:
+                    case TOKEN_TYPE_AMPERSAND:
+                    case TOKEN_TYPE_PIPE:
+                    case TOKEN_TYPE_CARET:
+                        bin_op = (enum Binary_op)(BINARY_OP_MUL + tok_type - TOKEN_TYPE_ASTERISK1);
+                        op_code = (enum Op_code)(OP_CODE_MUL + tok_type - TOKEN_TYPE_ASTERISK1);
+                        break;
+                    default:
+                        break;
+                }
+
+                Type_info *lhs_type_info_ptr = vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 2);
+                Type_info *rhs_type_info_ptr = vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1);
+
+                Type_info bin_op_result = binary_op_result_type_info(bin_op, *lhs_type_info_ptr, *rhs_type_info_ptr);
+                if (bin_op_result.m_tag == TYPE_INFO_TAG_NONE){
+                    Str_base_result lhs_type_info_str;
+                    Str_base_result rhs_type_info_str;
+                    if (
+                        !(lhs_type_info_str = type_info_to_str_base(*lhs_type_info_ptr, self->alloc)).success ||
+                        !(rhs_type_info_str = type_info_to_str_base(*rhs_type_info_ptr, self->alloc)).success
+                    )
+                        return OOM_ERROR;
+                    return syntax_error(
+                        "Invalid binary operation <%s> between <%s> and <%s>",
+                        ast_node->m_token->m_line_number,
+                        str_base_data_const(&ast_node->m_token->m_id),
+                        str_base_data_const(&lhs_type_info_str.result),
+                        str_base_data_const(&rhs_type_info_str.result)
+                    );
+                }
+
+                *lhs_type_info_ptr = bin_op_result;
+                vec_base_pop_back_discard(&self->type_info_stack);
+
+                add_instruction("%s", op_code_to_str(op_code));
+                pop_on_discarded_expression(ast_node);
+            }
+            break;
         case TOKEN_TYPE_AND:
         case TOKEN_TYPE_OR:
+            break;
+
+        case TOKEN_TYPE_TILDE:
+            break;
         case TOKEN_TYPE_NOT:
+            break;
+        case TOKEN_TYPE_PLUS:
+            break;
+        case TOKEN_TYPE_MINUS:
+            break;
         case TOKEN_TYPE_EQUALS1:
+            break;
         
         case TOKEN_TYPE_FN:
             fprintf(stderr, "Not implemented\n");

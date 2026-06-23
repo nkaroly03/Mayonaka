@@ -5,6 +5,8 @@
 extern "C"{
 #endif
 
+#include "../Allocator/Allocator.h"
+#include "../Data_structure/Str_base.h"
 #include "../Utils/Num.h"
 
 enum Type_info_tag{
@@ -21,6 +23,8 @@ typedef struct Type_info{
     enum Type_info_tag m_tag;
     usize m_dimensions;
 } Type_info;
+
+Str_base_result type_info_to_str_base(Type_info type_info, Allocator alloc);
 
 typedef struct Type_info_slice{
     usize m_size;

@@ -1,4 +1,36 @@
+#include <stdbool.h>
+
+#include "../../hdrs/Allocator/Allocator.h"
+#include "../../hdrs/Data_structure/Str_base.h"
+
 #include "../../hdrs/Lang/Type_info.h"
+
+static const char *TYPE_INFO_TAG_STRS[] = {
+    [TYPE_INFO_TAG_NONE]  = "none",
+    [TYPE_INFO_TAG_VOID]  = "void",
+    [TYPE_INFO_TAG_BOOL]  = "bool",
+    [TYPE_INFO_TAG_CHAR]  = "char",
+    [TYPE_INFO_TAG_INT]   = "int",
+    [TYPE_INFO_TAG_FLOAT] = "float",
+    [TYPE_INFO_TAG_STR]   = "str",
+};
+
+Str_base_result type_info_to_str_base(Type_info type_info, Allocator alloc){
+    Str_base result = {0};
+
+    for (usize i = 0; i < type_info.m_dimensions; ++i)
+        if (!str_base_append_raw(&result, alloc, "[]"))
+            goto oom_error;
+
+    if (!str_base_append_raw(&result, alloc, TYPE_INFO_TAG_STRS[type_info.m_tag]))
+        goto oom_error;
+
+    return (Str_base_result){.result = result, .success = true};
+
+oom_error:
+    str_base_deinit(&result, alloc);
+    return (Str_base_result){0};
+}
 
 Type_info unary_op_result_type_info(enum Unary_op op, Type_info type_info){
     Type_info result = {0};

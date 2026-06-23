@@ -25,6 +25,5 @@ for (0..(v = scan("Hello:\n"))) |i|
         print("ok\n");
 /*/
 
-let i: int = 10;
-let j: int = 10;
-i;
+let i: int = 10 ** (3.0 * 2);
+// let j: int = 10;
