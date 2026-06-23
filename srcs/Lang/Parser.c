@@ -26,10 +26,11 @@ typedef struct Binding_powers{
     u8 lhs, rhs;
 } Binding_powers;
 
-#define bps_init(lhs_bp, rhs_bp) (Binding_powers){.lhs = lhs_bp, .rhs = rhs_bp}
-
 static const Binding_powers BINDING_POWERS_UNARY = {.lhs = 111, .rhs = 110};
+
 static Binding_powers token_type_binding_powers(enum Token_type token_type){
+    #define bps_init(lhs_bp, rhs_bp) (Binding_powers){.lhs = lhs_bp, .rhs = rhs_bp}
+
     switch (token_type){
         case TOKEN_TYPE_ASTERISK2:            return bps_init(121, 120);
 
@@ -82,6 +83,7 @@ typedef struct Parser_state_parse_result{
 } Parser_state_parse_result;
 
 static const Parser_state_parse_result OOM_ERROR = {.error = PARSE_ERROR_OOM};
+
 static Parser_state_parse_result parser_state_syntax_error(Parser_state *self, const char *fmt, ...){
     va_list args;
     va_start(args, fmt);

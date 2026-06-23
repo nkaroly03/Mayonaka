@@ -1,35 +1,12 @@
 #include <stdbool.h>
 
-#include "../../hdrs/Allocator/Allocator.h"
-#include "../../hdrs/Data_structure/Str_base.h"
-
 #include "../../hdrs/Lang/Type_info.h"
 
-static const char *TYPE_INFO_TAG_STRS[] = {
-    [TYPE_INFO_TAG_NONE]  = "none",
-    [TYPE_INFO_TAG_VOID]  = "void",
-    [TYPE_INFO_TAG_BOOL]  = "bool",
-    [TYPE_INFO_TAG_CHAR]  = "char",
-    [TYPE_INFO_TAG_INT]   = "int",
-    [TYPE_INFO_TAG_FLOAT] = "float",
-    [TYPE_INFO_TAG_STR]   = "str",
-};
-
-Str_base_result type_info_to_str_base(Type_info type_info, Allocator alloc){
-    Str_base result = {0};
-
-    for (usize i = 0; i < type_info.m_dimensions; ++i)
-        if (!str_base_append_raw(&result, alloc, "[]"))
-            goto oom_error;
-
-    if (!str_base_append_raw(&result, alloc, TYPE_INFO_TAG_STRS[type_info.m_tag]))
-        goto oom_error;
-
-    return (Str_base_result){.result = result, .success = true};
-
-oom_error:
-    str_base_deinit(&result, alloc);
-    return (Str_base_result){0};
+static bool type_info_tag_is_int_like(enum Type_info_tag tag){
+    return tag >= TYPE_INFO_TAG_BOOL && tag <= TYPE_INFO_TAG_INT;
+}
+static bool type_info_tag_is_arithmetic(enum Type_info_tag tag){
+    return tag >= TYPE_INFO_TAG_BOOL && tag <= TYPE_INFO_TAG_FLOAT;
 }
 
 Type_info unary_op_result_type_info(enum Unary_op op, Type_info type_info){
@@ -42,11 +19,11 @@ Type_info unary_op_result_type_info(enum Unary_op op, Type_info type_info){
             case UNARY_OP_PLUS:
             case UNARY_OP_MINUS:
             case UNARY_OP_NOT:
-                if (type_info.m_tag >= TYPE_INFO_TAG_BOOL && type_info.m_tag <= TYPE_INFO_TAG_FLOAT)
+                if (type_info_tag_is_arithmetic(type_info.m_tag))
                     result = (Type_info){.m_tag = (op != UNARY_OP_NOT) ? type_info.m_tag : TYPE_INFO_TAG_BOOL, .m_dimensions = 0};
                 break;
             case UNARY_OP_BNEG:
-                if (type_info.m_tag >= TYPE_INFO_TAG_BOOL && type_info.m_tag <= TYPE_INFO_TAG_INT)
+                if (type_info_tag_is_int_like(type_info.m_tag))
                     result = (Type_info){.m_tag = type_info.m_tag, .m_dimensions = 0};
                 break;
         }
@@ -66,15 +43,6 @@ Type_info binary_op_result_type_info(enum Binary_op op, Type_info lhs, Type_info
             case BINARY_OP_NONE:
                 break;
 
-            case BINARY_OP_SUBSCRIPT:
-                if (rhs.m_dimensions == 0 && rhs.m_tag >= TYPE_INFO_TAG_BOOL && rhs.m_tag <= TYPE_INFO_TAG_INT){
-                    if (lhs.m_dimensions > 0)
-                        result = (Type_info){.m_tag = lhs.m_tag, .m_dimensions = lhs.m_dimensions - 1};
-                    else if (lhs.m_tag == TYPE_INFO_TAG_STR)
-                        result = (Type_info){.m_tag = TYPE_INFO_TAG_CHAR, .m_dimensions = 0};
-                }
-                break;
-
             case BINARY_OP_ASSIGNMENT:
                 if (lhs.m_dimensions > 0 || rhs.m_dimensions > 0){
                     if (lhs.m_dimensions == rhs.m_dimensions && lhs.m_tag == rhs.m_tag)
@@ -82,6 +50,15 @@ Type_info binary_op_result_type_info(enum Binary_op op, Type_info lhs, Type_info
                 }
                 else if (lhs.m_dimensions == 0 && rhs.m_dimensions == 0)
                     result = lhs;
+                break;
+
+            case BINARY_OP_SUBSCRIPT:
+                if (rhs.m_dimensions == 0 && type_info_tag_is_int_like(rhs.m_tag)){
+                    if (lhs.m_dimensions > 0)
+                        result = (Type_info){.m_tag = lhs.m_tag, .m_dimensions = lhs.m_dimensions - 1};
+                    else if (lhs.m_tag == TYPE_INFO_TAG_STR)
+                        result = (Type_info){.m_tag = TYPE_INFO_TAG_CHAR, .m_dimensions = 0};
+                }
                 break;
 
             case BINARY_OP_EQ:
@@ -112,7 +89,7 @@ Type_info binary_op_result_type_info(enum Binary_op op, Type_info lhs, Type_info
             case BINARY_OP_DIV:
             case BINARY_OP_MOD:
             case BINARY_OP_POW:
-                if (lhs.m_dimensions == 0 && rhs.m_dimensions == 0 && lhs.m_tag <= TYPE_INFO_TAG_FLOAT && rhs.m_tag <= TYPE_INFO_TAG_FLOAT)
+                if (lhs.m_dimensions == 0 && rhs.m_dimensions == 0 && type_info_tag_is_arithmetic(lhs.m_tag) && type_info_tag_is_arithmetic(rhs.m_tag))
                     result = (Type_info){.m_tag = (lhs.m_tag > rhs.m_tag) ? lhs.m_tag : rhs.m_tag, .m_dimensions = 0};
                 break;
 
@@ -121,13 +98,13 @@ Type_info binary_op_result_type_info(enum Binary_op op, Type_info lhs, Type_info
             case BINARY_OP_BAND:
             case BINARY_OP_BOR:
             case BINARY_OP_XOR:
-                if (lhs.m_dimensions == 0 && rhs.m_dimensions == 0 && lhs.m_tag <= TYPE_INFO_TAG_INT && rhs.m_tag <= TYPE_INFO_TAG_INT)
+                if (lhs.m_dimensions == 0 && rhs.m_dimensions == 0 && type_info_tag_is_int_like(lhs.m_tag) && type_info_tag_is_int_like(rhs.m_tag))
                     result = (Type_info){.m_tag = (lhs.m_tag > rhs.m_tag) ? lhs.m_tag : rhs.m_tag, .m_dimensions = 0};
                 break;
 
             case BINARY_OP_AND:
             case BINARY_OP_OR:
-                if (lhs.m_dimensions == 0 && rhs.m_dimensions == 0 && lhs.m_tag <= TYPE_INFO_TAG_FLOAT && rhs.m_tag <= TYPE_INFO_TAG_FLOAT)
+                if (lhs.m_dimensions == 0 && rhs.m_dimensions == 0 && type_info_tag_is_arithmetic(lhs.m_tag) && type_info_tag_is_arithmetic(rhs.m_tag))
                     result = (Type_info){.m_tag = TYPE_INFO_TAG_BOOL, .m_dimensions = 0};
                 break;
         }

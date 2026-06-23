@@ -5,8 +5,6 @@
 extern "C"{
 #endif
 
-#include "../Allocator/Allocator.h"
-#include "../Data_structure/Str_base.h"
 #include "../Utils/Num.h"
 
 enum Type_info_tag{
@@ -23,8 +21,6 @@ typedef struct Type_info{
     enum Type_info_tag m_tag;
     usize m_dimensions;
 } Type_info;
-
-Str_base_result type_info_to_str_base(Type_info type_info, Allocator alloc);
 
 typedef struct Type_info_slice{
     usize m_size;
@@ -44,9 +40,9 @@ Type_info unary_op_result_type_info(enum Unary_op op, Type_info type_info);
 enum Binary_op{
     BINARY_OP_NONE,
 
-    BINARY_OP_SUBSCRIPT,
-
     BINARY_OP_ASSIGNMENT,
+
+    BINARY_OP_SUBSCRIPT,
 
     BINARY_OP_EQ,
     BINARY_OP_NEQ,

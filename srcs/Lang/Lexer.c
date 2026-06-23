@@ -21,6 +21,9 @@
 #define HEX_DIGIT_MAX_COUNT BIN_DIGIT_MAX_COUNT / 4
 #define U64_MAX_STRLEN 20
 
+static const char MULTI_LINE_COMMENT_MARKER[] = "/*/";
+static const char SINGLE_LINE_COMMENT_MARKER[] = "//";
+
 typedef struct Lexer_state{
     Allocator alloc;
     FILE *file;
@@ -64,9 +67,6 @@ static bool lexer_state_token_push_back(Lexer_state *self, enum Token_type type,
 
     return temp.success;
 }
-
-static const char MULTI_LINE_COMMENT_MARKER[] = "/*/";
-static const char SINGLE_LINE_COMMENT_MARKER[] = "//";
 
 static int is_not_newline(int c){
     return c != '\n';

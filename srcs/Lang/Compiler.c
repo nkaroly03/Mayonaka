@@ -16,6 +16,78 @@
 
 // ------------------------------------------------------------------------------------------------
 
+static const char *TYPE_INFO_TAG_SYMBOLS[] = {
+    [TYPE_INFO_TAG_NONE]  = "none",
+    [TYPE_INFO_TAG_VOID]  = "void",
+    [TYPE_INFO_TAG_BOOL]  = "bool",
+    [TYPE_INFO_TAG_CHAR]  = "char",
+    [TYPE_INFO_TAG_INT]   = "int",
+    [TYPE_INFO_TAG_FLOAT] = "float",
+    [TYPE_INFO_TAG_STR]   = "str",
+};
+
+static const char *OP_CODE_SYMBOLS[] = {
+    [OP_CODE_PUSH]      = "push",
+    [OP_CODE_POP]       = "pop",
+
+    [OP_CODE_CALL]      = "call",
+    [OP_CODE_RET]       = "ret",
+
+    [OP_CODE_JMP]       = "jmp",
+    [OP_CODE_JMPZ]      = "jmpz",
+
+    [OP_CODE_TO_BOOL]   = "to_bool",
+    [OP_CODE_TO_CHAR]   = "to_char",
+    [OP_CODE_TO_INT]    = "to_int",
+    [OP_CODE_TO_FLOAT]  = "to_float",
+    [OP_CODE_TO_STR]    = "to_str",
+
+    [OP_CODE_NEG]       = "neg",
+    [OP_CODE_BNEG]      = "bneg",
+
+    [OP_CODE_DEREF]     = "deref",
+
+    [OP_CODE_MOV]       = "mov",
+    [OP_CODE_MOV_DEREF] = "mov_deref",
+
+    [OP_CODE_CMP_EQ]    = "cmp_eq",
+    [OP_CODE_CMP_NEQ]   = "cmp_neq",
+    [OP_CODE_CMP_LE]    = "cmp_le",
+    [OP_CODE_CMP_LEQ]   = "cmp_leq",
+    [OP_CODE_CMP_GE]    = "cmp_ge",
+    [OP_CODE_CMP_GEQ]   = "cmp_geq",
+
+    [OP_CODE_ADD]       = "add",
+    [OP_CODE_SUB]       = "sub",
+    [OP_CODE_MUL]       = "mul",
+    [OP_CODE_DIV]       = "div",
+    [OP_CODE_MOD]       = "mod",
+    [OP_CODE_POW]       = "pow",
+
+    [OP_CODE_SHL]       = "shl",
+    [OP_CODE_SHR]       = "shr",
+    [OP_CODE_BAND]      = "band",
+    [OP_CODE_BOR]       = "bor",
+    [OP_CODE_XOR]       = "xor"
+};
+
+static Str_base_result type_info_to_str_base(Type_info type_info, Allocator alloc){
+    Str_base result = {0};
+
+    for (usize i = 0; i < type_info.m_dimensions; ++i)
+        if (!str_base_append_raw(&result, alloc, "[]"))
+            goto oom_error;
+
+    if (!str_base_append_raw(&result, alloc, TYPE_INFO_TAG_SYMBOLS[type_info.m_tag]))
+        goto oom_error;
+
+    return (Str_base_result){.result = result, .success = true};
+
+oom_error:
+    str_base_deinit(&result, alloc);
+    return (Str_base_result){0};
+}
+
 typedef struct Id_info{
     usize stack_idx;
     Type_info type_info;
@@ -36,8 +108,6 @@ typedef struct Compiler_state_to_IR_result{
 } Compiler_state_to_IR_result;
 
 static const Compiler_state_to_IR_result OOM_ERROR = {.error = COMPILE_ERROR_OOM};
-
-static const char SP_SYMBOL[] = "sp";
 
 static Compiler_state_to_IR_result compiler_state_syntax_error(Compiler_state *self, const char *fmt, ...){
     va_list args;
@@ -89,7 +159,7 @@ static bool compiler_state_pop_on_discarded_expression(Compiler_state *self, con
 
     vec_base_pop_back_discard(&self->type_info_stack);
 
-    return compiler_state_add_instruction(self, "%s", op_code_to_str(OP_CODE_POP));
+    return compiler_state_add_instruction(self, "%s", OP_CODE_SYMBOLS[OP_CODE_POP]);
 }
 #define pop_on_discarded_expression(ast_node) \
     do{ \
@@ -97,7 +167,12 @@ static bool compiler_state_pop_on_discarded_expression(Compiler_state *self, con
             return OOM_ERROR; \
     } while (0)
 
+static const char SP_SYMBOL[] = "sp";
+
 static Compiler_state_to_IR_result compiler_state_to_IR(Compiler_state *self, const AST_node *ast_node){
+    enum Binary_op bin_op;
+    enum Op_code op_code;
+
     switch (ast_node->m_token->m_type){
         case TOKEN_TYPE_ID:
             {
@@ -107,21 +182,21 @@ static Compiler_state_to_IR_result compiler_state_to_IR(Compiler_state *self, co
                 Id_info *id_info = pair.m_value;
                 if (!vec_base_push_back(&self->type_info_stack, self->alloc, &id_info->type_info))
                     return OOM_ERROR;
-                add_instruction("%s %s[-" USIZE_PFMT "]", op_code_to_str(OP_CODE_PUSH), SP_SYMBOL, self->type_info_stack.m_size - id_info->stack_idx - 1);
+                add_instruction("%s %s[-" USIZE_PFMT "]", OP_CODE_SYMBOLS[OP_CODE_PUSH], SP_SYMBOL, self->type_info_stack.m_size - id_info->stack_idx - 1);
                 pop_on_discarded_expression(ast_node);
             }
             break;
         case TOKEN_TYPE_ARGV:
             if (!vec_base_push_back(&self->type_info_stack, self->alloc, &(Type_info){.m_tag = TYPE_INFO_TAG_STR, .m_dimensions = 1}))
                 return OOM_ERROR;
-            add_instruction("%s %s", op_code_to_str(OP_CODE_PUSH), str_base_data_const(&ast_node->m_token->m_id));
+            add_instruction("%s %s", OP_CODE_SYMBOLS[OP_CODE_PUSH], str_base_data_const(&ast_node->m_token->m_id));
             pop_on_discarded_expression(ast_node);
             break;
         case TOKEN_TYPE_FALSE:
         case TOKEN_TYPE_TRUE:
             if (!vec_base_push_back(&self->type_info_stack, self->alloc, &(Type_info){.m_tag = TYPE_INFO_TAG_BOOL, .m_dimensions = 0}))
                 return OOM_ERROR;
-            add_instruction("%s %s", op_code_to_str(OP_CODE_PUSH), str_base_data_const(&ast_node->m_token->m_id));
+            add_instruction("%s %s", OP_CODE_SYMBOLS[OP_CODE_PUSH], str_base_data_const(&ast_node->m_token->m_id));
             pop_on_discarded_expression(ast_node);
             break;
         case TOKEN_TYPE_CHAR_LIT:
@@ -134,44 +209,94 @@ static Compiler_state_to_IR_result compiler_state_to_IR(Compiler_state *self, co
                 &(Type_info){.m_tag = (enum Type_info_tag)(TYPE_INFO_TAG_CHAR + ast_node->m_token->m_type - TOKEN_TYPE_CHAR_LIT), .m_dimensions = 0}
             ))
                 return OOM_ERROR;
-            add_instruction("%s %s", op_code_to_str(OP_CODE_PUSH), str_base_data_const(&ast_node->m_token->m_id));
+            add_instruction("%s %s", OP_CODE_SYMBOLS[OP_CODE_PUSH], str_base_data_const(&ast_node->m_token->m_id));
             pop_on_discarded_expression(ast_node);
             break;
         case TOKEN_TYPE_INIT_LIST:
-            add_instruction("%s []", op_code_to_str(OP_CODE_PUSH));
+            if (!vec_base_push_back(&self->type_info_stack, self->alloc, &(Type_info){.m_tag = TYPE_INFO_TAG_VOID, .m_dimensions = 1}))
+                return OOM_ERROR;
+            add_instruction("%s []", OP_CODE_SYMBOLS[OP_CODE_PUSH]);
             if (ast_node->m_sub_nodes.m_size > 0){
                 fprintf(stderr, "Initilizer list with elements is not implemented");
                 abort();
             }
-            else if (!vec_base_push_back(&self->type_info_stack, self->alloc, &(Type_info){.m_tag = TYPE_INFO_TAG_VOID, .m_dimensions = 1}))
-                return OOM_ERROR;
             pop_on_discarded_expression(ast_node);
             break;
 
-        case TOKEN_TYPE_COMMA:
-        case TOKEN_TYPE_COLON:
-        case TOKEN_TYPE_SEMICOLON:
         case TOKEN_TYPE_LPAREN:
-        case TOKEN_TYPE_RPAREN:
+            break;
         case TOKEN_TYPE_LBRACE:
-        case TOKEN_TYPE_RBRACE:
+            break;
 
-        case TOKEN_TYPE_LBRACKET:
-        case TOKEN_TYPE_EQUALS2:
-        case TOKEN_TYPE_NOT_EQUALS:
-        case TOKEN_TYPE_LESS_THAN1:
-        case TOKEN_TYPE_LESS_THAN1_EQUALS:
-        case TOKEN_TYPE_GREATER_THAN1:
-        case TOKEN_TYPE_GREATER_THAN1_EQUALS:
-        case TOKEN_TYPE_ASTERISK1:
-        case TOKEN_TYPE_ASTERISK2:
-        case TOKEN_TYPE_SLASH:
-        case TOKEN_TYPE_PERCENT:
-        case TOKEN_TYPE_LESS_THAN2:
-        case TOKEN_TYPE_GREATER_THAN2:
-        case TOKEN_TYPE_AMPERSAND:
-        case TOKEN_TYPE_PIPE:
-        case TOKEN_TYPE_CARET:
+        case TOKEN_TYPE_TILDE:
+            break;
+        case TOKEN_TYPE_NOT:
+            break;
+
+        case TOKEN_TYPE_PLUS:
+        case TOKEN_TYPE_MINUS:
+            if (ast_node->m_sub_nodes.m_size > 1){
+                if (ast_node->m_token->m_type == TOKEN_TYPE_PLUS){
+                    bin_op  = BINARY_OP_ADD;
+                    op_code = OP_CODE_ADD;
+                }
+                else{
+                    bin_op  = BINARY_OP_SUB;
+                    op_code = OP_CODE_SUB;
+                }
+                goto bin_op_case;
+            }
+            else{
+                enum Unary_op unary_op = (ast_node->m_token->m_type == TOKEN_TYPE_PLUS) ? UNARY_OP_PLUS : UNARY_OP_MINUS;
+
+                Compiler_state_to_IR_result to_IR_result = compiler_state_to_IR(self, ast_node->m_sub_nodes.m_data[0]);
+                if (to_IR_result.error != COMPILE_ERROR_NONE)
+                    return to_IR_result;
+
+                Type_info *last_type_info_ptr = vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1);
+
+                Type_info type_info = unary_op_result_type_info(unary_op, *last_type_info_ptr);
+                if (type_info.m_tag == TYPE_INFO_TAG_NONE){
+                    Str_base_result type_info_str = type_info_to_str_base(*last_type_info_ptr, self->alloc);
+                    if (!type_info_str.success)
+                        return OOM_ERROR;
+                    return syntax_error(
+                        "Invalid unary operation <%s> on <%s>",
+                        ast_node->m_token->m_line_number,
+                        str_base_data_const(&ast_node->m_token->m_id),
+                        str_base_data(&type_info_str.result)
+                    );
+                }
+
+                *last_type_info_ptr = type_info;
+
+                if (unary_op == UNARY_OP_MINUS)
+                    add_instruction("%s", OP_CODE_SYMBOLS[OP_CODE_NEG]);
+
+                pop_on_discarded_expression(ast_node);
+            }
+            break;
+
+        case TOKEN_TYPE_EQUALS1:
+            break;
+
+        case TOKEN_TYPE_LBRACKET:             bin_op = BINARY_OP_SUBSCRIPT; op_code = OP_CODE_DEREF;   goto bin_op_case;
+        case TOKEN_TYPE_EQUALS2:              bin_op = BINARY_OP_EQ;        op_code = OP_CODE_CMP_EQ;  goto bin_op_case;
+        case TOKEN_TYPE_NOT_EQUALS:           bin_op = BINARY_OP_NEQ;       op_code = OP_CODE_CMP_NEQ; goto bin_op_case;
+        case TOKEN_TYPE_LESS_THAN1:           bin_op = BINARY_OP_LE;        op_code = OP_CODE_CMP_LE;  goto bin_op_case;
+        case TOKEN_TYPE_LESS_THAN1_EQUALS:    bin_op = BINARY_OP_LEQ;       op_code = OP_CODE_CMP_LEQ; goto bin_op_case;
+        case TOKEN_TYPE_GREATER_THAN1:        bin_op = BINARY_OP_GE;        op_code = OP_CODE_CMP_GE;  goto bin_op_case;
+        case TOKEN_TYPE_GREATER_THAN1_EQUALS: bin_op = BINARY_OP_GEQ;       op_code = OP_CODE_CMP_GEQ; goto bin_op_case;
+        case TOKEN_TYPE_ASTERISK1:            bin_op = BINARY_OP_MUL;       op_code = OP_CODE_MUL;     goto bin_op_case;
+        case TOKEN_TYPE_SLASH:                bin_op = BINARY_OP_DIV;       op_code = OP_CODE_DIV;     goto bin_op_case;
+        case TOKEN_TYPE_PERCENT:              bin_op = BINARY_OP_MOD;       op_code = OP_CODE_MOD;     goto bin_op_case;
+        case TOKEN_TYPE_ASTERISK2:            bin_op = BINARY_OP_POW;       op_code = OP_CODE_POW;     goto bin_op_case;
+        case TOKEN_TYPE_LESS_THAN2:           bin_op = BINARY_OP_SHL;       op_code = OP_CODE_SHL;     goto bin_op_case;
+        case TOKEN_TYPE_GREATER_THAN2:        bin_op = BINARY_OP_SHR;       op_code = OP_CODE_SHR;     goto bin_op_case;
+        case TOKEN_TYPE_AMPERSAND:            bin_op = BINARY_OP_BAND;      op_code = OP_CODE_BAND;    goto bin_op_case;
+        case TOKEN_TYPE_PIPE:                 bin_op = BINARY_OP_BOR;       op_code = OP_CODE_BOR;     goto bin_op_case;
+        case TOKEN_TYPE_CARET:                bin_op = BINARY_OP_XOR;       op_code = OP_CODE_XOR;
+        bin_op_case:
             {
                 const AST_node *lhs_node = ast_node->m_sub_nodes.m_data[0];
                 const AST_node *rhs_node = ast_node->m_sub_nodes.m_data[1];
@@ -182,40 +307,6 @@ static Compiler_state_to_IR_result compiler_state_to_IR(Compiler_state *self, co
                     (to_IR_result = compiler_state_to_IR(self, rhs_node)).error != COMPILE_ERROR_NONE
                 )
                     return to_IR_result;
-
-                enum Binary_op bin_op;
-                enum Op_code op_code;
-
-                enum Token_type tok_type = ast_node->m_token->m_type;
-                switch (tok_type){
-                    case TOKEN_TYPE_LBRACKET:
-                        bin_op = BINARY_OP_SUBSCRIPT;
-                        op_code = OP_CODE_DEREF;
-                        break;
-                    case TOKEN_TYPE_EQUALS2:
-                    case TOKEN_TYPE_NOT_EQUALS:
-                    case TOKEN_TYPE_LESS_THAN1:
-                    case TOKEN_TYPE_LESS_THAN1_EQUALS:
-                    case TOKEN_TYPE_GREATER_THAN1:
-                    case TOKEN_TYPE_GREATER_THAN1_EQUALS:
-                        bin_op = (enum Binary_op)(BINARY_OP_EQ + tok_type - TOKEN_TYPE_EQUALS2);
-                        op_code = (enum Op_code)(OP_CODE_CMP_EQ + tok_type - TOKEN_TYPE_EQUALS2);
-                        break;
-                    case TOKEN_TYPE_ASTERISK1:
-                    case TOKEN_TYPE_SLASH:
-                    case TOKEN_TYPE_PERCENT:
-                    case TOKEN_TYPE_ASTERISK2:
-                    case TOKEN_TYPE_LESS_THAN2:
-                    case TOKEN_TYPE_GREATER_THAN2:
-                    case TOKEN_TYPE_AMPERSAND:
-                    case TOKEN_TYPE_PIPE:
-                    case TOKEN_TYPE_CARET:
-                        bin_op = (enum Binary_op)(BINARY_OP_MUL + tok_type - TOKEN_TYPE_ASTERISK1);
-                        op_code = (enum Op_code)(OP_CODE_MUL + tok_type - TOKEN_TYPE_ASTERISK1);
-                        break;
-                    default:
-                        break;
-                }
 
                 Type_info *lhs_type_info_ptr = vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 2);
                 Type_info *rhs_type_info_ptr = vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1);
@@ -241,23 +332,13 @@ static Compiler_state_to_IR_result compiler_state_to_IR(Compiler_state *self, co
                 *lhs_type_info_ptr = bin_op_result;
                 vec_base_pop_back_discard(&self->type_info_stack);
 
-                add_instruction("%s", op_code_to_str(op_code));
+                add_instruction("%s", OP_CODE_SYMBOLS[op_code]);
                 pop_on_discarded_expression(ast_node);
             }
             break;
+
         case TOKEN_TYPE_AND:
         case TOKEN_TYPE_OR:
-            break;
-
-        case TOKEN_TYPE_TILDE:
-            break;
-        case TOKEN_TYPE_NOT:
-            break;
-        case TOKEN_TYPE_PLUS:
-            break;
-        case TOKEN_TYPE_MINUS:
-            break;
-        case TOKEN_TYPE_EQUALS1:
             break;
         
         case TOKEN_TYPE_FN:
@@ -302,14 +383,27 @@ static Compiler_state_to_IR_result compiler_state_to_IR(Compiler_state *self, co
                     return OOM_ERROR;
 
                 Type_info *last_type_info_ptr = vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1), last_type_info = *last_type_info_ptr;
-                if (binary_op_result_type_info(BINARY_OP_ASSIGNMENT, let_decl_type_info, last_type_info).m_tag == TYPE_INFO_TAG_NONE)
-                    return syntax_error("Expression's type is incompatible with the type of the destination", expr_node->m_token->m_line_number);
+                if (binary_op_result_type_info(BINARY_OP_ASSIGNMENT, let_decl_type_info, last_type_info).m_tag == TYPE_INFO_TAG_NONE){
+                    Str_base_result type_str;
+                    Str_base_result expr_type_str;
+                    if (
+                        !(type_str = type_info_to_str_base(let_decl_type_info, self->alloc)).success ||
+                        !(expr_type_str = type_info_to_str_base(last_type_info, self->alloc)).success
+                    )
+                        return OOM_ERROR;
+                    return syntax_error(
+                        "Expression's type <%s> is incompatible with the type of the destination <%s>",
+                        expr_node->m_token->m_line_number,
+                        str_base_data(&expr_type_str.result),
+                        str_base_data(&type_str.result)
+                    );
+                }
 
                 *last_type_info_ptr = let_decl_type_info;
                 ++*(usize*)vec_base_at(&self->let_decl_counts, self->let_decl_counts.m_size - 1);
 
-                if (last_type_info.m_tag >= TYPE_INFO_TAG_BOOL && last_type_info.m_tag <= TYPE_INFO_TAG_STR)
-                    add_instruction("%s", op_code_to_str((enum Op_code)(OP_CODE_TO_BOOL + let_decl_type_info.m_tag - TYPE_INFO_TAG_BOOL)));
+                if (last_type_info.m_dimensions == 0)
+                    add_instruction("%s", OP_CODE_SYMBOLS[OP_CODE_TO_BOOL + let_decl_type_info.m_tag - TYPE_INFO_TAG_BOOL]);
             }
             break;
 
@@ -330,55 +424,6 @@ static Compiler_state_to_IR_result compiler_state_to_IR(Compiler_state *self, co
 }
 
 // ------------------------------------------------------------------------------------------------
-
-const char* op_code_to_str(enum Op_code op_code){
-    switch (op_code){
-        case OP_CODE_PUSH: return "push";
-        case OP_CODE_POP:  return "pop";
-
-        case OP_CODE_CALL: return "call";
-        case OP_CODE_RET: return "ret";
-
-        case OP_CODE_JMP:  return "jmp";
-        case OP_CODE_JMPZ: return "jmpz";
-
-        case OP_CODE_TO_BOOL:  return "to_bool";
-        case OP_CODE_TO_CHAR:  return "to_char";
-        case OP_CODE_TO_INT:   return "to_int";
-        case OP_CODE_TO_FLOAT: return "to_float";
-        case OP_CODE_TO_STR:   return "to_str";
-
-        case OP_CODE_NEG:  return "neg";
-        case OP_CODE_BNEG: return "bneg";
-
-        case OP_CODE_DEREF: return "deref";
-
-        case OP_CODE_MOV:       return "mov";
-        case OP_CODE_MOV_DEREF: return "mov_deref";
-
-        case OP_CODE_CMP_EQ:  return "cmp_eq";
-        case OP_CODE_CMP_NEQ: return "cmp_neq";
-        case OP_CODE_CMP_LE:  return "cmp_le";
-        case OP_CODE_CMP_LEQ: return "cmp_leq";
-        case OP_CODE_CMP_GE:  return "cmp_ge";
-        case OP_CODE_CMP_GEQ: return "cmp_geq";
-
-        case OP_CODE_ADD: return "add";
-        case OP_CODE_SUB: return "sub";
-        case OP_CODE_MUL: return "mul";
-        case OP_CODE_DIV: return "div";
-        case OP_CODE_MOD: return "mod";
-        case OP_CODE_POW: return "pow";
-
-        case OP_CODE_SHL:  return "shl";
-        case OP_CODE_SHR:  return "shr";
-        case OP_CODE_BAND: return "band";
-        case OP_CODE_BOR:  return "bor";
-        case OP_CODE_XOR:  return "xor";
-
-        default: return NULL;
-    }
-}
 
 Compile_to_IR_result compile_to_IR(Arena *arena, AST_node_ptr_slice ast_nodes){
     assert(arena && "<arena> is not nullable");

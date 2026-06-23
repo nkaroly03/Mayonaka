@@ -15,7 +15,6 @@ enum Op_code{
     OP_CODE_POP,
 
     OP_CODE_CALL,
-
     OP_CODE_RET,
 
     OP_CODE_JMP,
@@ -55,8 +54,6 @@ enum Op_code{
     OP_CODE_BOR,
     OP_CODE_XOR
 };
-
-const char* op_code_to_str(enum Op_code op_code);
 
 enum Compile_error{
     COMPILE_ERROR_NONE,
