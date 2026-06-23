@@ -8,8 +8,6 @@
 #include "../../hdrs/Data_structure/Str_base.h"
 #include "../../hdrs/Data_structure/Umap_base.h"
 #include "../../hdrs/Data_structure/Vec_base.h"
-#include "../../hdrs/Utils/Cmp.h"
-#include "../../hdrs/Utils/Hash.h"
 #include "../../hdrs/Utils/Num.h"
 
 #include "../../hdrs/Lang/Compiler.h"
@@ -39,8 +37,6 @@ typedef struct Compiler_state_to_IR_result{
 
 static const Compiler_state_to_IR_result OOM_ERROR = {.error = COMPILE_ERROR_OOM};
 
-#define INDENT "    "
-
 static const char SP_SYMBOL[] = "sp";
 
 static Compiler_state_to_IR_result compiler_state_syntax_error(Compiler_state *self, const char *fmt, ...){
@@ -56,52 +52,77 @@ static Compiler_state_to_IR_result compiler_state_syntax_error(Compiler_state *s
 }
 #define syntax_error(...) compiler_state_syntax_error(self, "On line <" USIZE_PFMT ">: " __VA_ARGS__)
 
+#define INDENT "    "
+static bool compiler_state_add_instruction(Compiler_state *self, const char *fmt, ...){
+    va_list args;
+    va_start(args, fmt);
+    bool result = 
+        str_base_append_raw(&self->IR, self->alloc, INDENT) &&
+        str_base_append_fmt_va_list(&self->IR, self->alloc, fmt, args) &&
+#ifndef NDEBUG
+        str_base_append_fmt(&self->IR, self->alloc, " ; " USIZE_PFMT, self->type_info_stack.m_size) &&
+#endif // NDEBUG
+        str_base_push_back(&self->IR, self->alloc, '\n')
+    ;
+    va_end(args);
+
+    return result;
+}
+#define add_instruction(...) \
+    do{ \
+        if (!compiler_state_add_instruction(self, __VA_ARGS__)) \
+            return OOM_ERROR; \
+    } while (0)
+
 static bool compiler_state_pop_on_discarded_expression(Compiler_state *self, const AST_node *ast_node){
-    if (!ast_node->m_parent)
-        goto pop;
-    else{
+    if (ast_node->m_parent){
         switch (ast_node->m_parent->m_token->m_type){
             case TOKEN_TYPE_LBRACE:
             case TOKEN_TYPE_IF:
             case TOKEN_TYPE_ELSE:
             case TOKEN_TYPE_WHILE:
-                goto pop;
-            default:
                 break;
+            default:
+                return true;
         }
     }
 
-    return true;
-
-pop:
     vec_base_pop_back_discard(&self->type_info_stack);
-    return str_base_append_fmt(&self->IR, self->alloc, INDENT "%s\n", op_code_to_str(OP_CODE_POP));
+
+    return compiler_state_add_instruction(self, "%s", op_code_to_str(OP_CODE_POP));
 }
+#define pop_on_discarded_expression(ast_node) \
+    do{ \
+        if (!compiler_state_pop_on_discarded_expression(self, (ast_node))) \
+            return OOM_ERROR; \
+    } while (0)
 
 static Compiler_state_to_IR_result compiler_state_to_IR(Compiler_state *self, const AST_node *ast_node){
-    #define add_instruction(...) \
-        do{ \
-            if (!str_base_append_fmt(&self->IR, self->alloc, INDENT __VA_ARGS__) || !str_base_push_back(&self->IR, self->alloc, '\n')) \
-                return OOM_ERROR; \
-        } while (0)
-
     switch (ast_node->m_token->m_type){
         case TOKEN_TYPE_ID:
+            {
+                Umap_pair pair = umap_base_get_pair(&self->id_info_map, &ast_node->m_token->m_id);
+                if (!pair.m_key)
+                    return syntax_error("Use of undeclared identifier <%s>", ast_node->m_token->m_line_number, str_base_data_const(&ast_node->m_token->m_id));
+                Id_info *id_info = pair.m_value;
+                if (!vec_base_push_back(&self->type_info_stack, self->alloc, &id_info->type_info))
+                    return OOM_ERROR;
+                add_instruction("%s %s[-" USIZE_PFMT "]", op_code_to_str(OP_CODE_PUSH), SP_SYMBOL, self->type_info_stack.m_size - id_info->stack_idx - 1);
+                pop_on_discarded_expression(ast_node);
+            }
             break;
         case TOKEN_TYPE_ARGV:
             if (!vec_base_push_back(&self->type_info_stack, self->alloc, &(Type_info){.m_tag = TYPE_INFO_TAG_STR, .m_dimensions = 1}))
                 return OOM_ERROR;
             add_instruction("%s %s", op_code_to_str(OP_CODE_PUSH), str_base_data_const(&ast_node->m_token->m_id));
-            if (!compiler_state_pop_on_discarded_expression(self, ast_node))
-                return OOM_ERROR;
+            pop_on_discarded_expression(ast_node);
             break;
         case TOKEN_TYPE_FALSE:
         case TOKEN_TYPE_TRUE:
             if (!vec_base_push_back(&self->type_info_stack, self->alloc, &(Type_info){.m_tag = TYPE_INFO_TAG_BOOL, .m_dimensions = 0}))
                 return OOM_ERROR;
             add_instruction("%s %s", op_code_to_str(OP_CODE_PUSH), str_base_data_const(&ast_node->m_token->m_id));
-            if (!compiler_state_pop_on_discarded_expression(self, ast_node))
-                return OOM_ERROR;
+            pop_on_discarded_expression(ast_node);
             break;
         case TOKEN_TYPE_CHAR_LIT:
         case TOKEN_TYPE_INT_LIT:
@@ -114,8 +135,7 @@ static Compiler_state_to_IR_result compiler_state_to_IR(Compiler_state *self, co
             ))
                 return OOM_ERROR;
             add_instruction("%s %s", op_code_to_str(OP_CODE_PUSH), str_base_data_const(&ast_node->m_token->m_id));
-            if (!compiler_state_pop_on_discarded_expression(self, ast_node))
-                return OOM_ERROR;
+            pop_on_discarded_expression(ast_node);
             break;
         case TOKEN_TYPE_INIT_LIST:
             add_instruction("%s []", op_code_to_str(OP_CODE_PUSH));
@@ -125,8 +145,7 @@ static Compiler_state_to_IR_result compiler_state_to_IR(Compiler_state *self, co
             }
             else if (!vec_base_push_back(&self->type_info_stack, self->alloc, &(Type_info){.m_tag = TYPE_INFO_TAG_VOID, .m_dimensions = 1}))
                 return OOM_ERROR;
-            if (!compiler_state_pop_on_discarded_expression(self, ast_node))
-                return OOM_ERROR;
+            pop_on_discarded_expression(ast_node);
             break;
 
         case TOKEN_TYPE_COMMA:
@@ -220,7 +239,6 @@ static Compiler_state_to_IR_result compiler_state_to_IR(Compiler_state *self, co
         case TOKEN_TYPE_ELSE:
 
         case TOKEN_TYPE_WHILE:
-            break;
 
         case TOKEN_TYPE_RETURN:
             break;
@@ -241,7 +259,6 @@ const char* op_code_to_str(enum Op_code op_code){
         case OP_CODE_POP:  return "pop";
 
         case OP_CODE_CALL: return "call";
-
         case OP_CODE_RET: return "ret";
 
         case OP_CODE_JMP:  return "jmp";

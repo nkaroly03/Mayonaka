@@ -248,15 +248,15 @@ Str_base_result str_base_init_fmt_va_list(Allocator alloc, const char *fmt, va_l
 
     va_list args_cpy;
     va_copy(args_cpy, args);
-    int size = vsnprintf(NULL, 0, fmt, args_cpy);
+    usize size = (usize)vsnprintf(NULL, 0, fmt, args_cpy);
     va_end(args_cpy);
 
     Str_base result = {0};
-    if (!str_base_reserve(&result, alloc, (usize)size))
+    if (!str_base_reserve(&result, alloc, size))
         return (Str_base_result){0};
 
     vsprintf(str_base_data(&result), fmt, args);
-    str_base_set_size(&result, (usize)size);
+    str_base_set_size(&result, size);
 
     return (Str_base_result){.result = result, .success = true};
 }
@@ -384,14 +384,14 @@ bool str_base_assign_fmt_va_list(Str_base *self, Allocator alloc, const char *fm
 
     va_list args_cpy;
     va_copy(args_cpy, args);
-    int size = vsnprintf(NULL, 0, fmt, args_cpy);
+    usize size = (usize)vsnprintf(NULL, 0, fmt, args_cpy);
     va_end(args_cpy);
 
-    if (!str_base_reserve(self, alloc, (usize)size))
+    if (size > str_base_capacity(self) && !str_base_reserve(self, alloc, size * 2))
         return false;
 
     vsprintf(str_base_data(self), fmt, args);
-    str_base_set_size(self, (usize)size);
+    str_base_set_size(self, size);
 
     return true;
 }
@@ -474,11 +474,11 @@ bool str_base_append_fmt_va_list(Str_base *self, Allocator alloc, const char *fm
 
     va_list args_cpy;
     va_copy(args_cpy, args);
-    int size = vsnprintf(NULL, 0, fmt, args_cpy);
+    usize size = (usize)vsnprintf(NULL, 0, fmt, args_cpy);
     va_end(args_cpy);
 
-    usize str_size = str_base_size(self), new_size = str_size + (usize)size;
-    if (!str_base_reserve(self, alloc, new_size))
+    usize str_size = str_base_size(self), new_size = str_size + size;
+    if (new_size > str_base_capacity(self) && !str_base_reserve(self, alloc, new_size * 2))
         return false;
 
     vsprintf(&str_base_data(self)[str_size], fmt, args);

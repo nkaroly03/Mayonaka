@@ -26,3 +26,5 @@ for (0..(v = scan("Hello:\n"))) |i|
 /*/
 
 let i: int = 10;
+let j: int = 10;
+i;

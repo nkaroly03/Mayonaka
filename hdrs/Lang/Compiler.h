@@ -11,8 +11,6 @@ extern "C"{
 #include "Parser.h"
 
 enum Op_code{
-    OP_CODE_NONE,
-
     OP_CODE_PUSH,
     OP_CODE_POP,
 

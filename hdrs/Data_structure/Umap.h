@@ -9,6 +9,8 @@ extern "C"{
 #include <stdbool.h>
 
 #include "../Allocator/Allocator.h"
+#include "../Utils/Cmp.h"
+#include "../Utils/Hash.h"
 #include "../Utils/Num.h"
 #include "Umap_base.h"
 

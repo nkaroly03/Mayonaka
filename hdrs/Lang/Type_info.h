@@ -5,8 +5,6 @@
 extern "C"{
 #endif
 
-#include "../Allocator/Allocator.h"
-#include "../Data_structure/Str_base.h"
 #include "../Utils/Num.h"
 
 enum Type_info_tag{
