@@ -229,8 +229,40 @@ static Compiler_state_to_IR_result compiler_state_to_IR(Compiler_state *self, co
             break;
 
         case TOKEN_TYPE_TILDE:
-            break;
         case TOKEN_TYPE_NOT:
+            {
+                enum Unary_op unary_op = (ast_node->m_token->m_type == TOKEN_TYPE_TILDE) ? UNARY_OP_BNEG : UNARY_OP_NOT;
+
+                Compiler_state_to_IR_result to_IR_result = compiler_state_to_IR(self, ast_node->m_sub_nodes.m_data[0]);
+                if (to_IR_result.error != COMPILE_ERROR_NONE)
+                    return to_IR_result;
+
+                Type_info *last_type_info_ptr = vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1);
+
+                Type_info type_info = unary_op_result_type_info(unary_op, *last_type_info_ptr);
+                if (type_info.m_tag == TYPE_INFO_TAG_NONE){
+                    Str_base_result type_info_str = type_info_to_str_base(*last_type_info_ptr, self->alloc);
+                    if (!type_info_str.success)
+                        return OOM_ERROR;
+                    return syntax_error(
+                        "Invalid unary operation <%s> on <%s>",
+                        ast_node->m_token->m_line_number,
+                        str_base_data_const(&ast_node->m_token->m_id),
+                        str_base_data(&type_info_str.result)
+                    );
+                }
+
+                *last_type_info_ptr = type_info;
+
+                if (unary_op == UNARY_OP_BNEG)
+                    add_instruction("%s", OP_CODE_SYMBOLS[OP_CODE_BNEG]);
+                else{
+                    add_instruction("%s", OP_CODE_SYMBOLS[OP_CODE_TO_BOOL]);
+                    add_instruction("%s", OP_CODE_SYMBOLS[OP_CODE_NEG]);
+                }
+
+                pop_on_discarded_expression(ast_node);
+            }
             break;
 
         case TOKEN_TYPE_PLUS:

@@ -25,4 +25,4 @@ for (0..(v = scan("Hello:\n"))) |i|
         print("ok\n");
 /*/
 
-let i: []int = [];
+let i: int = 0;

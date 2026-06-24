@@ -11,6 +11,7 @@
 #include "../../hdrs/Allocator/Arena.h"
 #include "../../hdrs/Data_structure/Str_base.h"
 #include "../../hdrs/Data_structure/Vec_base.h"
+#include "../../hdrs/Utils/Cmp.h"
 #include "../../hdrs/Utils/Num.h"
 
 #include "../../hdrs/Lang/Lexer.h"
@@ -99,16 +100,10 @@ Lex_result lex(Arena *arena, const char *path){
     };
     #define oom_error() lexer_state_oom_error(&state)
     #define syntax_error(...) lexer_state_syntax_error(&state, __VA_ARGS__)
-    #define token_push_back(token_type, id) \
+    #define token_push_back(token_type, id_sv) \
         do{ \
-            if (!lexer_state_token_push_back(&state, (token_type), (id))) \
+            if (!lexer_state_token_push_back(&state, (token_type), (id_sv))) \
                 return oom_error(); \
-        } while (0)
-    #define match_starts_with(id_var, starts_with) ((id_var) = (starts_with), str_view_starts_with((sv), (id_var)))
-    #define match_token_push_back(token_type, id) \
-        do{ \
-            token_push_back((token_type), (id)); \
-            sv = str_view_trim_prefix(sv, (id)); \
         } while (0)
 
     if (!state.file){
@@ -154,8 +149,12 @@ Lex_result lex(Arena *arena, const char *path){
 
     for (Str_view sv = str_base_to_str_view(&lines); (sv = str_view_trim_left_while(sv, is_space_not_newline)).m_size > 0;){
         const char *punct_match;
-        #define punct_match_starts_with(starts_with) match_starts_with(punct_match, starts_with)
-        #define punct_match_token_push_back(token_type) match_token_push_back(token_type, punct_match)
+        #define punct_match_starts_with(starts_with) (punct_match = (starts_with), str_view_starts_with(sv, punct_match))
+        #define punct_match_token_push_back(token_type) \
+            do{ \
+                token_push_back((token_type), punct_match); \
+                sv = str_view_trim_prefix(sv, punct_match); \
+            } while (0)
 
         if (str_view_starts_with(sv, "\n")){
             ++state.line_number;
@@ -333,34 +332,37 @@ Lex_result lex(Arena *arena, const char *path){
             }
         }
         else if (isalpha(sv.m_str[0]) || sv.m_str[0] == '_'){
-            const char *keyword_match;
-            #define keyword_match_starts_with(starts_with) match_starts_with(keyword_match, starts_with)
-            #define keyword_match_token_push_back(token_type) match_token_push_back(token_type, keyword_match)
-
             usize id_end_pos = 0;
             while (++id_end_pos < sv.m_size && (isalnum(sv.m_str[id_end_pos]) || sv.m_str[id_end_pos] == '_'));
-
             Str_view id_sv = str_view_trim_right(sv, sv.m_size - id_end_pos);
 
-            if      (keyword_match_starts_with("argv"  )) keyword_match_token_push_back(TOKEN_TYPE_ARGV);
-            else if (keyword_match_starts_with("false" )) keyword_match_token_push_back(TOKEN_TYPE_FALSE);
-            else if (keyword_match_starts_with("true"  )) keyword_match_token_push_back(TOKEN_TYPE_TRUE);
-            else if (keyword_match_starts_with("and"   )) keyword_match_token_push_back(TOKEN_TYPE_AND);
-            else if (keyword_match_starts_with("or"    )) keyword_match_token_push_back(TOKEN_TYPE_OR);
-            else if (keyword_match_starts_with("not"   )) keyword_match_token_push_back(TOKEN_TYPE_NOT);
-            else if (keyword_match_starts_with("fn"    )) keyword_match_token_push_back(TOKEN_TYPE_FN);
-            else if (keyword_match_starts_with("let"   )) keyword_match_token_push_back(TOKEN_TYPE_LET);
-            else if (keyword_match_starts_with("void"  )) keyword_match_token_push_back(TOKEN_TYPE_VOID);
-            else if (keyword_match_starts_with("bool"  )) keyword_match_token_push_back(TOKEN_TYPE_BOOL);
-            else if (keyword_match_starts_with("char"  )) keyword_match_token_push_back(TOKEN_TYPE_CHAR);
-            else if (keyword_match_starts_with("int"   )) keyword_match_token_push_back(TOKEN_TYPE_INT);
-            else if (keyword_match_starts_with("float" )) keyword_match_token_push_back(TOKEN_TYPE_FLOAT);
-            else if (keyword_match_starts_with("str"   )) keyword_match_token_push_back(TOKEN_TYPE_STR);
-            else if (keyword_match_starts_with("if"    )) keyword_match_token_push_back(TOKEN_TYPE_IF);
-            else if (keyword_match_starts_with("else"  )) keyword_match_token_push_back(TOKEN_TYPE_ELSE);
-            else if (keyword_match_starts_with("while" )) keyword_match_token_push_back(TOKEN_TYPE_WHILE);
-            else if (keyword_match_starts_with("for"   )) keyword_match_token_push_back(TOKEN_TYPE_FOR);
-            else if (keyword_match_starts_with("return")) keyword_match_token_push_back(TOKEN_TYPE_RETURN);
+            Str_view keyword_sv;
+            #define keyword_match(keyword) (keyword_sv = str_view_init((keyword)), cmp_eq_Str_view(&id_sv, &keyword_sv))
+            #define keyword_match_token_push_back(token_type) \
+                do{ \
+                    token_push_back((token_type), keyword_sv.m_str); \
+                    sv = str_view_trim_left(sv, keyword_sv.m_size); \
+                } while (0)
+
+            if      (keyword_match("argv"  )) keyword_match_token_push_back(TOKEN_TYPE_ARGV);
+            else if (keyword_match("false" )) keyword_match_token_push_back(TOKEN_TYPE_FALSE);
+            else if (keyword_match("true"  )) keyword_match_token_push_back(TOKEN_TYPE_TRUE);
+            else if (keyword_match("and"   )) keyword_match_token_push_back(TOKEN_TYPE_AND);
+            else if (keyword_match("or"    )) keyword_match_token_push_back(TOKEN_TYPE_OR);
+            else if (keyword_match("not"   )) keyword_match_token_push_back(TOKEN_TYPE_NOT);
+            else if (keyword_match("fn"    )) keyword_match_token_push_back(TOKEN_TYPE_FN);
+            else if (keyword_match("let"   )) keyword_match_token_push_back(TOKEN_TYPE_LET);
+            else if (keyword_match("void"  )) keyword_match_token_push_back(TOKEN_TYPE_VOID);
+            else if (keyword_match("bool"  )) keyword_match_token_push_back(TOKEN_TYPE_BOOL);
+            else if (keyword_match("char"  )) keyword_match_token_push_back(TOKEN_TYPE_CHAR);
+            else if (keyword_match("int"   )) keyword_match_token_push_back(TOKEN_TYPE_INT);
+            else if (keyword_match("float" )) keyword_match_token_push_back(TOKEN_TYPE_FLOAT);
+            else if (keyword_match("str"   )) keyword_match_token_push_back(TOKEN_TYPE_STR);
+            else if (keyword_match("if"    )) keyword_match_token_push_back(TOKEN_TYPE_IF);
+            else if (keyword_match("else"  )) keyword_match_token_push_back(TOKEN_TYPE_ELSE);
+            else if (keyword_match("while" )) keyword_match_token_push_back(TOKEN_TYPE_WHILE);
+            else if (keyword_match("for"   )) keyword_match_token_push_back(TOKEN_TYPE_FOR);
+            else if (keyword_match("return")) keyword_match_token_push_back(TOKEN_TYPE_RETURN);
             else{
                 Str_base_result id = str_base_init_str_view(state.alloc, id_sv);
                 if (!id.success || !vec_base_push_back(&state.tokens, state.alloc, &(Token){.m_type = TOKEN_TYPE_ID, .m_id = id.result, .m_line_number = state.line_number}))
