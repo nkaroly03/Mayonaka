@@ -434,8 +434,6 @@ static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
 
         case TOKEN_TYPE_IF:
         case TOKEN_TYPE_WHILE:
-            bool is_while = (tok->m_type == TOKEN_TYPE_WHILE);
-
             if (self->token_idx >= self->tokens.m_size || self->tokens.m_data[self->token_idx++].m_type != TOKEN_TYPE_LPAREN)
                 return syntax_error("<%s> must be followed by <(>", tok->m_line_number, str_base_data_const(&tok->m_id));
 
@@ -477,6 +475,7 @@ static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
             else
                 ++self->token_idx;
 
+            bool is_while = (tok->m_type == TOKEN_TYPE_WHILE);
             if (self->token_idx < self->tokens.m_size && (tok = &self->tokens.m_data[self->token_idx])->m_type == TOKEN_TYPE_ELSE){
                 if (is_while)
                     return syntax_error("<while> statement followed by <else> statement", tok->m_line_number);

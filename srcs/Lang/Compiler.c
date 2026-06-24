@@ -169,6 +169,34 @@ static bool compiler_state_pop_on_discarded_expression(Compiler_state *self, con
 
 static const char SP_SYMBOL[] = "sp";
 
+static Compiler_state_to_IR_result compiler_state_unary_op_error(Compiler_state *self, const AST_node *un_op_node, Type_info type_info){
+    Str_base_result type_info_str = type_info_to_str_base(type_info, self->alloc);
+    if (!type_info_str.success)
+        return OOM_ERROR;
+    return syntax_error(
+        "Invalid unary operation <%s> on <%s>",
+        un_op_node->m_token->m_line_number,
+        str_base_data_const(&un_op_node->m_token->m_id),
+        str_base_data(&type_info_str.result)
+    );
+}
+static Compiler_state_to_IR_result compiler_state_binary_op_error(Compiler_state *self, const AST_node *bin_op_node, Type_info lhs_type_info, Type_info rhs_type_info){
+    Str_base_result lhs_type_info_str;
+    Str_base_result rhs_type_info_str;
+    if (
+        !(lhs_type_info_str = type_info_to_str_base(lhs_type_info, self->alloc)).success ||
+        !(rhs_type_info_str = type_info_to_str_base(rhs_type_info, self->alloc)).success
+    )
+        return OOM_ERROR;
+    return syntax_error(
+        "Invalid binary operation <%s> between <%s> and <%s>",
+        bin_op_node->m_token->m_line_number,
+        str_base_data_const(&bin_op_node->m_token->m_id),
+        str_base_data(&lhs_type_info_str.result),
+        str_base_data(&rhs_type_info_str.result)
+    );
+}
+
 static Compiler_state_to_IR_result compiler_state_to_IR(Compiler_state *self, const AST_node *ast_node){
     enum Binary_op bin_op;
     enum Op_code op_code;
@@ -206,7 +234,7 @@ static Compiler_state_to_IR_result compiler_state_to_IR(Compiler_state *self, co
             if (!vec_base_push_back(
                 &self->type_info_stack,
                 self->alloc,
-                &(Type_info){.m_tag = (enum Type_info_tag)(TYPE_INFO_TAG_CHAR + ast_node->m_token->m_type - TOKEN_TYPE_CHAR_LIT), .m_dimensions = 0}
+                &(Type_info){.m_tag = (enum Type_info_tag)(TYPE_INFO_TAG_CHAR + (ast_node->m_token->m_type - TOKEN_TYPE_CHAR_LIT)), .m_dimensions = 0}
             ))
                 return OOM_ERROR;
             add_instruction("%s %s", OP_CODE_SYMBOLS[OP_CODE_PUSH], str_base_data_const(&ast_node->m_token->m_id));
@@ -225,6 +253,7 @@ static Compiler_state_to_IR_result compiler_state_to_IR(Compiler_state *self, co
 
         case TOKEN_TYPE_LPAREN:
             break;
+
         case TOKEN_TYPE_LBRACE:
             break;
 
@@ -240,17 +269,8 @@ static Compiler_state_to_IR_result compiler_state_to_IR(Compiler_state *self, co
                 Type_info *last_type_info_ptr = vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1);
 
                 Type_info type_info = unary_op_result_type_info(unary_op, *last_type_info_ptr);
-                if (type_info.m_tag == TYPE_INFO_TAG_NONE){
-                    Str_base_result type_info_str = type_info_to_str_base(*last_type_info_ptr, self->alloc);
-                    if (!type_info_str.success)
-                        return OOM_ERROR;
-                    return syntax_error(
-                        "Invalid unary operation <%s> on <%s>",
-                        ast_node->m_token->m_line_number,
-                        str_base_data_const(&ast_node->m_token->m_id),
-                        str_base_data(&type_info_str.result)
-                    );
-                }
+                if (type_info.m_tag == TYPE_INFO_TAG_NONE)
+                    return compiler_state_unary_op_error(self, ast_node, *last_type_info_ptr);
 
                 *last_type_info_ptr = type_info;
 
@@ -288,17 +308,8 @@ static Compiler_state_to_IR_result compiler_state_to_IR(Compiler_state *self, co
                 Type_info *last_type_info_ptr = vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1);
 
                 Type_info type_info = unary_op_result_type_info(unary_op, *last_type_info_ptr);
-                if (type_info.m_tag == TYPE_INFO_TAG_NONE){
-                    Str_base_result type_info_str = type_info_to_str_base(*last_type_info_ptr, self->alloc);
-                    if (!type_info_str.success)
-                        return OOM_ERROR;
-                    return syntax_error(
-                        "Invalid unary operation <%s> on <%s>",
-                        ast_node->m_token->m_line_number,
-                        str_base_data_const(&ast_node->m_token->m_id),
-                        str_base_data(&type_info_str.result)
-                    );
-                }
+                if (type_info.m_tag == TYPE_INFO_TAG_NONE)
+                    return compiler_state_unary_op_error(self, ast_node, *last_type_info_ptr);
 
                 *last_type_info_ptr = type_info;
 
@@ -310,6 +321,139 @@ static Compiler_state_to_IR_result compiler_state_to_IR(Compiler_state *self, co
             break;
 
         case TOKEN_TYPE_EQUALS1:
+            {
+                const AST_node *lhs_node = ast_node->m_sub_nodes.m_data[0];
+                const AST_node *rhs_node = ast_node->m_sub_nodes.m_data[1];
+
+                bool push_back_after_assignment = false;
+                if (ast_node->m_parent){
+                    switch (ast_node->m_parent->m_token->m_type){
+                        case TOKEN_TYPE_LPAREN:
+                        case TOKEN_TYPE_TILDE:
+                        case TOKEN_TYPE_NOT:
+                        case TOKEN_TYPE_PLUS:
+                        case TOKEN_TYPE_MINUS:
+                        case TOKEN_TYPE_EQUALS1:
+                        case TOKEN_TYPE_LBRACKET:
+                        case TOKEN_TYPE_EQUALS2:
+                        case TOKEN_TYPE_NOT_EQUALS:
+                        case TOKEN_TYPE_LESS_THAN1:
+                        case TOKEN_TYPE_LESS_THAN1_EQUALS:
+                        case TOKEN_TYPE_GREATER_THAN1:
+                        case TOKEN_TYPE_GREATER_THAN1_EQUALS:
+                        case TOKEN_TYPE_ASTERISK1:
+                        case TOKEN_TYPE_SLASH:
+                        case TOKEN_TYPE_PERCENT:
+                        case TOKEN_TYPE_ASTERISK2:
+                        case TOKEN_TYPE_LESS_THAN2:
+                        case TOKEN_TYPE_GREATER_THAN2:
+                        case TOKEN_TYPE_AMPERSAND:
+                        case TOKEN_TYPE_PIPE:
+                        case TOKEN_TYPE_CARET:
+                        case TOKEN_TYPE_AND:
+                        case TOKEN_TYPE_OR:
+                        case TOKEN_TYPE_LET:
+                        case TOKEN_TYPE_RETURN:
+                            push_back_after_assignment = true;
+                        default:
+                            break;
+                    }
+                }
+
+                if (lhs_node->m_token->m_type != TOKEN_TYPE_LBRACKET){
+                    if (lhs_node->m_token->m_type == TOKEN_TYPE_ARGV)
+                        return syntax_error("<argv> is immutable", lhs_node->m_token->m_line_number);
+                    if (lhs_node->m_token->m_type != TOKEN_TYPE_ID)
+                        return syntax_error("Trying to assign to rvalue", lhs_node->m_token->m_line_number);
+
+                    Umap_pair pair = umap_base_get_pair(&self->id_info_map, &lhs_node->m_token->m_id);
+                    if (!pair.m_key)
+                        return syntax_error("Use of undeclared identifier <%s>", lhs_node->m_token->m_line_number, str_base_data_const(&lhs_node->m_token->m_id));
+
+                    Compiler_state_to_IR_result to_IR_result = compiler_state_to_IR(self, rhs_node);
+                    if (to_IR_result.error != COMPILE_ERROR_NONE)
+                        return to_IR_result;
+
+                    Id_info *id_info = pair.m_value;
+
+                    Type_info lhs_type_info = id_info->type_info;
+                    Type_info rhs_type_info = *(Type_info*)vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1);
+
+                    Type_info bin_op_result = binary_op_result_type_info(BINARY_OP_ASSIGNMENT, lhs_type_info, rhs_type_info);
+                    if (bin_op_result.m_tag == TYPE_INFO_TAG_NONE)
+                        return compiler_state_binary_op_error(self, ast_node, lhs_type_info, rhs_type_info);
+
+                    vec_base_pop_back_discard(&self->type_info_stack);
+                    add_instruction("%s %s[-" USIZE_PFMT "]", OP_CODE_SYMBOLS[OP_CODE_MOV], SP_SYMBOL, self->type_info_stack.m_size - id_info->stack_idx + 1);
+
+                    if (push_back_after_assignment){
+                        to_IR_result = compiler_state_to_IR(self, lhs_node);
+                        if (to_IR_result.error != COMPILE_ERROR_NONE)
+                            return to_IR_result;
+                    }
+                }
+                else{
+                    for (
+                        const AST_node *lhs_sub_node = lhs_node->m_sub_nodes.m_data[0];
+                        lhs_sub_node->m_token->m_type != TOKEN_TYPE_ID;
+                        lhs_sub_node = lhs_sub_node->m_sub_nodes.m_data[0]
+                    ){
+                        enum Token_type token_type = lhs_sub_node->m_token->m_type;
+                        if (token_type == TOKEN_TYPE_ARGV)
+                            return syntax_error("<argv> is immutable", lhs_sub_node->m_token->m_line_number);
+                        if (token_type != TOKEN_TYPE_EQUALS1 && token_type != TOKEN_TYPE_LBRACKET)
+                            return syntax_error("Trying to assign to rvalue", lhs_sub_node->m_token->m_line_number);
+                    }
+
+                    const AST_node *subscript_lhs_node = lhs_node->m_sub_nodes.m_data[0];
+                    const AST_node *subscript_rhs_node = lhs_node->m_sub_nodes.m_data[1];
+
+                    Compiler_state_to_IR_result to_IR_result;
+                    if (
+                        (to_IR_result = compiler_state_to_IR(self, subscript_lhs_node)).error != COMPILE_ERROR_NONE ||
+                        (to_IR_result = compiler_state_to_IR(self, subscript_rhs_node)).error != COMPILE_ERROR_NONE
+                    )
+                        return to_IR_result;
+
+                    Type_info subscript_lhs_type_info = *(Type_info*)vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 2);
+                    Type_info subscript_rhs_type_info = *(Type_info*)vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1);
+
+                    Type_info subscript_bin_op_result = binary_op_result_type_info(BINARY_OP_SUBSCRIPT, subscript_lhs_type_info, subscript_rhs_type_info);
+                    if (subscript_bin_op_result.m_tag == TYPE_INFO_TAG_NONE)
+                        return compiler_state_binary_op_error(self, lhs_node, subscript_lhs_type_info, subscript_rhs_type_info);
+
+                    if (push_back_after_assignment){
+                        if (!vec_base_push_back(&self->type_info_stack, self->alloc, &subscript_lhs_type_info))
+                            return OOM_ERROR;
+                        add_instruction("%s %s[-2]", OP_CODE_SYMBOLS[OP_CODE_PUSH], SP_SYMBOL);
+                        if (!vec_base_push_back(&self->type_info_stack, self->alloc, &subscript_rhs_type_info))
+                            return OOM_ERROR;
+                        add_instruction("%s %s[-2]", OP_CODE_SYMBOLS[OP_CODE_PUSH], SP_SYMBOL);
+                    }
+
+                    to_IR_result = compiler_state_to_IR(self, rhs_node);
+                    if (to_IR_result.error != COMPILE_ERROR_NONE)
+                        return to_IR_result;
+
+                    Type_info rhs_type_info = *(Type_info*)vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1);
+
+                    Type_info bin_op = binary_op_result_type_info(BINARY_OP_ASSIGNMENT, subscript_bin_op_result, rhs_type_info);
+                    if (bin_op.m_tag == TYPE_INFO_TAG_NONE)
+                        return compiler_state_binary_op_error(self, ast_node, subscript_bin_op_result, rhs_type_info);
+
+                    vec_base_pop_back_discard(&self->type_info_stack);
+                    vec_base_pop_back_discard(&self->type_info_stack);
+                    vec_base_pop_back_discard(&self->type_info_stack);
+
+                    add_instruction("%s", OP_CODE_SYMBOLS[OP_CODE_MOV_DEREF]);
+
+                    if (push_back_after_assignment){
+                        vec_base_pop_back_discard(&self->type_info_stack);
+                        *(Type_info*)vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1) = subscript_bin_op_result;
+                        add_instruction("%s", OP_CODE_SYMBOLS[OP_CODE_DEREF]);
+                    }
+                }
+            }
             break;
 
         case TOKEN_TYPE_LBRACKET:             bin_op = BINARY_OP_SUBSCRIPT; op_code = OP_CODE_DEREF;   goto bin_op_case;
@@ -344,22 +488,8 @@ static Compiler_state_to_IR_result compiler_state_to_IR(Compiler_state *self, co
                 Type_info *rhs_type_info_ptr = vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1);
 
                 Type_info bin_op_result = binary_op_result_type_info(bin_op, *lhs_type_info_ptr, *rhs_type_info_ptr);
-                if (bin_op_result.m_tag == TYPE_INFO_TAG_NONE){
-                    Str_base_result lhs_type_info_str;
-                    Str_base_result rhs_type_info_str;
-                    if (
-                        !(lhs_type_info_str = type_info_to_str_base(*lhs_type_info_ptr, self->alloc)).success ||
-                        !(rhs_type_info_str = type_info_to_str_base(*rhs_type_info_ptr, self->alloc)).success
-                    )
-                        return OOM_ERROR;
-                    return syntax_error(
-                        "Invalid binary operation <%s> between <%s> and <%s>",
-                        ast_node->m_token->m_line_number,
-                        str_base_data_const(&ast_node->m_token->m_id),
-                        str_base_data_const(&lhs_type_info_str.result),
-                        str_base_data_const(&rhs_type_info_str.result)
-                    );
-                }
+                if (bin_op_result.m_tag == TYPE_INFO_TAG_NONE)
+                    return compiler_state_binary_op_error(self, ast_node, *lhs_type_info_ptr, *rhs_type_info_ptr);
 
                 *lhs_type_info_ptr = bin_op_result;
                 vec_base_pop_back_discard(&self->type_info_stack);
@@ -389,7 +519,7 @@ static Compiler_state_to_IR_result compiler_state_to_IR(Compiler_state *self, co
                     ++let_decl_type_info.m_dimensions;
                 }
 
-                let_decl_type_info.m_tag = (enum Type_info_tag)(TYPE_INFO_TAG_BOOL + type_node->m_token->m_type - TOKEN_TYPE_BOOL);
+                let_decl_type_info.m_tag = (enum Type_info_tag)(TYPE_INFO_TAG_BOOL + (type_node->m_token->m_type - TOKEN_TYPE_BOOL));
 
                 Umap_insert_result ires = umap_base_insert(
                     &self->id_info_map,
@@ -435,7 +565,7 @@ static Compiler_state_to_IR_result compiler_state_to_IR(Compiler_state *self, co
                 ++*(usize*)vec_base_at(&self->let_decl_counts, self->let_decl_counts.m_size - 1);
 
                 if (last_type_info.m_dimensions == 0)
-                    add_instruction("%s", OP_CODE_SYMBOLS[OP_CODE_TO_BOOL + let_decl_type_info.m_tag - TYPE_INFO_TAG_BOOL]);
+                    add_instruction("%s", OP_CODE_SYMBOLS[OP_CODE_TO_BOOL + (let_decl_type_info.m_tag - TYPE_INFO_TAG_BOOL)]);
             }
             break;
 

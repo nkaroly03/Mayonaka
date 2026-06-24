@@ -100,9 +100,9 @@ Lex_result lex(Arena *arena, const char *path){
     };
     #define oom_error() lexer_state_oom_error(&state)
     #define syntax_error(...) lexer_state_syntax_error(&state, __VA_ARGS__)
-    #define token_push_back(token_type, id_sv) \
+    #define token_push_back(token_type, id) \
         do{ \
-            if (!lexer_state_token_push_back(&state, (token_type), (id_sv))) \
+            if (!lexer_state_token_push_back(&state, (token_type), (id))) \
                 return oom_error(); \
         } while (0)
 

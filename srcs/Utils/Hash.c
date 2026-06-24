@@ -35,14 +35,14 @@ usize hash_Str(const void *str_ptr){
     return hash_Str_base(&((const Str*)str_ptr)->m_base);
 }
 usize hash_Str_base(const void *str_base_ptr){
-    assert(str_base_ptr && "<ptr> is not nullable");
+    assert(str_base_ptr && "<str_base_ptr> is not nullable");
 
     Str_view sv = str_base_to_str_view(str_base_ptr);
 
     return hash_Str_view(&sv);
 }
 usize hash_Str_view(const void *str_view_ptr){
-    assert(str_view_ptr && "<ptr> is not nullable");
+    assert(str_view_ptr && "<str_view_ptr> is not nullable");
 
     usize h = 5381;
     for (Str_view sv = *(const Str_view*)str_view_ptr; sv.m_size-- > 0; ++sv.m_str)
