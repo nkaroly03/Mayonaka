@@ -24,9 +24,12 @@ for (0..(v = scan("Hello:\n"))) |i|
     for (0..20) |j|
         print("ok\n");
 
-/*/
-
 let arr1: [][][]int = [];
 let arr2:   [][]int = [];
 
 arr1[2][2][2] = (arr1[0][0] = (arr2[1] = []))[10];
+
+/*/
+
+let arr: [][]int = [];
+arr[scan("hello")] = [];

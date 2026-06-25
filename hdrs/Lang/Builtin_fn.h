@@ -14,7 +14,9 @@ enum Builtin_fn_tag{
     BUILTIN_FN_TAG_PRINT,
     BUILTIN_FN_TAG_SCAN,
     BUILTIN_FN_TAG_LEN,
-    BUILTIN_FN_TAG_RAND
+    BUILTIN_FN_TAG_RAND,
+    BUILTIN_FN_PUSH_BACK,
+    BUILTIN_FN_POP_BACK
 };
 
 enum Builtin_fn_tag builtin_fn_tag_init(const char *str);
