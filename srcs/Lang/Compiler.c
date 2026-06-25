@@ -96,9 +96,10 @@ typedef struct Id_info{
 
 typedef struct Compiler_state{
     Allocator alloc;
+    Vec_base fn_return_type_stack;
+    Vec_base let_decl_count_stack;
     Vec_base id_stack;
     Umap_base id_info_map;
-    Vec_base let_decl_counts;
     Vec_base type_info_stack;
     Str_base IR;
 } Compiler_state;
@@ -198,6 +199,19 @@ static Compiler_state_to_IR_result compiler_state_binary_op_error(Compiler_state
     );
 }
 
+static bool compiler_state_pop_ids_in_current_scope(Compiler_state *self){
+    usize last_let_decl_count = *(usize*)vec_base_at(&self->let_decl_count_stack, self->let_decl_count_stack.m_size - 1);
+    while (last_let_decl_count-- > 0){
+        umap_base_erase_discard(&self->id_info_map, self->alloc, vec_base_at(&self->id_stack, self->id_stack.m_size - 1));
+        vec_base_pop_back_discard(&self->id_stack);
+        vec_base_pop_back_discard(&self->type_info_stack);
+        if (!compiler_state_add_instruction(self, "%s", OP_CODE_SYMBOLS[OP_CODE_POP]))
+            return false;
+    }
+    vec_base_pop_back_discard(&self->let_decl_count_stack);
+    return true;
+}
+
 static Compiler_state_to_IR_result compiler_state_to_IR(Compiler_state *self, const AST_node *ast_node){
     enum Binary_op bin_op;
     enum Op_code bin_op_code;
@@ -259,7 +273,7 @@ static Compiler_state_to_IR_result compiler_state_to_IR(Compiler_state *self, co
 
                 enum Builtin_fn_tag bfn_tag = builtin_fn_tag_init(fn_id);
                 if (bfn_tag != BUILTIN_FN_TAG_NONE){
-                    Type_info bfn_return_type_info = builtin_fn_return_type_info(bfn_tag);
+                    Type_info bfn_return_type_info = builtin_fn_tag_return_type_info(bfn_tag);
                     if (bfn_return_type_info.m_dimensions > 0){
                         if (!vec_base_push_back(&self->type_info_stack, self->alloc, &bfn_return_type_info))
                             return OOM_ERROR;
@@ -282,7 +296,7 @@ static Compiler_state_to_IR_result compiler_state_to_IR(Compiler_state *self, co
                                     break;
                                 FALLTHROUGH;
                             default:
-                                return syntax_error("Builtin function returning type <void> is used in an expression", ast_node->m_token->m_line_number);
+                                return syntax_error("Builtin function <%s> returning type <void> is used in an expression", ast_node->m_token->m_line_number, fn_id);
                         }
                     }
 
@@ -294,7 +308,7 @@ static Compiler_state_to_IR_result compiler_state_to_IR(Compiler_state *self, co
                         }
 
                         Type_info_slice arg_type_infos = {.m_size = fn_args.m_size, vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - fn_args.m_size)};
-                        if (!builtin_fn_is_callable(bfn_tag, arg_type_infos)){
+                        if (!builtin_fn_tag_is_callable(bfn_tag, arg_type_infos)){
                             Str_base type_info_list_str = {0};
                             for (usize i = 0; i < arg_type_infos.m_size; ++i){
                                 Str_base_result type_info_str = type_info_to_str_base(arg_type_infos.m_data[i], self->alloc);
@@ -315,7 +329,7 @@ static Compiler_state_to_IR_result compiler_state_to_IR(Compiler_state *self, co
                         for (usize i = 0; i < fn_args.m_size; ++i)
                             vec_base_pop_back_discard(&self->type_info_stack);
                     }
-                    else if (!builtin_fn_is_callable(bfn_tag, (Type_info_slice){0}))
+                    else if (!builtin_fn_tag_is_callable(bfn_tag, (Type_info_slice){0}))
                         return syntax_error("Builtin function <%s> is not callable without arguments", ast_node->m_token->m_line_number, fn_id);
 
                     add_instruction("%s %s", OP_CODE_SYMBOLS[OP_CODE_CALL], fn_id);
@@ -330,6 +344,15 @@ static Compiler_state_to_IR_result compiler_state_to_IR(Compiler_state *self, co
             break;
 
         case TOKEN_TYPE_LBRACE:
+            if (!vec_base_push_back(&self->let_decl_count_stack, self->alloc, &(usize){0}))
+                return OOM_ERROR;
+            for (usize i = 0; i < ast_node->m_sub_nodes.m_size; ++i){
+                Compiler_state_to_IR_result to_IR_result = compiler_state_to_IR(self, ast_node->m_sub_nodes.m_data[i]);
+                if (to_IR_result.error != COMPILE_ERROR_NONE)
+                    return to_IR_result;
+            }
+            if (!compiler_state_pop_ids_in_current_scope(self))
+                return OOM_ERROR;
             break;
 
         case TOKEN_TYPE_TILDE:
@@ -343,7 +366,7 @@ static Compiler_state_to_IR_result compiler_state_to_IR(Compiler_state *self, co
 
                 Type_info *last_type_info_ptr = vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1);
 
-                Type_info type_info = unary_op_result_type_info(unary_op, *last_type_info_ptr);
+                Type_info type_info = unary_op_type_info_result(unary_op, *last_type_info_ptr);
                 if (type_info.m_tag == TYPE_INFO_TAG_NONE)
                     return compiler_state_unary_op_error(self, ast_node, *last_type_info_ptr);
 
@@ -382,7 +405,7 @@ static Compiler_state_to_IR_result compiler_state_to_IR(Compiler_state *self, co
 
                 Type_info *last_type_info_ptr = vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1);
 
-                Type_info type_info = unary_op_result_type_info(unary_op, *last_type_info_ptr);
+                Type_info type_info = unary_op_type_info_result(unary_op, *last_type_info_ptr);
                 if (type_info.m_tag == TYPE_INFO_TAG_NONE)
                     return compiler_state_unary_op_error(self, ast_node, *last_type_info_ptr);
 
@@ -454,7 +477,7 @@ static Compiler_state_to_IR_result compiler_state_to_IR(Compiler_state *self, co
                     Type_info lhs_type_info = id_info->type_info;
                     Type_info rhs_type_info = *(Type_info*)vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1);
 
-                    Type_info bin_op_result = binary_op_result_type_info(BINARY_OP_ASSIGNMENT, lhs_type_info, rhs_type_info);
+                    Type_info bin_op_result = binary_op_type_info_result(BINARY_OP_ASSIGNMENT, lhs_type_info, rhs_type_info);
                     if (bin_op_result.m_tag == TYPE_INFO_TAG_NONE)
                         return compiler_state_binary_op_error(self, ast_node, lhs_type_info, rhs_type_info);
 
@@ -493,7 +516,7 @@ static Compiler_state_to_IR_result compiler_state_to_IR(Compiler_state *self, co
                     Type_info subscript_lhs_type_info = *(Type_info*)vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 2);
                     Type_info subscript_rhs_type_info = *(Type_info*)vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1);
 
-                    Type_info subscript_bin_op_result = binary_op_result_type_info(BINARY_OP_SUBSCRIPT, subscript_lhs_type_info, subscript_rhs_type_info);
+                    Type_info subscript_bin_op_result = binary_op_type_info_result(BINARY_OP_SUBSCRIPT, subscript_lhs_type_info, subscript_rhs_type_info);
                     if (subscript_bin_op_result.m_tag == TYPE_INFO_TAG_NONE)
                         return compiler_state_binary_op_error(self, lhs_node, subscript_lhs_type_info, subscript_rhs_type_info);
 
@@ -512,7 +535,7 @@ static Compiler_state_to_IR_result compiler_state_to_IR(Compiler_state *self, co
 
                     Type_info rhs_type_info = *(Type_info*)vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1);
 
-                    Type_info bin_op_result = binary_op_result_type_info(BINARY_OP_ASSIGNMENT, subscript_bin_op_result, rhs_type_info);
+                    Type_info bin_op_result = binary_op_type_info_result(BINARY_OP_ASSIGNMENT, subscript_bin_op_result, rhs_type_info);
                     if (bin_op_result.m_tag == TYPE_INFO_TAG_NONE)
                         return compiler_state_binary_op_error(self, ast_node, subscript_bin_op_result, rhs_type_info);
 
@@ -562,7 +585,7 @@ static Compiler_state_to_IR_result compiler_state_to_IR(Compiler_state *self, co
                 Type_info *lhs_type_info_ptr = vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 2);
                 Type_info *rhs_type_info_ptr = vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1);
 
-                Type_info bin_op_result = binary_op_result_type_info(bin_op, *lhs_type_info_ptr, *rhs_type_info_ptr);
+                Type_info bin_op_result = binary_op_type_info_result(bin_op, *lhs_type_info_ptr, *rhs_type_info_ptr);
                 if (bin_op_result.m_tag == TYPE_INFO_TAG_NONE)
                     return compiler_state_binary_op_error(self, ast_node, *lhs_type_info_ptr, *rhs_type_info_ptr);
 
@@ -576,10 +599,11 @@ static Compiler_state_to_IR_result compiler_state_to_IR(Compiler_state *self, co
 
         case TOKEN_TYPE_AND:
         case TOKEN_TYPE_OR:
-            break;
+            fprintf(stderr, "Not implemented\n");
+            abort();
         
         case TOKEN_TYPE_FN:
-            fprintf(stderr, "Not implemented\n");
+            fprintf(stderr, "User defined functions are not implemented");
             abort();
         case TOKEN_TYPE_LET:
             {
@@ -620,7 +644,7 @@ static Compiler_state_to_IR_result compiler_state_to_IR(Compiler_state *self, co
                     return OOM_ERROR;
 
                 Type_info *last_type_info_ptr = vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1), last_type_info = *last_type_info_ptr;
-                if (binary_op_result_type_info(BINARY_OP_ASSIGNMENT, let_decl_type_info, last_type_info).m_tag == TYPE_INFO_TAG_NONE){
+                if (binary_op_type_info_result(BINARY_OP_ASSIGNMENT, let_decl_type_info, last_type_info).m_tag == TYPE_INFO_TAG_NONE){
                     Str_base_result type_str;
                     Str_base_result expr_type_str;
                     if (
@@ -637,7 +661,7 @@ static Compiler_state_to_IR_result compiler_state_to_IR(Compiler_state *self, co
                 }
 
                 *last_type_info_ptr = let_decl_type_info;
-                ++*(usize*)vec_base_at(&self->let_decl_counts, self->let_decl_counts.m_size - 1);
+                ++*(usize*)vec_base_at(&self->let_decl_count_stack, self->let_decl_count_stack.m_size - 1);
 
                 if (last_type_info.m_dimensions == 0)
                     add_instruction("%s", OP_CODE_SYMBOLS[OP_CODE_TO_BOOL + (let_decl_type_info.m_tag - TYPE_INFO_TAG_BOOL)]);
@@ -646,10 +670,27 @@ static Compiler_state_to_IR_result compiler_state_to_IR(Compiler_state *self, co
 
         case TOKEN_TYPE_IF:
         case TOKEN_TYPE_ELSE:
+            fprintf(stderr, "Not implemented\n");
+            abort();
 
         case TOKEN_TYPE_WHILE:
+            fprintf(stderr, "Not implemented\n");
+            abort();
 
         case TOKEN_TYPE_RETURN:
+            if (self->fn_return_type_stack.m_size == 0){
+                if (ast_node->m_sub_nodes.m_size != 1)
+                    return syntax_error("The program must return a non-void value on exit", ast_node->m_token->m_line_number);
+                Compiler_state_to_IR_result to_IR_result = compiler_state_to_IR(self, ast_node->m_sub_nodes.m_data[0]);
+                if (to_IR_result.error != COMPILE_ERROR_NONE)
+                    return to_IR_result;
+                vec_base_pop_back_discard(&self->type_info_stack);
+                add_instruction("%s %s", OP_CODE_SYMBOLS[OP_CODE_CALL], builtin_fn_tag_to_str(BUILTIN_FN_TAG_EXIT));
+            }
+            else{
+                fprintf(stderr, "User defined functions are not implemented");
+                abort();
+            }
             break;
 
         default:
@@ -666,16 +707,16 @@ Compile_to_IR_result compile_to_IR(Arena *arena, AST_node_ptr_slice ast_nodes){
     assert(arena && "<arena> is not nullable");
 
     Compiler_state state = {
-        .alloc           = arena_allocator(arena),
-        .id_stack        = vec_base_init(Str_base),
-        .id_info_map     = umap_base_init(Str_base, Id_info),
-        .let_decl_counts = vec_base_init(usize),
-        .type_info_stack = vec_base_init(Type_info),
-        .IR              = {0}
+        .alloc                = arena_allocator(arena),
+        .let_decl_count_stack = vec_base_init(usize),
+        .id_stack             = vec_base_init(Str_base),
+        .id_info_map          = umap_base_init(Str_base, Id_info),
+        .type_info_stack      = vec_base_init(Type_info),
+        .IR                   = {0}
     };
 
-    if (!vec_base_push_back(&state.let_decl_counts, state.alloc, &(usize){0}))
-        return (Compile_to_IR_result){.error = COMPILE_ERROR_OOM};
+    if (!vec_base_push_back(&state.let_decl_count_stack, state.alloc, &(usize){0}))
+        goto oom_error;
 
     for (usize i = 0; i < ast_nodes.m_size; ++i){
         Compiler_state_to_IR_result to_IR_result = compiler_state_to_IR(&state, ast_nodes.m_data[i]);
@@ -683,5 +724,21 @@ Compile_to_IR_result compile_to_IR(Arena *arena, AST_node_ptr_slice ast_nodes){
             return (Compile_to_IR_result){.error_info = to_IR_result.error_info, .error = to_IR_result.error};
     }
 
+    if (
+        !compiler_state_pop_ids_in_current_scope(&state) || (
+            (ast_nodes.m_size == 0 || ast_nodes.m_data[ast_nodes.m_size - 1]->m_token->m_type != TOKEN_TYPE_RETURN) && (
+                !vec_base_push_back(&state.type_info_stack, state.alloc, &(Type_info){.m_tag = TYPE_INFO_TAG_INT, .m_dimensions = 0}) ||
+                !compiler_state_add_instruction(&state, "%s 0", OP_CODE_SYMBOLS[OP_CODE_PUSH]) || (
+                    vec_base_pop_back_discard(&state.type_info_stack),
+                    !compiler_state_add_instruction(&state, "%s %s", OP_CODE_SYMBOLS[OP_CODE_CALL], builtin_fn_tag_to_str(BUILTIN_FN_TAG_EXIT))
+                )
+            )
+        )
+    )
+        goto oom_error;
+
     return (Compile_to_IR_result){.IR = state.IR, .error = COMPILE_ERROR_NONE};
+
+oom_error:
+    return (Compile_to_IR_result){.error = COMPILE_ERROR_OOM};
 }

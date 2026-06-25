@@ -11,18 +11,21 @@ extern "C"{
 
 enum Builtin_fn_tag{
     BUILTIN_FN_TAG_NONE,
+    BUILTIN_FN_TAG_EXIT,
     BUILTIN_FN_TAG_PRINT,
     BUILTIN_FN_TAG_SCAN,
     BUILTIN_FN_TAG_LEN,
     BUILTIN_FN_TAG_RAND,
-    BUILTIN_FN_PUSH_BACK,
-    BUILTIN_FN_POP_BACK
+    BUILTIN_FN_TAG_PUSH_BACK,
+    BUILTIN_FN_TAG_POP_BACK
 };
 
 enum Builtin_fn_tag builtin_fn_tag_init(const char *str);
 
-Type_info builtin_fn_return_type_info(enum Builtin_fn_tag tag);
-bool builtin_fn_is_callable(enum Builtin_fn_tag tag, Type_info_slice args);
+const char* builtin_fn_tag_to_str(enum Builtin_fn_tag tag);
+
+Type_info builtin_fn_tag_return_type_info(enum Builtin_fn_tag tag);
+bool builtin_fn_tag_is_callable(enum Builtin_fn_tag tag, Type_info_slice args);
 
 #ifdef __cplusplus
 }

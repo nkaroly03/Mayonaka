@@ -31,5 +31,14 @@ arr1[2][2][2] = (arr1[0][0] = (arr2[1] = []))[10];
 
 /*/
 
-let arr: [][]int = [];
-arr[scan("hello")] = [];
+let arr1: [][]int = [];
+
+{
+    let arr2: []int = [];
+
+    len("") + exit(10);
+}
+
+return 20;
+
+print("ok");

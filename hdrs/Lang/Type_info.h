@@ -35,7 +35,7 @@ enum Unary_op{
     UNARY_OP_NOT
 };
 
-Type_info unary_op_result_type_info(enum Unary_op op, Type_info type_info);
+Type_info unary_op_type_info_result(enum Unary_op op, Type_info type_info);
 
 enum Binary_op{
     BINARY_OP_NONE,
@@ -68,7 +68,7 @@ enum Binary_op{
     BINARY_OP_OR
 };
 
-Type_info binary_op_result_type_info(enum Binary_op op, Type_info lhs, Type_info rhs);
+Type_info binary_op_type_info_result(enum Binary_op op, Type_info lhs, Type_info rhs);
 
 #ifdef __cplusplus
 }
