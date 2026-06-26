@@ -178,10 +178,10 @@
 
 /*/
 
-for (0..scan("hello") + 'A') |_|
-    if (1);
-    else
-        for (0..10) |_2|;
+
+let arr1: [][]int = [];
+let arr2: []int = [];
+push_back(arr2, 10.0);
 
 /*/
     

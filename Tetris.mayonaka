@@ -16,71 +16,78 @@ let TETROMINO_ROTATION_IDX_90:  int = 1;
 let TETROMINO_ROTATION_IDX_180: int = 2;
 let TETROMINO_ROTATION_IDX_270: int = 3;
 
-let TETROMINO_SHAPE_INFO_TABLE_SIDE_LENGTHS: []int = [8]{};
-TETROMINO_SHAPE_INFO_TABLE_SIDE_LENGTHS[TETROMINO_SHAPE_IDX_SQR ] = 2;
-TETROMINO_SHAPE_INFO_TABLE_SIDE_LENGTHS[TETROMINO_SHAPE_IDX_Z0  ] = 3;
-TETROMINO_SHAPE_INFO_TABLE_SIDE_LENGTHS[TETROMINO_SHAPE_IDX_Z1  ] = 3;
-TETROMINO_SHAPE_INFO_TABLE_SIDE_LENGTHS[TETROMINO_SHAPE_IDX_L0  ] = 3;
-TETROMINO_SHAPE_INFO_TABLE_SIDE_LENGTHS[TETROMINO_SHAPE_IDX_L1  ] = 3;
-TETROMINO_SHAPE_INFO_TABLE_SIDE_LENGTHS[TETROMINO_SHAPE_IDX_T   ] = 3;
-TETROMINO_SHAPE_INFO_TABLE_SIDE_LENGTHS[TETROMINO_SHAPE_IDX_I   ] = 4;
-TETROMINO_SHAPE_INFO_TABLE_SIDE_LENGTHS[TETROMINO_SHAPE_IDX_NONE] = 0;
+let TETROMINO_SHAPE_INFO_TABLE_SIDE_LENGTHS: []int = [];
+push_back(TETROMINO_SHAPE_INFO_TABLE_SIDE_LENGTHS, 2);
+push_back(TETROMINO_SHAPE_INFO_TABLE_SIDE_LENGTHS, 3);
+push_back(TETROMINO_SHAPE_INFO_TABLE_SIDE_LENGTHS, 3);
+push_back(TETROMINO_SHAPE_INFO_TABLE_SIDE_LENGTHS, 3);
+push_back(TETROMINO_SHAPE_INFO_TABLE_SIDE_LENGTHS, 3);
+push_back(TETROMINO_SHAPE_INFO_TABLE_SIDE_LENGTHS, 3);
+push_back(TETROMINO_SHAPE_INFO_TABLE_SIDE_LENGTHS, 4);
+push_back(TETROMINO_SHAPE_INFO_TABLE_SIDE_LENGTHS, 0);
 
-let TETROMINO_SHAPE_INFO_TABLES: []str = [8]{};
-TETROMINO_SHAPE_INFO_TABLES[TETROMINO_SHAPE_IDX_SQR] =
+let TETROMINO_SHAPE_INFO_TABLES: []str = [];
+push_back(
+    TETROMINO_SHAPE_INFO_TABLES,
     "XX"
     "XX"
-;
-TETROMINO_SHAPE_INFO_TABLES[TETROMINO_SHAPE_IDX_Z0] =
+);
+push_back(
+    TETROMINO_SHAPE_INFO_TABLES,
     ".XX"
     "XX."
     "..."
-;
-TETROMINO_SHAPE_INFO_TABLES[TETROMINO_SHAPE_IDX_Z1] =
+);
+push_back(
+    TETROMINO_SHAPE_INFO_TABLES,
     "XX."
     ".XX"
     "..."
-;
-TETROMINO_SHAPE_INFO_TABLES[TETROMINO_SHAPE_IDX_L0] =
+);
+push_back(
+    TETROMINO_SHAPE_INFO_TABLES,
     "..X"
     "XXX"
     "..."
-;
-TETROMINO_SHAPE_INFO_TABLES[TETROMINO_SHAPE_IDX_L1] =
+);
+push_back(
+    TETROMINO_SHAPE_INFO_TABLES,
     "X.."
     "XXX"
     "..."
-;
-TETROMINO_SHAPE_INFO_TABLES[TETROMINO_SHAPE_IDX_T] =
+);
+push_back(
+    TETROMINO_SHAPE_INFO_TABLES,
     ".X."
     "XXX"
     "..."
-;
-TETROMINO_SHAPE_INFO_TABLES[TETROMINO_SHAPE_IDX_I] =
+);
+push_back(
+    TETROMINO_SHAPE_INFO_TABLES,
     "...."
     "XXXX"
     "...."
     "...."
-;
-TETROMINO_SHAPE_INFO_TABLES[TETROMINO_SHAPE_IDX_NONE] = "";
+);
+push_back(TETROMINO_SHAPE_INFO_TABLES, "");
 
-let TETROMINO_SHAPE_INFO_SYMBOL_STRS: []str = [8]{};
-TETROMINO_SHAPE_INFO_SYMBOL_STRS[TETROMINO_SHAPE_IDX_SQR ] = "\x1b[38;2;255;255;0m#";
-TETROMINO_SHAPE_INFO_SYMBOL_STRS[TETROMINO_SHAPE_IDX_Z0  ] = "\x1b[38;2;0;255;0m#";
-TETROMINO_SHAPE_INFO_SYMBOL_STRS[TETROMINO_SHAPE_IDX_Z1  ] = "\x1b[38;2;255;0;0m#";
-TETROMINO_SHAPE_INFO_SYMBOL_STRS[TETROMINO_SHAPE_IDX_L0  ] = "\x1b[38;2;255;127;0m#";
-TETROMINO_SHAPE_INFO_SYMBOL_STRS[TETROMINO_SHAPE_IDX_L1  ] = "\x1b[38;2;255;255;255m#";
-TETROMINO_SHAPE_INFO_SYMBOL_STRS[TETROMINO_SHAPE_IDX_T   ] = "\x1b[38;2;255;0;255m#";
-TETROMINO_SHAPE_INFO_SYMBOL_STRS[TETROMINO_SHAPE_IDX_I   ] = "\x1b[38;2;0;255;255m#";
-TETROMINO_SHAPE_INFO_SYMBOL_STRS[TETROMINO_SHAPE_IDX_NONE] = " ";
+let TETROMINO_SHAPE_INFO_SYMBOL_STRS: []str = [];
+push_back(TETROMINO_SHAPE_INFO_SYMBOL_STRS, "\x1b[38;2;255;255;0m#");
+push_back(TETROMINO_SHAPE_INFO_SYMBOL_STRS, "\x1b[38;2;0;255;0m#");
+push_back(TETROMINO_SHAPE_INFO_SYMBOL_STRS, "\x1b[38;2;255;0;0m#");
+push_back(TETROMINO_SHAPE_INFO_SYMBOL_STRS, "\x1b[38;2;255;127;0m#");
+push_back(TETROMINO_SHAPE_INFO_SYMBOL_STRS, "\x1b[38;2;255;255;255m#");
+push_back(TETROMINO_SHAPE_INFO_SYMBOL_STRS, "\x1b[38;2;255;0;255m#");
+push_back(TETROMINO_SHAPE_INFO_SYMBOL_STRS, "\x1b[38;2;0;255;255m#");
+push_back(TETROMINO_SHAPE_INFO_SYMBOL_STRS, " ");
 
 // ------------------------------------------------------------------------------------------------
 
 let stop_game: bool = false;
 while (not stop_game){
-    let tetris_field: []int = [TETRIS_WIDTH * TETRIS_HEIGHT]{};
-    for (0..array_size(tetris_field)) |i|
-        tetris_field[i] = TETROMINO_SHAPE_IDX_NONE;
+    let tetris_field: []int = [];
+    for (0..TETRIS_WIDTH * TETRIS_HEIGHT) |_|
+        push_back(tetris_field, TETROMINO_SHAPE_IDX_NONE);
 
     let current_tetromino_shape_idx:    int = rand() % TETROMINO_SHAPE_IDX_NONE;
     let current_tetromino_rotation_idx: int = TETROMINO_ROTATION_IDX_0;
@@ -122,7 +129,7 @@ while (not stop_game){
     let tetris_is_running: bool = true;
     while (tetris_is_running){
         {
-            let keypress: char = poll_char();
+            let keypress: char = scan("");
             if (keypress != '\0'){
                 let moved_tetromino_shape_idx:    int = current_tetromino_shape_idx;
                 let moved_tetromino_rotation_idx: int = current_tetromino_rotation_idx;
@@ -477,7 +484,7 @@ while (not stop_game){
     print("\x1b[2JDo you wish to restart? (y/n):");
     let valid_user_input: bool = false;
     while (not valid_user_input){
-        let user_input: char = poll_char();
+        let user_input: char = scan("");
         user_input = user_input - ((user_input >= 'a' and user_input <= 'z') * ('a' - 'A'));
         valid_user_input = (user_input == 'Y' or user_input == 'N');
         stop_game = (user_input == 'N');

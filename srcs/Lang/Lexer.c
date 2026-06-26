@@ -19,7 +19,7 @@
 // ------------------------------------------------------------------------------------------------
 
 #define BIN_DIGIT_MAX_COUNT 64
-#define HEX_DIGIT_MAX_COUNT BIN_DIGIT_MAX_COUNT / 4
+#define HEX_DIGIT_MAX_COUNT (BIN_DIGIT_MAX_COUNT / 4)
 #define U64_MAX_STRLEN 20
 
 static const char MULTI_LINE_COMMENT_MARKER[] = "/*/";

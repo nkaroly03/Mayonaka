@@ -29,7 +29,8 @@
 #include "hdrs/Utils/Num.h"
 #include "hdrs/Utils/Utils.h"
 
-#include "hdrs/Lang/Compiler.h"
+#include "hdrs/Lang/Bytecode_compiler.h"
+#include "hdrs/Lang/IR_compiler.h"
 #include "hdrs/Lang/Lexer.h"
 #include "hdrs/Lang/Parser.h"
 
@@ -81,19 +82,19 @@ int main(const int argc, const char *const *const argv){
     ast_node_ptr_slice_print(parse_result.ast_nodes);
     printf("------------------------------------------------------------------------------------------------\n");
 
-    Compile_to_IR_result compile_to_IR_result = compile_to_IR(&arena, parse_result.ast_nodes);
+    IR_compile_result IR_compile_result = IR_compile(&arena, parse_result.ast_nodes);
 
-    switch (compile_to_IR_result.error){
+    switch (IR_compile_result.error){
         case COMPILE_ERROR_NONE:
             break;
         case COMPILE_ERROR_OOM:
             goto oom_error;
         case COMPILE_ERROR_SYNTAX:
-            error_info = compile_to_IR_result.error_info;
+            error_info = IR_compile_result.error_info;
             goto syntax_error;
     }
 
-    printf("%s", str_base_data(&compile_to_IR_result.IR));
+    printf("%s", str_base_data(&IR_compile_result.IR));
     printf("------------------------------------------------------------------------------------------------\n");
 
     arena_deinit(&arena);

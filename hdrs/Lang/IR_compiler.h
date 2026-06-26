@@ -1,5 +1,5 @@
-#ifndef LANG_COMPILER_H
-#define LANG_COMPILER_H
+#ifndef LANG_IR_COMPILER_H
+#define LANG_IR_COMPILER_H
 
 #ifdef __cplusplus
 extern "C"{
@@ -55,24 +55,26 @@ enum Op_code{
     OP_CODE_XOR
 };
 
+const char* op_code_to_str(enum Op_code op_code);
+
 enum Compile_error{
     COMPILE_ERROR_NONE,
     COMPILE_ERROR_OOM,
     COMPILE_ERROR_SYNTAX
 };
 
-typedef struct Compile_to_IR_result{
+typedef struct IR_compile_result{
     union{
         Str_base IR;
         Str_base error_info;
     };
     enum Compile_error error;
-} Compile_to_IR_result;
+} IR_compile_result;
 
-Compile_to_IR_result compile_to_IR(Arena *arena, AST_node_ptr_slice ast_nodes);
+IR_compile_result IR_compile(Arena *arena, AST_node_ptr_slice ast_nodes);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif // LANG_COMPILER_H
+#endif // LANG_IR_COMPILER_H
