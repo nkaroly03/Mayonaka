@@ -59,18 +59,15 @@
 
     print("end");
 
-/*/
+    let i: int = 0;
+    if (1)
+        print("if");
+    else if (true)
+        while (i < 10){
+            print("while");
+            i = i + 1;
+        }
 
-let i: int = 0;
-if (1)
-    print("if");
-else if (true)
-    while (i < 10){
-        print("while");
-        i = i + 1;
-    }
-
-/*/
 
 ------------------------------------------------------------------------------------------------
     let i: int = 0;
@@ -86,14 +83,122 @@ else if (true)
     push 10 ; 3
     cmp_le ; 2
     jmpz .L1 ; 1
-    push SP[-1] ; 2
+    push sp[-1] ; 2
     push 1 ; 3
     add ; 2
-    mov ; SP[-2] ; 1
+    mov ; sp[-2] ; 1
     jmp .L0 ; 1
 .L1:
     pop ; 0
     push 0 ; 1
     call exit ; 0
+
+
+------------------------------------------------------------------------------------------------
+    let i: int = 0;
+    let k: int = 2;
+    let j: int = 1;
+
+    if (i and j or 10)
+        print("if");
+------------------------------------------------------------------------------------------------
+
+    push 0 ; 1
+    to_int ; 1
+    push 1 ; 2
+    to_int ; 2
+    push sp[-2] ; 3
+    to_bool ; 3
+    push sp[-1] ; 4
+    jmpz .L1 ; 3
+    pop ; 2
+    push sp[-1] ; 3
+    to_bool ; 3
+.L1
+    jmpz .L0 ; 2
+    push "if" ; 3
+    call print ; 2
+.L0
+    pop ; 1
+    pop ; 0
+    push 0 ; 1
+    call exit ; 0
+
+
+------------------------------------------------------------------------------------------------
+    let i: int = 0;
+    let j: int = 1;
+    if (scan(i and j and 10)){
+        print("if");
+    }
+------------------------------------------------------------------------------------------------
+
+    push 0 ; 1
+    to_int ; 1
+    push 1 ; 2
+    to_int ; 2
+    push sp[-2] ; 3
+    to_bool ; 3
+    push sp[-1] ; 4
+    jmpz .L0 ; 3
+    pop ; 2
+    push sp[-1] ; 3
+    to_bool ; 3
+.L0:
+    pop ; 2
+    pop ; 1
+    pop ; 0
+    push 0 ; 1
+    call exit ; 0
+
+------------------------------------------------------------------------------------------------
+    let i: int = 0;
+    let j: int = 1;
+    let k: bool = i or j;
+------------------------------------------------------------------------------------------------
+    push 0 ; 1
+    to_int ; 1
+    push 1 ; 2
+    to_int ; 2
+    push sp[-2] ; 3
+    to_bool ; 3
+    push sp[-1] ; 4
+    neg ; 4
+    jmpz .L0 ; 3
+    pop ; 2
+    push sp[-1] ; 3
+    to_bool ; 3
+.L0:
+    to_bool ; 3
+    pop ; 2
+    pop ; 1
+    pop ; 0
+    push 0 ; 1
+    call exit ; 0
+
+/*/
+
+for (0..scan("hello") + 'A') |_|
+    if (1);
+    else
+        for (0..10) |_2|;
+
+/*/
+    
+    {
+        let _: int = 0;
+        let $_: int = scan("hello") + 'A';
+        while (_ < $_){
+            if (1);
+            else{
+                let _2: int = 0;
+                let $_2: int = 10;
+                while (_2 < $_2){
+                    _2 = _2 + 1;
+                }
+            }
+            _ = _ + 1;
+        }
+    }
 
 /*/

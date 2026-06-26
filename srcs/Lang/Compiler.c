@@ -125,6 +125,49 @@ static Compiler_state_to_IR_result compiler_state_syntax_error(Compiler_state *s
 }
 #define syntax_error(...) compiler_state_syntax_error(self, "On line <" USIZE_PFMT ">: " __VA_ARGS__)
 
+static Compiler_state_to_IR_result compiler_state_unary_op_error(Compiler_state *self, const AST_node *un_op_node, Type_info type_info){
+    Str_base_result type_info_str = type_info_to_str_base(type_info, self->alloc);
+    if (!type_info_str.success)
+        return OOM_ERROR;
+    return syntax_error(
+        "Invalid unary operation <%s> on <%s>",
+        un_op_node->m_token->m_line_number,
+        str_base_data_const(&un_op_node->m_token->m_id),
+        str_base_data(&type_info_str.result)
+    );
+}
+static Compiler_state_to_IR_result compiler_state_binary_op_error(Compiler_state *self, const AST_node *bin_op_node, Type_info lhs_type_info, Type_info rhs_type_info){
+    Str_base_result lhs_type_info_str;
+    Str_base_result rhs_type_info_str;
+    if (
+        !(lhs_type_info_str = type_info_to_str_base(lhs_type_info, self->alloc)).success ||
+        !(rhs_type_info_str = type_info_to_str_base(rhs_type_info, self->alloc)).success
+    )
+        return OOM_ERROR;
+    return syntax_error(
+        "Invalid binary operation <%s> between <%s> and <%s>",
+        bin_op_node->m_token->m_line_number,
+        str_base_data_const(&bin_op_node->m_token->m_id),
+        str_base_data(&lhs_type_info_str.result),
+        str_base_data(&rhs_type_info_str.result)
+    );
+}
+static Compiler_state_to_IR_result compiler_state_type_conversion_error(Compiler_state *self, const AST_node *ast_node, Type_info dest_type_info, Type_info src_type_info){
+    Str_base_result dest_type_info_str;
+    Str_base_result src_type_info_str;
+    if (
+        !(dest_type_info_str = type_info_to_str_base(dest_type_info, self->alloc)).success ||
+        !( src_type_info_str = type_info_to_str_base( src_type_info, self->alloc)).success
+    )
+        return OOM_ERROR;
+    return syntax_error(
+        "Expression with type <%s> is not convertible to <%s>",
+        ast_node->m_token->m_line_number,
+        str_base_data(&src_type_info_str.result),
+        str_base_data(&dest_type_info_str.result)
+    );
+}
+
 #define INDENT "    "
 static bool compiler_state_add_instruction(Compiler_state *self, const char *fmt, ...){
     va_list args;
@@ -174,37 +217,6 @@ static bool compiler_state_pop_on_discarded_expression(Compiler_state *self, con
             return OOM_ERROR; \
     } while (0)
 
-static const char SP_SYMBOL[] = "sp";
-static const char LABEL_SYMBOL[] = ".L";
-
-static Compiler_state_to_IR_result compiler_state_unary_op_error(Compiler_state *self, const AST_node *un_op_node, Type_info type_info){
-    Str_base_result type_info_str = type_info_to_str_base(type_info, self->alloc);
-    if (!type_info_str.success)
-        return OOM_ERROR;
-    return syntax_error(
-        "Invalid unary operation <%s> on <%s>",
-        un_op_node->m_token->m_line_number,
-        str_base_data_const(&un_op_node->m_token->m_id),
-        str_base_data(&type_info_str.result)
-    );
-}
-static Compiler_state_to_IR_result compiler_state_binary_op_error(Compiler_state *self, const AST_node *bin_op_node, Type_info lhs_type_info, Type_info rhs_type_info){
-    Str_base_result lhs_type_info_str;
-    Str_base_result rhs_type_info_str;
-    if (
-        !(lhs_type_info_str = type_info_to_str_base(lhs_type_info, self->alloc)).success ||
-        !(rhs_type_info_str = type_info_to_str_base(rhs_type_info, self->alloc)).success
-    )
-        return OOM_ERROR;
-    return syntax_error(
-        "Invalid binary operation <%s> between <%s> and <%s>",
-        bin_op_node->m_token->m_line_number,
-        str_base_data_const(&bin_op_node->m_token->m_id),
-        str_base_data(&lhs_type_info_str.result),
-        str_base_data(&rhs_type_info_str.result)
-    );
-}
-
 static bool compiler_state_pop_ids_in_current_scope(Compiler_state *self){
     usize last_let_decl_count = *(usize*)vec_base_at(&self->let_decl_count_stack, self->let_decl_count_stack.m_size - 1);
     while (last_let_decl_count-- > 0){
@@ -217,6 +229,9 @@ static bool compiler_state_pop_ids_in_current_scope(Compiler_state *self){
     vec_base_pop_back_discard(&self->let_decl_count_stack);
     return true;
 }
+
+static const char SP_SYMBOL[] = "sp";
+static const char LABEL_SYMBOL[] = ".L";
 
 static Compiler_state_to_IR_result compiler_state_to_IR(Compiler_state *self, const AST_node *ast_node){
     enum Binary_op bin_op;
@@ -606,8 +621,51 @@ static Compiler_state_to_IR_result compiler_state_to_IR(Compiler_state *self, co
 
         case TOKEN_TYPE_AND:
         case TOKEN_TYPE_OR:
-            fprintf(stderr, "Not implemented\n");
-            abort();
+            {
+                // TODO? disallow logical operators between <str>
+
+                char and_or_label_str_buf[32];
+                sprintf(and_or_label_str_buf, "%s" USIZE_PFMT, LABEL_SYMBOL, self->label_counter++);
+
+                const AST_node *lhs_node = ast_node->m_sub_nodes.m_data[0];
+                const AST_node *rhs_node = ast_node->m_sub_nodes.m_data[1];
+
+                Compiler_state_to_IR_result to_IR_result = compiler_state_to_IR(self, lhs_node);
+                if (to_IR_result.error != COMPILE_ERROR_NONE)
+                    return to_IR_result;
+
+                Type_info lhs_type_info = *(Type_info*)vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1);
+                Type_info bool_type_info = {.m_tag = TYPE_INFO_TAG_BOOL, .m_dimensions = 0};
+                if (binary_op_type_info_result(BINARY_OP_ASSIGNMENT, bool_type_info, lhs_type_info).m_tag == TYPE_INFO_TAG_NONE)
+                    return compiler_state_type_conversion_error(self, ast_node, bool_type_info, lhs_type_info);
+                add_instruction("%s", OP_CODE_SYMBOLS[OP_CODE_TO_BOOL]);
+
+                if (!vec_base_push_back(&self->type_info_stack, self->alloc, &lhs_type_info))
+                    return OOM_ERROR;
+                add_instruction("%s %s[-1]", OP_CODE_SYMBOLS[OP_CODE_PUSH], SP_SYMBOL);
+                if (ast_node->m_token->m_type == TOKEN_TYPE_OR)
+                    add_instruction("%s", OP_CODE_SYMBOLS[OP_CODE_NEG]);
+                vec_base_pop_back_discard(&self->type_info_stack);
+                add_instruction("%s %s", OP_CODE_SYMBOLS[OP_CODE_JMPZ], and_or_label_str_buf);
+
+                vec_base_pop_back_discard(&self->type_info_stack);
+                add_instruction("%s", OP_CODE_SYMBOLS[OP_CODE_POP]);
+
+                to_IR_result = compiler_state_to_IR(self, rhs_node);
+                if (to_IR_result.error != COMPILE_ERROR_NONE)
+                    return to_IR_result;
+
+                Type_info rhs_type_info = *(Type_info*)vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1);
+                if (binary_op_type_info_result(BINARY_OP_ASSIGNMENT, bool_type_info, rhs_type_info).m_tag == TYPE_INFO_TAG_NONE)
+                    return compiler_state_type_conversion_error(self, ast_node, bool_type_info, rhs_type_info);
+                add_instruction("%s", OP_CODE_SYMBOLS[OP_CODE_TO_BOOL]);
+
+                if (!str_base_append_fmt(&self->IR, self->alloc, "%s:\n", and_or_label_str_buf))
+                    return OOM_ERROR;
+
+                pop_on_discarded_expression(ast_node);
+            }
+            break;
         
         case TOKEN_TYPE_FN:
             fprintf(stderr, "User defined functions are not implemented");
@@ -687,8 +745,9 @@ static Compiler_state_to_IR_result compiler_state_to_IR(Compiler_state *self, co
                 Type_info last_type_info;
                 vec_base_pop_back_to(&self->type_info_stack, &last_type_info);
 
-                if (binary_op_type_info_result(BINARY_OP_ASSIGNMENT, (Type_info){.m_tag = TYPE_INFO_TAG_BOOL, .m_dimensions = 0}, last_type_info).m_tag == TYPE_INFO_TAG_NONE)
-                    return syntax_error("<if> statement's conditional expression can't be converted to <bool>", ast_node->m_token->m_line_number);
+                Type_info bool_type_info = {.m_tag = TYPE_INFO_TAG_BOOL, .m_dimensions = 0};
+                if (binary_op_type_info_result(BINARY_OP_ASSIGNMENT, bool_type_info, last_type_info).m_tag == TYPE_INFO_TAG_NONE)
+                    return compiler_state_type_conversion_error(self, ast_node, (Type_info){.m_tag = TYPE_INFO_TAG_BOOL, .m_dimensions = 0}, last_type_info);
 
                 add_instruction("%s %s", OP_CODE_SYMBOLS[OP_CODE_JMPZ], if_label_str_buf);
 
@@ -757,8 +816,9 @@ static Compiler_state_to_IR_result compiler_state_to_IR(Compiler_state *self, co
                 Type_info last_type_info;
                 vec_base_pop_back_to(&self->type_info_stack, &last_type_info);
 
-                if (binary_op_type_info_result(BINARY_OP_ASSIGNMENT, (Type_info){.m_tag = TYPE_INFO_TAG_BOOL, .m_dimensions = 0}, last_type_info).m_tag == TYPE_INFO_TAG_NONE)
-                    return syntax_error("<while> statement's conditional expression can't be converted to <bool>", ast_node->m_token->m_line_number);
+                Type_info bool_type_info = {.m_tag = TYPE_INFO_TAG_BOOL, .m_dimensions = 0};
+                if (binary_op_type_info_result(BINARY_OP_ASSIGNMENT, bool_type_info, last_type_info).m_tag == TYPE_INFO_TAG_NONE)
+                    return compiler_state_type_conversion_error(self, ast_node, (Type_info){.m_tag = TYPE_INFO_TAG_BOOL, .m_dimensions = 0}, last_type_info);
 
                 add_instruction("%s %s", OP_CODE_SYMBOLS[OP_CODE_JMPZ], while_end_label_str_buf);
 
