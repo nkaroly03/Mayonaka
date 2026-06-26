@@ -96,6 +96,7 @@ typedef struct Id_info{
 
 typedef struct Compiler_state{
     Allocator alloc;
+    usize label_counter;
     Vec_base fn_return_type_stack;
     Vec_base let_decl_count_stack;
     Vec_base id_stack;
@@ -148,12 +149,16 @@ static bool compiler_state_add_instruction(Compiler_state *self, const char *fmt
 
 static bool compiler_state_pop_on_discarded_expression(Compiler_state *self, const AST_node *ast_node){
     if (ast_node->m_parent){
-        switch (ast_node->m_parent->m_token->m_type){
+        const AST_node *parent = ast_node->m_parent;
+        switch (parent->m_token->m_type){
             case TOKEN_TYPE_LBRACE:
-            case TOKEN_TYPE_IF:
             case TOKEN_TYPE_ELSE:
-            case TOKEN_TYPE_WHILE:
                 break;
+            case TOKEN_TYPE_IF:
+            case TOKEN_TYPE_WHILE:
+                if (parent->m_sub_nodes.m_data[0] != ast_node)
+                    break;
+                FALLTHROUGH;
             default:
                 return true;
         }
@@ -286,13 +291,14 @@ static Compiler_state_to_IR_result compiler_state_to_IR(Compiler_state *self, co
                         add_instruction("%s", OP_CODE_SYMBOLS[OP_CODE_TO_BOOL + (bfn_return_type_info.m_tag - TYPE_INFO_TAG_BOOL)]);
                     }
                     else if (ast_node->m_parent){
-                        switch (ast_node->m_parent->m_token->m_type){
+                        const AST_node *parent = ast_node->m_parent;
+                        switch (parent->m_token->m_type){
                             case TOKEN_TYPE_LBRACE:
                             case TOKEN_TYPE_ELSE:
                                 break;
                             case TOKEN_TYPE_IF:
                             case TOKEN_TYPE_WHILE:
-                                if (ast_node->m_parent->m_sub_nodes.m_data[0]->m_token->m_type != TOKEN_TYPE_LPAREN)
+                                if (parent->m_sub_nodes.m_data[0] != ast_node)
                                     break;
                                 FALLTHROUGH;
                             default:
@@ -669,9 +675,66 @@ static Compiler_state_to_IR_result compiler_state_to_IR(Compiler_state *self, co
             break;
 
         case TOKEN_TYPE_IF:
-        case TOKEN_TYPE_ELSE:
-            fprintf(stderr, "Not implemented\n");
-            abort();
+            {
+                char if_label_str_buf[32];
+                sprintf(if_label_str_buf, ".L" USIZE_PFMT, self->label_counter++);
+
+                Compiler_state_to_IR_result to_IR_result = compiler_state_to_IR(self, ast_node->m_sub_nodes.m_data[0]);
+                if (to_IR_result.error != COMPILE_ERROR_NONE)
+                    return to_IR_result;
+
+                Type_info last_type_info;
+                vec_base_pop_back_to(&self->type_info_stack, &last_type_info);
+
+                if (binary_op_type_info_result(BINARY_OP_ASSIGNMENT, (Type_info){.m_tag = TYPE_INFO_TAG_BOOL, .m_dimensions = 0}, last_type_info).m_tag == TYPE_INFO_TAG_NONE)
+                    return syntax_error("If statement's conditional expression can't be converted to <bool>", ast_node->m_token->m_line_number);
+
+                add_instruction("%s %s", OP_CODE_SYMBOLS[OP_CODE_JMPZ], if_label_str_buf);
+
+                if (ast_node->m_sub_nodes.m_size > 1){
+                    if (ast_node->m_sub_nodes.m_data[1]->m_token->m_type != TOKEN_TYPE_ELSE){
+                        if (!vec_base_push_back(&self->let_decl_count_stack, self->alloc, &(usize){0}))
+                            return OOM_ERROR;
+                        to_IR_result = compiler_state_to_IR(self, ast_node->m_sub_nodes.m_data[1]);
+                        if (to_IR_result.error != COMPILE_ERROR_NONE)
+                            return to_IR_result;
+                        if (
+                            !compiler_state_pop_ids_in_current_scope(self) || (
+                                ast_node->m_sub_nodes.m_size == 2 &&
+                                !str_base_append_fmt(&self->IR, self->alloc, "%s:\n", if_label_str_buf)
+                            )
+                        )
+                            return OOM_ERROR;
+                    }
+                    if (ast_node->m_sub_nodes.m_size == 3 || ast_node->m_sub_nodes.m_data[1]->m_token->m_type == TOKEN_TYPE_ELSE){
+                        char else_label_str_buf[32];
+                        sprintf(else_label_str_buf, ".L" USIZE_PFMT, self->label_counter++);
+
+                        add_instruction("%s %s", OP_CODE_SYMBOLS[OP_CODE_JMP], else_label_str_buf);
+
+                        if (!str_base_append_fmt(&self->IR, self->alloc, "%s:\n", if_label_str_buf))
+                            return OOM_ERROR;
+
+                        AST_node_ptr_slice else_node_sub_nodes = ast_node->m_sub_nodes.m_data[(ast_node->m_sub_nodes.m_size == 3) ? 2 : 1]->m_sub_nodes;
+                        if (else_node_sub_nodes.m_size > 0){
+                            if (!vec_base_push_back(&self->let_decl_count_stack, self->alloc, &(usize){0}))
+                                return OOM_ERROR;
+                            to_IR_result = compiler_state_to_IR(self, else_node_sub_nodes.m_data[0]);
+                            if (to_IR_result.error != COMPILE_ERROR_NONE)
+                                return to_IR_result;
+                            if (!compiler_state_pop_ids_in_current_scope(self))
+                                return OOM_ERROR;
+                        }
+
+                        if (!str_base_append_fmt(&self->IR, self->alloc, "%s:\n", else_label_str_buf))
+                            return OOM_ERROR;
+                    }
+
+                }
+                else if (!str_base_append_fmt(&self->IR, self->alloc, "%s:\n", if_label_str_buf))
+                    return OOM_ERROR;
+            }
+            break;
 
         case TOKEN_TYPE_WHILE:
             fprintf(stderr, "Not implemented\n");
@@ -708,6 +771,7 @@ Compile_to_IR_result compile_to_IR(Arena *arena, AST_node_ptr_slice ast_nodes){
 
     Compiler_state state = {
         .alloc                = arena_allocator(arena),
+        .label_counter        = 0,
         .let_decl_count_stack = vec_base_init(usize),
         .id_stack             = vec_base_init(Str_base),
         .id_info_map          = umap_base_init(Str_base, Id_info),
