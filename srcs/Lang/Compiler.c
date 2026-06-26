@@ -175,6 +175,7 @@ static bool compiler_state_pop_on_discarded_expression(Compiler_state *self, con
     } while (0)
 
 static const char SP_SYMBOL[] = "sp";
+static const char LABEL_SYMBOL[] = ".L";
 
 static Compiler_state_to_IR_result compiler_state_unary_op_error(Compiler_state *self, const AST_node *un_op_node, Type_info type_info){
     Str_base_result type_info_str = type_info_to_str_base(type_info, self->alloc);
@@ -677,7 +678,7 @@ static Compiler_state_to_IR_result compiler_state_to_IR(Compiler_state *self, co
         case TOKEN_TYPE_IF:
             {
                 char if_label_str_buf[32];
-                sprintf(if_label_str_buf, ".L" USIZE_PFMT, self->label_counter++);
+                sprintf(if_label_str_buf, "%s" USIZE_PFMT, LABEL_SYMBOL, self->label_counter++);
 
                 Compiler_state_to_IR_result to_IR_result = compiler_state_to_IR(self, ast_node->m_sub_nodes.m_data[0]);
                 if (to_IR_result.error != COMPILE_ERROR_NONE)
@@ -687,7 +688,7 @@ static Compiler_state_to_IR_result compiler_state_to_IR(Compiler_state *self, co
                 vec_base_pop_back_to(&self->type_info_stack, &last_type_info);
 
                 if (binary_op_type_info_result(BINARY_OP_ASSIGNMENT, (Type_info){.m_tag = TYPE_INFO_TAG_BOOL, .m_dimensions = 0}, last_type_info).m_tag == TYPE_INFO_TAG_NONE)
-                    return syntax_error("If statement's conditional expression can't be converted to <bool>", ast_node->m_token->m_line_number);
+                    return syntax_error("<if> statement's conditional expression can't be converted to <bool>", ast_node->m_token->m_line_number);
 
                 add_instruction("%s %s", OP_CODE_SYMBOLS[OP_CODE_JMPZ], if_label_str_buf);
 
@@ -706,16 +707,18 @@ static Compiler_state_to_IR_result compiler_state_to_IR(Compiler_state *self, co
                         )
                             return OOM_ERROR;
                     }
-                    if (ast_node->m_sub_nodes.m_size == 3 || ast_node->m_sub_nodes.m_data[1]->m_token->m_type == TOKEN_TYPE_ELSE){
+
+                    usize last_idx = ast_node->m_sub_nodes.m_size - 1;
+                    if (ast_node->m_sub_nodes.m_data[last_idx]->m_token->m_type == TOKEN_TYPE_ELSE){
                         char else_label_str_buf[32];
-                        sprintf(else_label_str_buf, ".L" USIZE_PFMT, self->label_counter++);
+                        sprintf(else_label_str_buf, "%s" USIZE_PFMT, LABEL_SYMBOL, self->label_counter++);
 
                         add_instruction("%s %s", OP_CODE_SYMBOLS[OP_CODE_JMP], else_label_str_buf);
 
                         if (!str_base_append_fmt(&self->IR, self->alloc, "%s:\n", if_label_str_buf))
                             return OOM_ERROR;
 
-                        AST_node_ptr_slice else_node_sub_nodes = ast_node->m_sub_nodes.m_data[(ast_node->m_sub_nodes.m_size == 3) ? 2 : 1]->m_sub_nodes;
+                        AST_node_ptr_slice else_node_sub_nodes = ast_node->m_sub_nodes.m_data[last_idx]->m_sub_nodes;
                         if (else_node_sub_nodes.m_size > 0){
                             if (!vec_base_push_back(&self->let_decl_count_stack, self->alloc, &(usize){0}))
                                 return OOM_ERROR;
@@ -737,8 +740,44 @@ static Compiler_state_to_IR_result compiler_state_to_IR(Compiler_state *self, co
             break;
 
         case TOKEN_TYPE_WHILE:
-            fprintf(stderr, "Not implemented\n");
-            abort();
+            {
+                char while_start_label_str_buf[32];
+                char while_end_label_str_buf[32];
+
+                sprintf(while_start_label_str_buf, "%s" USIZE_PFMT, LABEL_SYMBOL, self->label_counter++);
+                sprintf(while_end_label_str_buf, "%s" USIZE_PFMT, LABEL_SYMBOL, self->label_counter++);
+
+                if (!str_base_append_fmt(&self->IR, self->alloc, "%s:\n", while_start_label_str_buf))
+                    return OOM_ERROR;
+
+                Compiler_state_to_IR_result to_IR_result = compiler_state_to_IR(self, ast_node->m_sub_nodes.m_data[0]);
+                if (to_IR_result.error != COMPILE_ERROR_NONE)
+                    return to_IR_result;
+
+                Type_info last_type_info;
+                vec_base_pop_back_to(&self->type_info_stack, &last_type_info);
+
+                if (binary_op_type_info_result(BINARY_OP_ASSIGNMENT, (Type_info){.m_tag = TYPE_INFO_TAG_BOOL, .m_dimensions = 0}, last_type_info).m_tag == TYPE_INFO_TAG_NONE)
+                    return syntax_error("<while> statement's conditional expression can't be converted to <bool>", ast_node->m_token->m_line_number);
+
+                add_instruction("%s %s", OP_CODE_SYMBOLS[OP_CODE_JMPZ], while_end_label_str_buf);
+
+                if (ast_node->m_sub_nodes.m_size > 1){
+                    if (!vec_base_push_back(&self->let_decl_count_stack, self->alloc, &(usize){0}))
+                        return OOM_ERROR;
+                    to_IR_result = compiler_state_to_IR(self, ast_node->m_sub_nodes.m_data[1]);
+                    if (to_IR_result.error != COMPILE_ERROR_NONE)
+                        return to_IR_result;
+                    if (!compiler_state_pop_ids_in_current_scope(self))
+                        return OOM_ERROR;
+                }
+
+                add_instruction("%s %s", OP_CODE_SYMBOLS[OP_CODE_JMP], while_start_label_str_buf);
+
+                if (!str_base_append_fmt(&self->IR, self->alloc, "%s:\n", while_end_label_str_buf))
+                    return OOM_ERROR;
+            }
+            break;
 
         case TOKEN_TYPE_RETURN:
             if (self->fn_return_type_stack.m_size == 0){
