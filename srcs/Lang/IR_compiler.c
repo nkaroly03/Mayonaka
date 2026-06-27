@@ -27,6 +27,51 @@ static const char *TYPE_INFO_TAG_SYMBOLS[] = {
     [TYPE_INFO_TAG_STR]   = "str",
 };
 
+static const char *OP_CODE_SYMBOLS[] = {
+    [OP_CODE_PUSH]      = "push",
+    [OP_CODE_POP]       = "pop",
+
+    [OP_CODE_CALL]      = "call",
+    [OP_CODE_RET]       = "ret",
+
+    [OP_CODE_JMP]       = "jmp",
+    [OP_CODE_JMPZ]      = "jmpz",
+
+    [OP_CODE_TO_BOOL]   = "to_bool",
+    [OP_CODE_TO_CHAR]   = "to_char",
+    [OP_CODE_TO_INT]    = "to_int",
+    [OP_CODE_TO_FLOAT]  = "to_float",
+    [OP_CODE_TO_STR]    = "to_str",
+
+    [OP_CODE_NEG]       = "neg",
+    [OP_CODE_BNEG]      = "bneg",
+
+    [OP_CODE_DEREF]     = "deref",
+
+    [OP_CODE_MOV]       = "mov",
+    [OP_CODE_MOV_DEREF] = "mov_deref",
+
+    [OP_CODE_CMP_EQ]    = "cmp_eq",
+    [OP_CODE_CMP_NEQ]   = "cmp_neq",
+    [OP_CODE_CMP_LE]    = "cmp_le",
+    [OP_CODE_CMP_LEQ]   = "cmp_leq",
+    [OP_CODE_CMP_GE]    = "cmp_ge",
+    [OP_CODE_CMP_GEQ]   = "cmp_geq",
+
+    [OP_CODE_ADD]       = "add",
+    [OP_CODE_SUB]       = "sub",
+    [OP_CODE_MUL]       = "mul",
+    [OP_CODE_DIV]       = "div",
+    [OP_CODE_MOD]       = "mod",
+    [OP_CODE_POW]       = "pow",
+
+    [OP_CODE_SHL]       = "shl",
+    [OP_CODE_SHR]       = "shr",
+    [OP_CODE_BAND]      = "band",
+    [OP_CODE_BOR]       = "bor",
+    [OP_CODE_XOR]       = "xor"
+};
+
 static Str_base_result type_info_to_str_base(Type_info type_info, Allocator alloc){
     Str_base result = {0};
 
@@ -185,9 +230,6 @@ static bool IR_compiler_state_pop_ids_in_current_scope(IR_compiler_state *self){
     return true;
 }
 
-static const char SP_SYMBOL[] = "sp";
-static const char LABEL_SYMBOL[] = ".L";
-
 static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_state *self, const AST_node *ast_node){
     enum Binary_op bin_op;
     enum Op_code bin_op_code;
@@ -201,7 +243,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                 Id_info *id_info = pair.m_value;
                 if (!vec_base_push_back(&self->type_info_stack, self->alloc, &id_info->type_info))
                     return OOM_ERROR;
-                add_instruction("%s %s[-" USIZE_PFMT "]", op_code_to_str(OP_CODE_PUSH), SP_SYMBOL, self->type_info_stack.m_size - id_info->stack_idx - 1);
+                add_instruction("%s " SP_SYMBOL "[-" USIZE_PFMT "]", op_code_to_str(OP_CODE_PUSH), self->type_info_stack.m_size - id_info->stack_idx - 1);
                 pop_on_discarded_expression(ast_node);
             }
             break;
@@ -461,7 +503,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                         return IR_compiler_state_binary_op_error(self, ast_node, lhs_type_info, rhs_type_info);
 
                     vec_base_pop_back_discard(&self->type_info_stack);
-                    add_instruction("%s %s[-" USIZE_PFMT "]", op_code_to_str(OP_CODE_MOV), SP_SYMBOL, self->type_info_stack.m_size - id_info->stack_idx + 1);
+                    add_instruction("%s " SP_SYMBOL "[-" USIZE_PFMT "]", op_code_to_str(OP_CODE_MOV), self->type_info_stack.m_size - id_info->stack_idx + 1);
 
                     if (push_back_after_assignment){
                         compile_result = IR_compiler_state_compile(self, lhs_node);
@@ -502,10 +544,10 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                     if (push_back_after_assignment){
                         if (!vec_base_push_back(&self->type_info_stack, self->alloc, &subscript_lhs_type_info))
                             return OOM_ERROR;
-                        add_instruction("%s %s[-2]", op_code_to_str(OP_CODE_PUSH), SP_SYMBOL);
+                        add_instruction("%s " SP_SYMBOL "[-2]", op_code_to_str(OP_CODE_PUSH));
                         if (!vec_base_push_back(&self->type_info_stack, self->alloc, &subscript_rhs_type_info))
                             return OOM_ERROR;
-                        add_instruction("%s %s[-2]", op_code_to_str(OP_CODE_PUSH), SP_SYMBOL);
+                        add_instruction("%s " SP_SYMBOL "[-2]", op_code_to_str(OP_CODE_PUSH));
                     }
 
                     compile_result = IR_compiler_state_compile(self, rhs_node);
@@ -582,7 +624,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                 // TODO? disallow logical operators between <str>
 
                 char and_or_label_str_buf[32];
-                sprintf(and_or_label_str_buf, "%s" USIZE_PFMT, LABEL_SYMBOL, self->label_counter++);
+                sprintf(and_or_label_str_buf, LABEL_SYMBOL USIZE_PFMT, self->label_counter++);
 
                 const AST_node *lhs_node = ast_node->m_sub_nodes.m_data[0];
                 const AST_node *rhs_node = ast_node->m_sub_nodes.m_data[1];
@@ -599,7 +641,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
 
                 if (!vec_base_push_back(&self->type_info_stack, self->alloc, &lhs_type_info))
                     return OOM_ERROR;
-                add_instruction("%s %s[-1]", op_code_to_str(OP_CODE_PUSH), SP_SYMBOL);
+                add_instruction("%s " SP_SYMBOL "[-1]", op_code_to_str(OP_CODE_PUSH));
                 if (ast_node->m_token->m_type == TOKEN_TYPE_OR)
                     add_instruction("%s", op_code_to_str(OP_CODE_NEG));
                 vec_base_pop_back_discard(&self->type_info_stack);
@@ -693,7 +735,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
         case TOKEN_TYPE_IF:
             {
                 char if_label_str_buf[32];
-                sprintf(if_label_str_buf, "%s" USIZE_PFMT, LABEL_SYMBOL, self->label_counter++);
+                sprintf(if_label_str_buf, LABEL_SYMBOL USIZE_PFMT, self->label_counter++);
 
                 IR_compiler_state_compile_result compile_result = IR_compiler_state_compile(self, ast_node->m_sub_nodes.m_data[0]);
                 if (compile_result.error != COMPILE_ERROR_NONE)
@@ -727,7 +769,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                     usize last_idx = ast_node->m_sub_nodes.m_size - 1;
                     if (ast_node->m_sub_nodes.m_data[last_idx]->m_token->m_type == TOKEN_TYPE_ELSE){
                         char else_label_str_buf[32];
-                        sprintf(else_label_str_buf, "%s" USIZE_PFMT, LABEL_SYMBOL, self->label_counter++);
+                        sprintf(else_label_str_buf, LABEL_SYMBOL USIZE_PFMT, self->label_counter++);
 
                         add_instruction("%s %s", op_code_to_str(OP_CODE_JMP), else_label_str_buf);
 
@@ -760,8 +802,8 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                 char while_start_label_str_buf[32];
                 char while_end_label_str_buf[32];
 
-                sprintf(while_start_label_str_buf, "%s" USIZE_PFMT, LABEL_SYMBOL, self->label_counter++);
-                sprintf(while_end_label_str_buf, "%s" USIZE_PFMT, LABEL_SYMBOL, self->label_counter++);
+                sprintf(while_start_label_str_buf, LABEL_SYMBOL USIZE_PFMT, self->label_counter++);
+                sprintf(while_end_label_str_buf, LABEL_SYMBOL USIZE_PFMT, self->label_counter++);
 
                 if (!str_base_append_fmt(&self->IR, self->alloc, "%s:\n", while_start_label_str_buf))
                     return OOM_ERROR;
@@ -823,51 +865,6 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
 // ------------------------------------------------------------------------------------------------
 
 const char* op_code_to_str(enum Op_code op_code){
-    static const char *OP_CODE_SYMBOLS[] = {
-        [OP_CODE_PUSH]      = "push",
-        [OP_CODE_POP]       = "pop",
-
-        [OP_CODE_CALL]      = "call",
-        [OP_CODE_RET]       = "ret",
-
-        [OP_CODE_JMP]       = "jmp",
-        [OP_CODE_JMPZ]      = "jmpz",
-
-        [OP_CODE_TO_BOOL]   = "to_bool",
-        [OP_CODE_TO_CHAR]   = "to_char",
-        [OP_CODE_TO_INT]    = "to_int",
-        [OP_CODE_TO_FLOAT]  = "to_float",
-        [OP_CODE_TO_STR]    = "to_str",
-
-        [OP_CODE_NEG]       = "neg",
-        [OP_CODE_BNEG]      = "bneg",
-
-        [OP_CODE_DEREF]     = "deref",
-
-        [OP_CODE_MOV]       = "mov",
-        [OP_CODE_MOV_DEREF] = "mov_deref",
-
-        [OP_CODE_CMP_EQ]    = "cmp_eq",
-        [OP_CODE_CMP_NEQ]   = "cmp_neq",
-        [OP_CODE_CMP_LE]    = "cmp_le",
-        [OP_CODE_CMP_LEQ]   = "cmp_leq",
-        [OP_CODE_CMP_GE]    = "cmp_ge",
-        [OP_CODE_CMP_GEQ]   = "cmp_geq",
-
-        [OP_CODE_ADD]       = "add",
-        [OP_CODE_SUB]       = "sub",
-        [OP_CODE_MUL]       = "mul",
-        [OP_CODE_DIV]       = "div",
-        [OP_CODE_MOD]       = "mod",
-        [OP_CODE_POW]       = "pow",
-
-        [OP_CODE_SHL]       = "shl",
-        [OP_CODE_SHR]       = "shr",
-        [OP_CODE_BAND]      = "band",
-        [OP_CODE_BOR]       = "bor",
-        [OP_CODE_XOR]       = "xor"
-    };
-        
     return OP_CODE_SYMBOLS[op_code];
 }
 

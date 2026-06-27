@@ -10,6 +10,9 @@ extern "C"{
 
 #include "Parser.h"
 
+#define SP_SYMBOL "sp"
+#define LABEL_SYMBOL ".L"
+
 enum Op_code{
     OP_CODE_PUSH,
     OP_CODE_POP,
@@ -29,10 +32,10 @@ enum Op_code{
     OP_CODE_NEG,
     OP_CODE_BNEG,
 
-    OP_CODE_DEREF,
-
     OP_CODE_MOV,
     OP_CODE_MOV_DEREF,
+
+    OP_CODE_DEREF,
 
     OP_CODE_CMP_EQ,
     OP_CODE_CMP_NEQ,

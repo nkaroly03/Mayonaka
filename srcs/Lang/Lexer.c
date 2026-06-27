@@ -18,12 +18,15 @@
 
 // ------------------------------------------------------------------------------------------------
 
-#define BIN_DIGIT_MAX_COUNT 64
-#define HEX_DIGIT_MAX_COUNT (BIN_DIGIT_MAX_COUNT / 4)
-#define U64_MAX_STRLEN 20
-
-static const char MULTI_LINE_COMMENT_MARKER[] = "/*/";
-static const char SINGLE_LINE_COMMENT_MARKER[] = "//";
+static int is_newline(int c){
+    return c == '\n';
+}
+static int is_space_not_newline(int c){
+    return !is_newline(c) && isspace(c);
+}
+static int is_bin_digit(int c){
+    return c == '0' || c == '1';
+}
 
 typedef struct Lexer_state{
     Allocator alloc;
@@ -31,6 +34,13 @@ typedef struct Lexer_state{
     usize line_number;
     Vec_base tokens;
 } Lexer_state;
+
+#define BIN_DIGIT_MAX_COUNT 64
+#define HEX_DIGIT_MAX_COUNT (BIN_DIGIT_MAX_COUNT / 4)
+#define U64_MAX_STRLEN 20
+
+static const char MULTI_LINE_COMMENT_MARKER[] = "/*/";
+static const char SINGLE_LINE_COMMENT_MARKER[] = "//";
 
 static void lexer_state_cleanup(Lexer_state *self){
     fclose(self->file);
@@ -67,16 +77,6 @@ static bool lexer_state_token_push_back(Lexer_state *self, enum Token_type type,
         temp.success = vec_base_push_back(&self->tokens, self->alloc, &(Token){.m_type = type, .m_id = temp.result, .m_line_number = self->line_number});
 
     return temp.success;
-}
-
-static int is_not_newline(int c){
-    return c != '\n';
-}
-static int is_space_not_newline(int c){
-    return isspace(c) && is_not_newline(c);
-}
-static int is_bin_digit(int c){
-    return c == '0' || c == '1';
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -175,18 +175,19 @@ Lex_result lex(Arena *arena, const char *path){
             sv = str_view_trim_prefix(sv, MULTI_LINE_COMMENT_MARKER);
         }
         else if (str_view_starts_with(sv, SINGLE_LINE_COMMENT_MARKER))
-            sv = str_view_trim_left_while(sv, is_not_newline);
-        else if (str_view_starts_with(sv, "\"") || str_view_starts_with(sv, "'")){
-            char quote = (sv.m_str[0] == '"') ? '"' : '\'';
+            sv = str_view_trim_left_while_not(sv, is_newline);
+        else if (str_view_starts_with(sv, "'") || str_view_starts_with(sv, "\"")){
+            char quote = sv.m_str[0];
+            const char *type_str = (quote == '\'') ? "char" : "str";
 
             usize quote_end_pos = 0;
             while (++quote_end_pos < sv.m_size && sv.m_str[quote_end_pos] != quote){
                 if (sv.m_str[quote_end_pos] == '\n')
-                    return syntax_error("<%s> literal contains newline character(s)", (quote == '\'') ? "char" : "str");
+                    return syntax_error("<%s> literal contains newline character(s)", type_str);
                 quote_end_pos += (sv.m_str[quote_end_pos] == '\\');
             }
             if (quote_end_pos >= sv.m_size)
-                return syntax_error("Unclosed <%s> literal", (quote == '\'') ? "char" : "str");
+                return syntax_error("Unclosed <%s> literal", type_str);
 
             Str_view quoted_sv = str_view_trim_right(sv, sv.m_size - quote_end_pos - 1);
 
@@ -194,7 +195,7 @@ Lex_result lex(Arena *arena, const char *path){
             switch (temp.error){
                 case STR_UNESCAPE_ERROR_NONE:                break;
                 case STR_UNESCAPE_ERROR_OOM:                 return oom_error();
-                case STR_UNESCAPE_ERROR_BAD_ESCAPE_SEQUENCE: return syntax_error("<%s> literal is escaped incorrectly", (quote == '\'') ? "char" : "str");
+                case STR_UNESCAPE_ERROR_BAD_ESCAPE_SEQUENCE: return syntax_error("<%s> literal is escaped incorrectly", type_str);
             }
 
             // TODO: <char> literals than have '\0'(s) might be consumed even when they contain multiple characters

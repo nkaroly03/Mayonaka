@@ -179,9 +179,7 @@
 /*/
 
 
-let arr1: [][]int = [];
-let arr2: []int = [];
-push_back(arr2, 10.0);
+let arr1: str = '\x1b';
 
 /*/
     

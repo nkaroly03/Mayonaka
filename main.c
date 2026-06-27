@@ -97,6 +97,26 @@ int main(const int argc, const char *const *const argv){
     printf("%s", str_base_data(&IR_compile_result.IR));
     printf("------------------------------------------------------------------------------------------------\n");
 
+    Bytecode_compile_result bytecode_compile_result = bytecode_compile(&arena, &IR_compile_result.IR);
+    switch (bytecode_compile_result.error){
+        case COMPILE_ERROR_NONE:
+            break;
+        case COMPILE_ERROR_OOM:
+            goto oom_error;
+        case COMPILE_ERROR_SYNTAX:
+            error_info = bytecode_compile_result.error_info;
+            goto syntax_error;
+    }
+
+    {
+        usize i = 0;
+        vec_base_for_each(bytecode_compile_result.bytecode, it){
+            printf("%hhu, ", *(u8*)it);
+            if (++i % 10 == 0)
+                putchar('\n');
+        }
+    }
+
     arena_deinit(&arena);
 
     printf("\n---test success---\n");
