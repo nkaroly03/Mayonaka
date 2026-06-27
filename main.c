@@ -97,7 +97,15 @@ int main(const int argc, const char *const *const argv){
     printf("%s", str_base_data(&IR_compile_result.IR));
     printf("------------------------------------------------------------------------------------------------\n");
 
-    Bytecode_compile_result bytecode_compile_result = bytecode_compile(&arena, &IR_compile_result.IR);
+    Str_base IR = str_base_init_raw(
+        arena_allocator(&arena),
+        ".L0:\n"
+        "push true\n"
+        "push .14   ;helloasd\n"
+        "add\n"
+    ).result;;
+
+    Bytecode_compile_result bytecode_compile_result = bytecode_compile(&arena, &IR);
     switch (bytecode_compile_result.error){
         case COMPILE_ERROR_NONE:
             break;

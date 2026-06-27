@@ -11,6 +11,17 @@ extern "C"{
 
 #include "IR_compiler.h"
 
+enum Op_code_push_tag{
+    OP_CODE_PUSH_TAG_SP,
+    OP_CODE_PUSH_TAG_ARGV,
+    OP_CODE_PUSH_TAG_BOOL,
+    OP_CODE_PUSH_TAG_CHAR,
+    OP_CODE_PUSH_TAG_INT,
+    OP_CODE_PUSH_TAG_FLOAT,
+    OP_CODE_PUSH_TAG_STR,
+    OP_CODE_PUSH_TAG_LIST
+};
+
 typedef struct Bytecode_compile_result{
     union{
         Vec_base bytecode;

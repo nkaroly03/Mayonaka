@@ -11,7 +11,6 @@ extern "C"{
 #include "Parser.h"
 
 #define SP_SYMBOL "sp"
-#define LABEL_SYMBOL ".L"
 
 enum Op_code{
     OP_CODE_PUSH,

@@ -230,6 +230,8 @@ static bool IR_compiler_state_pop_ids_in_current_scope(IR_compiler_state *self){
     return true;
 }
 
+#define LABEL_SYMBOL "L"
+
 static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_state *self, const AST_node *ast_node){
     enum Binary_op bin_op;
     enum Op_code bin_op_code;
@@ -624,7 +626,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                 // TODO? disallow logical operators between <str>
 
                 char and_or_label_str_buf[32];
-                sprintf(and_or_label_str_buf, LABEL_SYMBOL USIZE_PFMT, self->label_counter++);
+                sprintf(and_or_label_str_buf, "." LABEL_SYMBOL USIZE_PFMT, self->label_counter++);
 
                 const AST_node *lhs_node = ast_node->m_sub_nodes.m_data[0];
                 const AST_node *rhs_node = ast_node->m_sub_nodes.m_data[1];
@@ -735,7 +737,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
         case TOKEN_TYPE_IF:
             {
                 char if_label_str_buf[32];
-                sprintf(if_label_str_buf, LABEL_SYMBOL USIZE_PFMT, self->label_counter++);
+                sprintf(if_label_str_buf, "." LABEL_SYMBOL USIZE_PFMT, self->label_counter++);
 
                 IR_compiler_state_compile_result compile_result = IR_compiler_state_compile(self, ast_node->m_sub_nodes.m_data[0]);
                 if (compile_result.error != COMPILE_ERROR_NONE)
@@ -769,7 +771,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                     usize last_idx = ast_node->m_sub_nodes.m_size - 1;
                     if (ast_node->m_sub_nodes.m_data[last_idx]->m_token->m_type == TOKEN_TYPE_ELSE){
                         char else_label_str_buf[32];
-                        sprintf(else_label_str_buf, LABEL_SYMBOL USIZE_PFMT, self->label_counter++);
+                        sprintf(else_label_str_buf, "." LABEL_SYMBOL USIZE_PFMT, self->label_counter++);
 
                         add_instruction("%s %s", op_code_to_str(OP_CODE_JMP), else_label_str_buf);
 
@@ -802,8 +804,8 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                 char while_start_label_str_buf[32];
                 char while_end_label_str_buf[32];
 
-                sprintf(while_start_label_str_buf, LABEL_SYMBOL USIZE_PFMT, self->label_counter++);
-                sprintf(while_end_label_str_buf, LABEL_SYMBOL USIZE_PFMT, self->label_counter++);
+                sprintf(while_start_label_str_buf, "." LABEL_SYMBOL USIZE_PFMT, self->label_counter++);
+                sprintf(while_end_label_str_buf, "." LABEL_SYMBOL USIZE_PFMT, self->label_counter++);
 
                 if (!str_base_append_fmt(&self->IR, self->alloc, "%s:\n", while_start_label_str_buf))
                     return OOM_ERROR;
