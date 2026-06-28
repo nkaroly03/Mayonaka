@@ -99,7 +99,21 @@ int main(const int argc, const char *const *const argv){
 
     Str_base IR = str_base_init_raw(
         arena_allocator(&arena),
-        "call exit  \n"
+        "push 0\n"
+        "to_int\n"
+        "push 10\n"
+        "to_int\n"
+        ".L0:\n"
+        "push sp[-2]\n"
+        "push sp[-2]\n"
+        "cmp_le\n"
+        "jmp .L1\n"
+        "push sp[-2]\n"
+        "push 1\n"
+        "add\n"
+        "mov sp[-3]\n"
+        "jmp .L0\n"
+        ".L1:\n"
     ).result;;
 
     Bytecode_compile_result bytecode_compile_result = bytecode_compile(&arena, &IR);

@@ -6,11 +6,13 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "../../hdrs/Allocator/Allocator.h"
 #include "../../hdrs/Allocator/Arena.h"
 #include "../../hdrs/Data_structure/Str_base.h"
 #include "../../hdrs/Data_structure/Str_view.h"
+#include "../../hdrs/Data_structure/Umap_base.h"
 #include "../../hdrs/Data_structure/Vec_base.h"
 #include "../../hdrs/Utils/Cmp.h"
 #include "../../hdrs/Utils/Num.h"
@@ -41,8 +43,16 @@ static int is_rbracket(int c){
     return c == ']';
 }
 
+typedef struct Jmp_info{
+    Str_base label;
+    usize bytecode_offset;
+    usize line_number;
+} Jmp_info;
+
 typedef struct Bytecode_compiler_state{
     Allocator alloc;
+    Vec_base jmp_infos;
+    Umap_base label_offset_map;
     Vec_base instruction_views;
     usize instruction_idx;
     Vec_base bytecode;
@@ -65,7 +75,7 @@ static Bytecode_compile_result bytecode_compiler_syntax_error(Bytecode_compiler_
 }
 #define syntax_error(...) bytecode_compiler_syntax_error(self, __VA_ARGS__)
 
-static Bytecode_compile_result bytecode_compiler_sp_case(Bytecode_compiler_state *self, Str_view rhs){
+static Bytecode_compile_result bytecode_compiler_state_sp_case(Bytecode_compiler_state *self, Str_view rhs){
     union{
         usize as_usize;
         u8 as_u8s[sizeof(usize)];
@@ -80,9 +90,55 @@ static Bytecode_compile_result bytecode_compiler_sp_case(Bytecode_compiler_state
     if (rhs.m_size > 0 && rhs.m_str[0] != ';')
         return syntax_error("Invalid or more than 1 argument");
 
-    for (usize j = 0; j < array_size(sp_offset.as_u8s); ++j)
-        if (!vec_base_push_back(&self->bytecode, self->alloc, &sp_offset.as_u8s[j]))
+    for (usize i = 0; i < array_size(sp_offset.as_u8s); ++i)
+        if (!vec_base_push_back(&self->bytecode, self->alloc, &sp_offset.as_u8s[i]))
             return OOM_ERROR;
+
+    return (Bytecode_compile_result){.error = COMPILE_ERROR_NONE};
+}
+
+static Bytecode_compile_result bytecode_compiler_state_label_to_str(Bytecode_compiler_state *self, Str_view label, Str_base *out_label_str, bool is_label_decl){
+    label = str_view_trim_right_while(str_view_trim_left_while(label, isspace), isspace);
+
+    Str_view label_cpy = label;
+
+    if (label.m_size == 0 || label.m_str[0] != '.')
+        return syntax_error("Labels must start with <.>");
+
+    label = str_view_trim_left_while(str_view_trim_left(label, 1), isspace);
+
+    if (label.m_size == 0 || !is_alpha_or_underscore(label.m_str[0]))
+        return syntax_error("Labels must start with an ascii character or <_>");
+
+    label = str_view_trim_left_while(str_view_trim_left_while(label, is_alnum_or_underscore), isspace);
+
+    Str_base label_str = {0};
+
+    if (is_label_decl){
+        if (label.m_size == 0 || label.m_str[0] != ':')
+            return syntax_error("Label declaration must end with <:>");
+
+        label = str_view_trim_left_while(str_view_trim_left(label, 1), isspace);
+        if (label.m_size > 0 && label.m_str[0] != ';')
+            return syntax_error("Labels can only be followed by comments");
+
+        for (usize i = 0; label_cpy.m_str[i] != ':'; ++i)
+            if (!isspace(label_cpy.m_str[i]) && !str_base_push_back(&label_str, self->alloc, label_cpy.m_str[i]))
+                return OOM_ERROR;
+    }
+    else{
+        label = str_view_trim_left_while(label, isspace);
+        if (label.m_size > 0 && label.m_str[0] != ';')
+            return syntax_error("Labels can only be followed by comments");
+
+        label_cpy = str_view_trim_right(label_cpy, str_view_trim_left_while_not(label_cpy, is_semicolon).m_size);
+
+        for (usize i = 0; i < label_cpy.m_size; ++i)
+            if (!isspace(label_cpy.m_str[i]) && !str_base_push_back(&label_str, self->alloc, label_cpy.m_str[i]))
+                return OOM_ERROR;
+    }
+
+    *out_label_str = label_str;
 
     return (Bytecode_compile_result){.error = COMPILE_ERROR_NONE};
 }
@@ -92,14 +148,20 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
     
     for (; self->instruction_idx < instruction_count; ++self->instruction_idx){
         Str_view sv = *(Str_view*)vec_base_at(&self->instruction_views, self->instruction_idx);
+
         if (sv.m_size > 0 && sv.m_str[0] != ';'){
             if (str_view_starts_with(sv, ".")){
-                sv = str_view_trim_left_while(str_view_trim_left_while(str_view_trim_left(sv, 1), is_alnum_or_underscore), isspace);
-                if (sv.m_size == 0 || sv.m_str[0] != ':')
-                    return syntax_error("Label must end with <:>");
-                sv = str_view_trim_left_while(str_view_trim_left(sv, 1), isspace);
-                if (sv.m_size > 0 && sv.m_str[0] != ';')
-                    return syntax_error("Label must not be followed by any statement besides a comment");
+                Str_base label_str;
+                Bytecode_compile_result label_to_str_result = bytecode_compiler_state_label_to_str(self, sv, &label_str, true);
+                if (label_to_str_result.error != COMPILE_ERROR_NONE)
+                    return label_to_str_result;
+
+                Umap_insert_result ires = umap_base_insert(&self->label_offset_map, self->alloc, &label_str, &(usize){self->bytecode.m_size + 1});
+                switch (ires.error){
+                    case UMAP_INSERT_ERROR_NONE:             break;
+                    case UMAP_INSERT_ERROR_OOM:              return OOM_ERROR;
+                    case UMAP_INSERT_ERROR_ALREADY_INSERTED: return syntax_error("Label <%s> is already in use", str_base_data(&label_str));
+                }
             }
             else{
                 enum Op_code op_code;
@@ -140,7 +202,7 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                         if (!vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)OP_CODE_PUSH_TAG_SP}))
                             return OOM_ERROR;
 
-                        Bytecode_compile_result sp_case_result = bytecode_compiler_sp_case(self, rhs);
+                        Bytecode_compile_result sp_case_result = bytecode_compiler_state_sp_case(self, rhs);
                         if (sp_case_result.error != COMPILE_ERROR_NONE)
                             return sp_case_result;
                     }
@@ -231,14 +293,14 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
 
                             if (!vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)OP_CODE_PUSH_TAG_INT}))
                                 return OOM_ERROR;
-                            for (usize j = 0; j < array_size(int_literal.as_u8s); ++j)
-                                if (!vec_base_push_back(&self->bytecode, self->alloc, &int_literal.as_u8s[j]))
+                            for (usize i = 0; i < array_size(int_literal.as_u8s); ++i)
+                                if (!vec_base_push_back(&self->bytecode, self->alloc, &int_literal.as_u8s[i]))
                                     return OOM_ERROR;
                         }
                         else if (str_view_none_of(rhs_temp, isspace)){
                             usize dot_count = 0;
-                            for (usize j = 0; j < rhs_temp.m_size; ++j){
-                                char c = rhs_temp.m_str[j];
+                            for (usize i = 0; i < rhs_temp.m_size; ++i){
+                                char c = rhs_temp.m_str[i];
                                 if (!isdigit(c) && c != '.')
                                     return syntax_error("<float> literal containing non-digit characters");
                                 dot_count += (c == '.');
@@ -256,8 +318,8 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                             if (!vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)OP_CODE_PUSH_TAG_FLOAT}))
                                 return OOM_ERROR;
 
-                            for (usize j = 0; j < array_size(float_literal.as_u8s); ++j)
-                                if (!vec_base_push_back(&self->bytecode, self->alloc, &float_literal.as_u8s[j]))
+                            for (usize i = 0; i < array_size(float_literal.as_u8s); ++i)
+                                if (!vec_base_push_back(&self->bytecode, self->alloc, &float_literal.as_u8s[i]))
                                     return OOM_ERROR;
                         }
                         else
@@ -271,7 +333,7 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                     if (!vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)op_code}))
                         return OOM_ERROR;
 
-                    Bytecode_compile_result sp_case_result = bytecode_compiler_sp_case(self, rhs);
+                    Bytecode_compile_result sp_case_result = bytecode_compiler_state_sp_case(self, rhs);
                     if (sp_case_result.error != COMPILE_ERROR_NONE)
                         return sp_case_result;
                 }
@@ -287,7 +349,7 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                     if (!str_view_all_of(rhs, is_alnum_or_underscore))
                         return syntax_error("Function label must only contain alphanumeric or <_> characters");
 
-                    if (!vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)OP_CODE_CALL}))
+                    if (!vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)op_code}))
                         return OOM_ERROR;
 
                     Str_base_result fn_str = str_base_init_str_view(self->alloc, rhs);
@@ -307,8 +369,33 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                     }
                 }
                 else if (op_code_match(OP_CODE_JMP) || op_code_match(OP_CODE_JMPZ)){
-                    fprintf(stderr, "Not implemented");
-                    abort();
+                    if (rhs.m_size == 0)
+                        return syntax_error("Op code <%s> takes in a label", op_code_str);
+
+                    Str_base label_str;
+
+                    Bytecode_compile_result label_to_str_result = bytecode_compiler_state_label_to_str(self, rhs, &label_str, false);
+                    if (label_to_str_result.error != COMPILE_ERROR_NONE)
+                        return label_to_str_result;
+
+                    if (
+                        !vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)op_code}) ||
+                        !vec_base_push_back(
+                            &self->jmp_infos,
+                            self->alloc,
+                            &(Jmp_info){.label = label_str, .bytecode_offset = self->bytecode.m_size, .line_number = self->instruction_idx + 1}
+                        )
+                    )
+                        return OOM_ERROR;
+                    
+                    union{
+                        usize as_usize;
+                        u8 as_u8s[sizeof(usize)];
+                    } label_bytecode_offset = {.as_usize = 0};
+
+                    for (usize i = 0; i < array_size(label_bytecode_offset.as_u8s); ++i)
+                        if (!vec_base_push_back(&self->bytecode, self->alloc, &label_bytecode_offset.as_u8s[i]))
+                            return OOM_ERROR;
                 }
 
                 else if (
@@ -355,6 +442,22 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
         }
     }
 
+    vec_base_for_each(self->jmp_infos, it){
+        Jmp_info *jmp_info = it;
+        Umap_pair pair = umap_base_get_pair(&self->label_offset_map, &jmp_info->label);
+        if (!pair.m_key){
+            self->instruction_idx = jmp_info->line_number;
+            return syntax_error("Use of undeclared label <%s>", str_base_data(&jmp_info->label));
+        }
+
+        union{
+            usize as_usize;
+            u8 as_u8s[sizeof(usize)];
+        } label_bytecode_offset = {.as_usize = *(usize*)pair.m_value};
+
+        memcpy(vec_base_at(&self->bytecode, jmp_info->bytecode_offset), label_bytecode_offset.as_u8s, sizeof(label_bytecode_offset.as_u8s));
+    }
+
     return (Bytecode_compile_result){.bytecode = self->bytecode, .error = COMPILE_ERROR_NONE};
 }
 
@@ -366,6 +469,8 @@ Bytecode_compile_result bytecode_compile(Arena *arena, const Str_base *IR){
 
     Bytecode_compiler_state state = {
         .alloc             = arena_allocator(arena),
+        .jmp_infos         = vec_base_init(Jmp_info),
+        .label_offset_map  = umap_base_init(Str_base, usize),
         .instruction_views = vec_base_init(Str_view),
         .instruction_idx   = 0,
         .bytecode          = vec_base_init(u8)

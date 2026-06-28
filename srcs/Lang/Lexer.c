@@ -39,8 +39,8 @@ typedef struct Lexer_state{
 #define HEX_DIGIT_MAX_COUNT (BIN_DIGIT_MAX_COUNT / 4)
 #define U64_MAX_STRLEN 20
 
-static const char MULTI_LINE_COMMENT_MARKER[] = "/*/";
-static const char SINGLE_LINE_COMMENT_MARKER[] = "//";
+static const char MULTI_LINE_COMMENT_SYMBOL[] = "/*/";
+static const char SINGLE_LINE_COMMENT_SYMBOL[] = "//";
 
 static void lexer_state_cleanup(Lexer_state *self){
     fclose(self->file);
@@ -160,11 +160,11 @@ Lex_result lex(Arena *arena, const char *path){
             ++state.line_number;
             sv = str_view_trim_prefix(sv, "\n");
         }
-        else if (str_view_starts_with(sv, MULTI_LINE_COMMENT_MARKER)){
+        else if (str_view_starts_with(sv, MULTI_LINE_COMMENT_SYMBOL)){
             usize multiline_newline_count = 0;
 
-            sv = str_view_trim_prefix(sv, MULTI_LINE_COMMENT_MARKER);
-            while (sv.m_size > 0 && !str_view_starts_with(sv, MULTI_LINE_COMMENT_MARKER)){
+            sv = str_view_trim_prefix(sv, MULTI_LINE_COMMENT_SYMBOL);
+            while (sv.m_size > 0 && !str_view_starts_with(sv, MULTI_LINE_COMMENT_SYMBOL)){
                 multiline_newline_count += str_view_starts_with(sv, "\n");
                 sv = str_view_trim_left(sv, 1);
             }
@@ -172,9 +172,9 @@ Lex_result lex(Arena *arena, const char *path){
                 return syntax_error("Unclosed multi line comment");
             
             state.line_number += multiline_newline_count;
-            sv = str_view_trim_prefix(sv, MULTI_LINE_COMMENT_MARKER);
+            sv = str_view_trim_prefix(sv, MULTI_LINE_COMMENT_SYMBOL);
         }
-        else if (str_view_starts_with(sv, SINGLE_LINE_COMMENT_MARKER))
+        else if (str_view_starts_with(sv, SINGLE_LINE_COMMENT_SYMBOL))
             sv = str_view_trim_left_while_not(sv, is_newline);
         else if (str_view_starts_with(sv, "'") || str_view_starts_with(sv, "\"")){
             char quote = sv.m_str[0];
