@@ -19,10 +19,18 @@
 #include "../../hdrs/Lang/Builtin_fn.h"
 #include "../../hdrs/Lang/Bytecode_compiler.h"
 #include "../../hdrs/Lang/IR_compiler.h"
-#include "../../hdrs/Lang/Type_info.h"
 
 // ------------------------------------------------------------------------------------------------
 
+static int is_punct_not_underscore(int c){
+    return c != '_' && ispunct(c);
+}
+static int is_alpha_or_underscore(int c){
+    return c == '_' || isalpha(c);
+}
+static int is_alnum_or_underscore(int c){
+    return c == '_' || isalnum(c);
+}
 static int is_newline(int c){
     return c == '\n';
 }
@@ -57,19 +65,39 @@ static Bytecode_compile_result bytecode_compiler_syntax_error(Bytecode_compiler_
 }
 #define syntax_error(...) bytecode_compiler_syntax_error(self, __VA_ARGS__)
 
+static Bytecode_compile_result bytecode_compiler_sp_case(Bytecode_compiler_state *self, Str_view rhs){
+    union{
+        usize as_usize;
+        u8 as_u8s[sizeof(usize)];
+    } sp_offset;
+
+    if (errno = 0, sscanf(rhs.m_str, SP_SYMBOL " [ - " USIZE_SFMT " ]", &sp_offset.as_usize) != 1)
+        return syntax_error("<" SP_SYMBOL "> must be followed by <[-<val>]>, where <val> is an integer");
+    if (errno != 0)
+        return syntax_error("<" SP_SYMBOL "> offset is not representable by <usize>");
+
+    rhs = str_view_trim_left_while(str_view_trim_left(str_view_trim_left_while_not(rhs, is_rbracket), 1), isspace);
+    if (rhs.m_size > 0 && rhs.m_str[0] != ';')
+        return syntax_error("Invalid or more than 1 argument");
+
+    for (usize j = 0; j < array_size(sp_offset.as_u8s); ++j)
+        if (!vec_base_push_back(&self->bytecode, self->alloc, &sp_offset.as_u8s[j]))
+            return OOM_ERROR;
+
+    return (Bytecode_compile_result){.error = COMPILE_ERROR_NONE};
+}
+
 static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler_state *self){
     usize instruction_count = self->instruction_views.m_size;
     
-    fprintf(stderr, "\n================================================================================================\n");
-
     for (; self->instruction_idx < instruction_count; ++self->instruction_idx){
         Str_view sv = *(Str_view*)vec_base_at(&self->instruction_views, self->instruction_idx);
         if (sv.m_size > 0 && sv.m_str[0] != ';'){
             if (str_view_starts_with(sv, ".")){
-                sv = str_view_trim_left_while(str_view_trim_left_while(str_view_trim_prefix(sv, "."), isalnum), isspace);
+                sv = str_view_trim_left_while(str_view_trim_left_while(str_view_trim_left(sv, 1), is_alnum_or_underscore), isspace);
                 if (sv.m_size == 0 || sv.m_str[0] != ':')
                     return syntax_error("Label must end with <:>");
-                sv = str_view_trim_left_while(str_view_trim_prefix(sv, ":"), isspace);
+                sv = str_view_trim_left_while(str_view_trim_left(sv, 1), isspace);
                 if (sv.m_size > 0 && sv.m_str[0] != ';')
                     return syntax_error("Label must not be followed by any statement besides a comment");
             }
@@ -87,8 +115,12 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                         cmp_eq_Str_view(&op_code_sv, &lhs) \
                     )
 
-                if (lhs.m_size > 0 && !isalpha(lhs.m_str[0]) && lhs.m_str[0] != '_')
-                    return syntax_error("Op code starting with %c", lhs.m_str[0]);
+                if (lhs.m_size > 0){
+                    if (!is_alpha_or_underscore(lhs.m_str[0]))
+                        return syntax_error("Op code starting with %c", lhs.m_str[0]);
+                    else if (str_view_any_of(lhs, is_punct_not_underscore))
+                        return syntax_error("Op code containing punctuation characters other than <_>");
+                }
 
                 Str_view rhs = str_view_trim_left_while(str_view_trim_left(sv, lhs.m_size), isspace);
 
@@ -105,27 +137,12 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                     bool bool_val;
 
                     if (str_view_starts_with(rhs, SP_SYMBOL)){
-                        union{
-                            usize as_usize;
-                            u8 as_u8s[sizeof(usize)];
-                        } sp_offset;
-
-                        errno = 0;
-                        if (sscanf(rhs.m_str, SP_SYMBOL " [ - " USIZE_SFMT " ]", &sp_offset.as_usize) != 1)
-                            return syntax_error("<" SP_SYMBOL "> must be followed by <[-<val>]>, where <val> is an integer");
-                        if (errno != 0)
-                            return syntax_error("<" SP_SYMBOL "> offset is not representable by <usize>");
-
-                        rhs = str_view_trim_left_while(str_view_trim_left(str_view_trim_left_while_not(rhs, is_rbracket), 1), isspace);
-                        if (rhs.m_size > 0 && rhs.m_str[0] != ';')
-                            return syntax_error("Invalid or more than 1 argument");
-
                         if (!vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)OP_CODE_PUSH_TAG_SP}))
                             return OOM_ERROR;
 
-                        for (usize j = 0; j < array_size(sp_offset.as_u8s); ++j)
-                            if (!vec_base_push_back(&self->bytecode, self->alloc, &sp_offset.as_u8s[j]))
-                                return OOM_ERROR;
+                        Bytecode_compile_result sp_case_result = bytecode_compiler_sp_case(self, rhs);
+                        if (sp_case_result.error != COMPILE_ERROR_NONE)
+                            return sp_case_result;
                     }
                     else if (
                         (push_tag = OP_CODE_PUSH_TAG_ARGV, rhs_starts_with = "argv", str_view_starts_with(rhs, rhs_starts_with)) ||
@@ -208,7 +225,7 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                             union{
                                 i64 as_i64;
                                 u8 as_u8s[sizeof(i64)];
-                            } int_literal = {.as_i64 = (errno = 0, strtoll(rhs.m_str, NULL, 10))};
+                            } int_literal = {.as_i64 = (errno = 0, (i64)strtoll(rhs.m_str, NULL, 10))};
                             if (errno != 0)
                                 return syntax_error("<int> literal out of range");
 
@@ -232,7 +249,7 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                             union{
                                 f64 as_f64;
                                 u8 as_u8s[sizeof(f64)];
-                            } float_literal = {.as_f64 = (errno = 0, strtod(rhs.m_str, NULL))};
+                            } float_literal = {.as_f64 = (errno = 0, (f64)strtod(rhs.m_str, NULL))};
                             if (errno != 0)
                                 return syntax_error("<float> literal out of range");
 
@@ -248,13 +265,50 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                     }
                 }
                 else if (op_code_match(OP_CODE_MOV)){
+                    if (!str_view_starts_with(rhs, SP_SYMBOL))
+                        return syntax_error("Op code <%s> must be followed by sp[-<val>], where val is an integer", op_code_str);
 
+                    if (!vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)op_code}))
+                        return OOM_ERROR;
+
+                    Bytecode_compile_result sp_case_result = bytecode_compiler_sp_case(self, rhs);
+                    if (sp_case_result.error != COMPILE_ERROR_NONE)
+                        return sp_case_result;
                 }
                 else if (op_code_match(OP_CODE_CALL)){
+                    if (rhs.m_size == 0)
+                        return syntax_error("Op code <%s> takes in a function label", op_code_str);
 
+                    if (!is_alpha_or_underscore(rhs.m_str[0]))
+                        return syntax_error("Function label's first character must be an ascii character or <_>");
+
+                    rhs = str_view_trim_right_while(str_view_trim_right(rhs, str_view_trim_left_while_not(rhs, is_semicolon).m_size), isspace);
+
+                    if (!str_view_all_of(rhs, is_alnum_or_underscore))
+                        return syntax_error("Function label must only contain alphanumeric or <_> characters");
+
+                    if (!vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)OP_CODE_CALL}))
+                        return OOM_ERROR;
+
+                    Str_base_result fn_str = str_base_init_str_view(self->alloc, rhs);
+                    if (!fn_str.success)
+                        return OOM_ERROR;
+
+                    const char *fn_id = str_base_data(&fn_str.result);
+
+                    enum Builtin_fn_tag bfn_tag = builtin_fn_tag_init(fn_id);
+                    if (bfn_tag != BUILTIN_FN_TAG_NONE){
+                        if (!vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)bfn_tag}))
+                            return OOM_ERROR;
+                    }
+                    else{
+                        fprintf(stderr, "User defined functions are not implemented");
+                        abort();
+                    }
                 }
                 else if (op_code_match(OP_CODE_JMP) || op_code_match(OP_CODE_JMPZ)){
-
+                    fprintf(stderr, "Not implemented");
+                    abort();
                 }
 
                 else if (
