@@ -179,7 +179,7 @@
 /*/
 
 
-let arr1: str = '\x1b';
+let arr1: char = "1" and "2";
 
 /*/
     

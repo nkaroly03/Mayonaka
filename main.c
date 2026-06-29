@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <ctype.h>
 #include <errno.h>
+#include <math.h>
 #include <stdalign.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -97,26 +98,7 @@ int main(const int argc, const char *const *const argv){
     printf("%s", str_base_data(&IR_compile_result.IR));
     printf("------------------------------------------------------------------------------------------------\n");
 
-    Str_base IR = str_base_init_raw(
-        arena_allocator(&arena),
-        "push 0\n"
-        "to_int\n"
-        "push 10\n"
-        "to_int\n"
-        ".L0:\n"
-        "push sp[-2]\n"
-        "push sp[-2]\n"
-        "cmp_le\n"
-        "jmp .L1\n"
-        "push sp[-2]\n"
-        "push 1\n"
-        "add\n"
-        "mov sp[-3]\n"
-        "jmp .L0\n"
-        ".L1:\n"
-    ).result;;
-
-    Bytecode_compile_result bytecode_compile_result = bytecode_compile(&arena, &IR);
+    Bytecode_compile_result bytecode_compile_result = bytecode_compile(&arena, &IR_compile_result.IR);
     switch (bytecode_compile_result.error){
         case COMPILE_ERROR_NONE:
             break;

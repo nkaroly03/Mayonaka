@@ -36,6 +36,9 @@ static int is_alnum_or_underscore(int c){
 static int is_newline(int c){
     return c == '\n';
 }
+static int is_colon(int c){
+    return c == ':';
+}
 static int is_semicolon(int c){
     return c == ';';
 }
@@ -46,7 +49,7 @@ static int is_rbracket(int c){
 typedef struct Jmp_info{
     Str_base label;
     usize bytecode_offset;
-    usize line_number;
+    usize instruction_idx;
 } Jmp_info;
 
 typedef struct Bytecode_compiler_state{
@@ -98,7 +101,16 @@ static Bytecode_compile_result bytecode_compiler_state_sp_case(Bytecode_compiler
 }
 
 static Bytecode_compile_result bytecode_compiler_state_label_to_str(Bytecode_compiler_state *self, Str_view label, Str_base *out_label_str, bool is_label_decl){
-    label = str_view_trim_right_while(str_view_trim_left_while(label, isspace), isspace);
+    label = str_view_trim_right_while(
+        str_view_trim_left_while(
+            str_view_trim_right(
+                label,
+                str_view_trim_left_while_not(label, is_semicolon).m_size
+            ),
+            isspace
+        ),
+        isspace
+    );
 
     Str_view label_cpy = label;
 
@@ -112,31 +124,23 @@ static Bytecode_compile_result bytecode_compiler_state_label_to_str(Bytecode_com
 
     label = str_view_trim_left_while(str_view_trim_left_while(label, is_alnum_or_underscore), isspace);
 
-    Str_base label_str = {0};
-
     if (is_label_decl){
         if (label.m_size == 0 || label.m_str[0] != ':')
             return syntax_error("Label declaration must end with <:>");
 
+        label_cpy = str_view_trim_right(label_cpy, str_view_trim_left_while_not(label_cpy, is_colon).m_size);
+
         label = str_view_trim_left_while(str_view_trim_left(label, 1), isspace);
-        if (label.m_size > 0 && label.m_str[0] != ';')
-            return syntax_error("Labels can only be followed by comments");
-
-        for (usize i = 0; label_cpy.m_str[i] != ':'; ++i)
-            if (!isspace(label_cpy.m_str[i]) && !str_base_push_back(&label_str, self->alloc, label_cpy.m_str[i]))
-                return OOM_ERROR;
     }
-    else{
-        label = str_view_trim_left_while(label, isspace);
-        if (label.m_size > 0 && label.m_str[0] != ';')
-            return syntax_error("Labels can only be followed by comments");
 
-        label_cpy = str_view_trim_right(label_cpy, str_view_trim_left_while_not(label_cpy, is_semicolon).m_size);
+    if (label.m_size > 0)
+        return syntax_error("Labels can only be followed by comments");
 
-        for (usize i = 0; i < label_cpy.m_size; ++i)
-            if (!isspace(label_cpy.m_str[i]) && !str_base_push_back(&label_str, self->alloc, label_cpy.m_str[i]))
-                return OOM_ERROR;
-    }
+    Str_base label_str = {0};
+
+    for (usize i = 0; i < label_cpy.m_size; ++i)
+        if (!isspace(label_cpy.m_str[i]) && !str_base_push_back(&label_str, self->alloc, label_cpy.m_str[i]))
+            return OOM_ERROR;
 
     *out_label_str = label_str;
 
@@ -177,12 +181,10 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                         cmp_eq_Str_view(&op_code_sv, &lhs) \
                     )
 
-                if (lhs.m_size > 0){
-                    if (!is_alpha_or_underscore(lhs.m_str[0]))
-                        return syntax_error("Op code starting with %c", lhs.m_str[0]);
-                    else if (str_view_any_of(lhs, is_punct_not_underscore))
-                        return syntax_error("Op code containing punctuation characters other than <_>");
-                }
+                if (!is_alpha_or_underscore(lhs.m_str[0]))
+                    return syntax_error("Op code starting with <%c>", lhs.m_str[0]);
+                else if (str_view_any_of(lhs, is_punct_not_underscore))
+                    return syntax_error("Op code containing punctuation characters other than <_>");
 
                 Str_view rhs = str_view_trim_left_while(str_view_trim_left(sv, lhs.m_size), isspace);
 
@@ -207,8 +209,14 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                             return sp_case_result;
                     }
                     else if (
-                        (push_tag = OP_CODE_PUSH_TAG_ARGV, rhs_starts_with = "argv", str_view_starts_with(rhs, rhs_starts_with)) ||
-                        (push_tag = OP_CODE_PUSH_TAG_LIST, rhs_starts_with = "[]",   str_view_starts_with(rhs, rhs_starts_with))
+                        push_tag = OP_CODE_PUSH_TAG_ARGV, rhs_starts_with = "argv",
+                        str_view_starts_with(rhs, rhs_starts_with) || (
+                            push_tag = OP_CODE_PUSH_TAG_LIST, rhs_starts_with = "[",
+                            str_view_starts_with(rhs, rhs_starts_with) && (
+                                rhs_starts_with = "]", rhs = str_view_trim_left_while(str_view_trim_left(rhs, 1), isspace),
+                                str_view_starts_with(rhs, rhs_starts_with)
+                            )
+                        )
                     ){
                         rhs = str_view_trim_left_while(str_view_trim_prefix(rhs, rhs_starts_with), isspace);
                         if (rhs.m_size > 0 && rhs.m_str[0] != ';')
@@ -233,13 +241,14 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                     }
                     else if (str_view_starts_with(rhs, "'") || str_view_starts_with(rhs, "\"")){
                         char quote = rhs.m_str[0];
+                        const char *quoted_lit_type_str = (quote == '\'') ? "char" : "str";
                         
                         usize quote_end_pos = 0;
                         while (++quote_end_pos < rhs.m_size && rhs.m_str[quote_end_pos] != quote)
                             quote_end_pos += (rhs.m_str[quote_end_pos] == '\\');
 
                         if (quote_end_pos >= rhs.m_size)
-                            return syntax_error("Unclosed <%s> literal", (quote == '\'') ? "char" : "str");
+                            return syntax_error("Unclosed <%s> literal", quoted_lit_type_str);
 
                         Str_view unquoted_sv = str_view_trim_left(str_view_trim_right(rhs, rhs.m_size - quote_end_pos), 1);
 
@@ -251,7 +260,7 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                         switch (unescaped.error){
                             case STR_UNESCAPE_ERROR_NONE:                break;
                             case STR_UNESCAPE_ERROR_OOM:                 return OOM_ERROR;
-                            case STR_UNESCAPE_ERROR_BAD_ESCAPE_SEQUENCE: return syntax_error("<%s> is escaped incorrectly", (quote == '\'') ? "char" : "str");
+                            case STR_UNESCAPE_ERROR_BAD_ESCAPE_SEQUENCE: return syntax_error("<%s> is escaped incorrectly", quoted_lit_type_str);
                         }
                         
                         if (quote == '\''){
@@ -383,7 +392,7 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                         !vec_base_push_back(
                             &self->jmp_infos,
                             self->alloc,
-                            &(Jmp_info){.label = label_str, .bytecode_offset = self->bytecode.m_size, .line_number = self->instruction_idx + 1}
+                            &(Jmp_info){.label = label_str, .bytecode_offset = self->bytecode.m_size, .instruction_idx = self->instruction_idx}
                         )
                     )
                         return OOM_ERROR;
@@ -446,7 +455,7 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
         Jmp_info *jmp_info = it;
         Umap_pair pair = umap_base_get_pair(&self->label_offset_map, &jmp_info->label);
         if (!pair.m_key){
-            self->instruction_idx = jmp_info->line_number;
+            self->instruction_idx = jmp_info->instruction_idx;
             return syntax_error("Use of undeclared label <%s>", str_base_data(&jmp_info->label));
         }
 

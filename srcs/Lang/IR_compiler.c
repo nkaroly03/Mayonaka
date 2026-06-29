@@ -623,8 +623,6 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
         case TOKEN_TYPE_AND:
         case TOKEN_TYPE_OR:
             {
-                // TODO? disallow logical operators between <str>
-
                 char and_or_label_str_buf[32];
                 sprintf(and_or_label_str_buf, "." LABEL_SYMBOL USIZE_PFMT, self->label_counter++);
 
@@ -635,8 +633,9 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                 if (compile_result.error != COMPILE_ERROR_NONE)
                     return compile_result;
 
-                Type_info lhs_type_info = *(Type_info*)vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1);
                 Type_info bool_type_info = {.m_tag = TYPE_INFO_TAG_BOOL, .m_dimensions = 0};
+
+                Type_info lhs_type_info = *(Type_info*)vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1);
                 if (binary_op_type_info_result(BINARY_OP_ASSIGNMENT, bool_type_info, lhs_type_info).m_tag == TYPE_INFO_TAG_NONE)
                     return IR_compiler_state_type_conversion_error(self, ast_node, bool_type_info, lhs_type_info);
                 add_instruction("%s", op_code_to_str(OP_CODE_TO_BOOL));
@@ -660,6 +659,9 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                 if (binary_op_type_info_result(BINARY_OP_ASSIGNMENT, bool_type_info, rhs_type_info).m_tag == TYPE_INFO_TAG_NONE)
                     return IR_compiler_state_type_conversion_error(self, ast_node, bool_type_info, rhs_type_info);
                 add_instruction("%s", op_code_to_str(OP_CODE_TO_BOOL));
+
+                if (binary_op_type_info_result(BINARY_OP_AND, lhs_type_info, rhs_type_info).m_tag == TYPE_INFO_TAG_NONE)
+                    return IR_compiler_state_binary_op_error(self, ast_node, lhs_type_info, rhs_type_info);
 
                 if (!str_base_append_fmt(&self->IR, self->alloc, "%s:\n", and_or_label_str_buf))
                     return OOM_ERROR;

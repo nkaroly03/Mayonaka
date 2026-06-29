@@ -655,8 +655,11 @@ static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
 static void ast_node_print(const AST_node *self, usize indent){
     for (usize i = 0; i < indent; ++i)
         putchar(' ');
-    // printf("%s\n", str_base_data_const(&self->m_token->m_id));
+#ifndef NDEBUG
     printf("%s parent: %s\n", str_base_data_const(&self->m_token->m_id), (self->m_parent) ? str_base_data_const(&self->m_parent->m_token->m_id) : "null");
+#else
+    printf("%s\n", str_base_data_const(&self->m_token->m_id));
+#endif // NDEBUG
     for (usize i = 0; i < self->m_sub_nodes.m_size; ++i)
         ast_node_print(self->m_sub_nodes.m_data[i], indent + 4);
 }
