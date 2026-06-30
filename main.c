@@ -34,6 +34,7 @@
 #include "hdrs/Lang/IR_compiler.h"
 #include "hdrs/Lang/Lexer.h"
 #include "hdrs/Lang/Parser.h"
+#include "hdrs/Lang/Primitive.h"
 
 int main(const int argc, const char *const *const argv){
     if (argc < 2){

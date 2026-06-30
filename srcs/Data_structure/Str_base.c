@@ -489,17 +489,18 @@ bool str_base_append_fmt_va_list(Str_base *self, Allocator alloc, const char *fm
 
 bool str_base_push_back(Str_base *self, Allocator alloc, char c){
     assert(self && "<self> is never null");
-    assert(c && "<c> is not allowed to be the 0 terminator");
 
-    usize size = str_base_size(self), cap = str_base_capacity(self);
+    if (c != '\0'){
+        usize size = str_base_size(self), cap = str_base_capacity(self);
 
-    if (size >= cap && !str_base_reserve(self, alloc, cap * 2))
-        return false;
+        if (size >= cap && !str_base_reserve(self, alloc, cap * 2))
+            return false;
 
-    char *data = str_base_data(self);
-    data[size++] = c;
-    data[size] = '\0';
-    str_base_set_size(self, size);
+        char *data = str_base_data(self);
+        data[size++] = c;
+        data[size] = '\0';
+        str_base_set_size(self, size);
+    }
 
     return true;
 }

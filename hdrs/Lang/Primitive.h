@@ -30,7 +30,7 @@ typedef struct Primitive{
     enum Primitive_tag m_tag;
     union{
         bool m_bool_data;
-        char m_char_data;
+        u8 m_char_data;
         i64 m_int_data;
         f64 m_float_data;
         Str_base m_str_data;
@@ -60,25 +60,27 @@ Primitive_op_result primitive_to_str  (Primitive *self, Allocator alloc);
 Primitive_op_result primitive_neg (Primitive *self);
 Primitive_op_result primitive_bneg(Primitive *self);
 
-Primitive_op_result primitive_eq  (Primitive *self, Allocator alloc, const Primitive *other);
-Primitive_op_result primitive_neq (Primitive *self, Allocator alloc, const Primitive *other);
-Primitive_op_result primitive_le  (Primitive *self, Allocator alloc, const Primitive *other);
-Primitive_op_result primitive_leq (Primitive *self, Allocator alloc, const Primitive *other);
-Primitive_op_result primitive_ge  (Primitive *self, Allocator alloc, const Primitive *other);
-Primitive_op_result primitive_geq (Primitive *self, Allocator alloc, const Primitive *other);
+Primitive_op_result primitive_deref(Primitive *self, Allocator alloc, const Primitive *other);
+
+Primitive_op_result primitive_cmp_eq (Primitive *self, Allocator alloc, const Primitive *other);
+Primitive_op_result primitive_cmp_neq(Primitive *self, Allocator alloc, const Primitive *other);
+Primitive_op_result primitive_cmp_le (Primitive *self, Allocator alloc, const Primitive *other);
+Primitive_op_result primitive_cmp_leq(Primitive *self, Allocator alloc, const Primitive *other);
+Primitive_op_result primitive_cmp_ge (Primitive *self, Allocator alloc, const Primitive *other);
+Primitive_op_result primitive_cmp_geq(Primitive *self, Allocator alloc, const Primitive *other);
 
 Primitive_op_result primitive_add (Primitive *self, Allocator alloc, const Primitive *other);
-Primitive_op_result primitive_sub (Primitive *self, Allocator alloc, const Primitive *other);
-Primitive_op_result primitive_mul (Primitive *self, Allocator alloc, const Primitive *other);
-Primitive_op_result primitive_div (Primitive *self, Allocator alloc, const Primitive *other);
-Primitive_op_result primitive_mod (Primitive *self, Allocator alloc, const Primitive *other);
-Primitive_op_result primitive_pow (Primitive *self, Allocator alloc, const Primitive *other);
+Primitive_op_result primitive_sub (Primitive *self, const Primitive *other);
+Primitive_op_result primitive_mul (Primitive *self, const Primitive *other);
+Primitive_op_result primitive_div (Primitive *self, const Primitive *other);
+Primitive_op_result primitive_mod (Primitive *self, const Primitive *other);
+Primitive_op_result primitive_pow (Primitive *self, const Primitive *other);
 
-Primitive_op_result primitive_shl (Primitive *self, Allocator alloc, const Primitive *other);
-Primitive_op_result primitive_shr (Primitive *self, Allocator alloc, const Primitive *other);
-Primitive_op_result primitive_band(Primitive *self, Allocator alloc, const Primitive *other);
-Primitive_op_result primitive_bor (Primitive *self, Allocator alloc, const Primitive *other);
-Primitive_op_result primitive_xor (Primitive *self, Allocator alloc, const Primitive *other);
+Primitive_op_result primitive_shl (Primitive *self, const Primitive *other);
+Primitive_op_result primitive_shr (Primitive *self, const Primitive *other);
+Primitive_op_result primitive_band(Primitive *self, const Primitive *other);
+Primitive_op_result primitive_bor (Primitive *self, const Primitive *other);
+Primitive_op_result primitive_xor (Primitive *self, const Primitive *other);
 
 #ifdef __cplusplus
 }
