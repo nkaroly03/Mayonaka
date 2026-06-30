@@ -21,6 +21,11 @@ enum Primitive_tag{
     PRIMITIVE_TAG_LIST
 };
 
+typedef struct Primitive_str_data{
+    usize m_ref_count;
+    Str_base m_data;
+} Primitive_str_data;
+
 typedef struct Primitive_list_data{
     usize m_ref_count;
     Vec_base m_data;
@@ -33,8 +38,8 @@ typedef struct Primitive{
         u8 m_char_data;
         i64 m_int_data;
         f64 m_float_data;
-        Str_base m_str_data;
-        Primitive_list_data *m_list_data;
+        Primitive_str_data *m_str_data_ptr;
+        Primitive_list_data *m_list_data_ptr;
     };
 } Primitive;
 
@@ -51,6 +56,8 @@ typedef struct Primitive_op_result{
 
 void primitive_deinit(const Primitive *self, Allocator alloc);
 
+void primitive_print(const Primitive *self);
+
 Primitive_op_result primitive_to_bool (Primitive *self, Allocator alloc);
 Primitive_op_result primitive_to_char (Primitive *self, Allocator alloc);
 Primitive_op_result primitive_to_int  (Primitive *self, Allocator alloc);
@@ -59,6 +66,9 @@ Primitive_op_result primitive_to_str  (Primitive *self, Allocator alloc);
 
 Primitive_op_result primitive_neg (Primitive *self);
 Primitive_op_result primitive_bneg(Primitive *self);
+
+Primitive_op_result primitive_mov(Primitive *self, Allocator alloc, const Primitive *other);
+Primitive_op_result primitive_mov_deref(Primitive *self, Allocator alloc, const Primitive *idx, const Primitive *other);
 
 Primitive_op_result primitive_deref(Primitive *self, Allocator alloc, const Primitive *other);
 

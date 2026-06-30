@@ -178,8 +178,17 @@
 
 /*/
 
+let arr: []int = [];
 
-let arr1: char = "1" and "2";
+push_back(arr, 0);
+push_back(arr, 1);
+push_back(arr, 2);
+push_back(arr, 3);
+push_back(arr, 4);
+
+pop_back(arr);
+
+print(arr);
 
 /*/
     

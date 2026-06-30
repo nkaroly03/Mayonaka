@@ -8,6 +8,7 @@ extern "C"{
 #include "../Allocator/Arena.h"
 #include "../Data_structure/Str_base.h"
 #include "../Data_structure/Vec_base.h"
+#include "../Utils/Num.h"
 
 #include "IR_compiler.h"
 
@@ -22,9 +23,14 @@ enum Op_code_push_tag{
     OP_CODE_PUSH_TAG_LIST
 };
 
+typedef struct U8_slice{
+    usize m_size;
+    const u8 *m_data;
+} U8_slice;
+
 typedef struct Bytecode_compile_result{
     union{
-        Vec_base bytecode;
+        U8_slice bytecode;
         Str_base error_info;
     };
     enum Compile_error error;

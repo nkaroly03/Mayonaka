@@ -10,6 +10,17 @@ extern "C"{
 #include "Num.h"
 
 #if __STDC_VERSION__ >= 202311l
+#include <stddef.h>
+#elif defined(__GNUC__)
+#define unreachable() (__builtin_unreachable())
+#elif defined(_MSC_VER)
+#define unreachable() (__assume(0))
+#else
+_Noreturn inline void unreachable_(void){}
+#define unreachable() (unreachable_())
+#endif // __STDC_VERSION__ >= 202311l
+
+#if __STDC_VERSION__ >= 202311l
 #define FALLTHROUGH [[fallthrough]]
 #elif defined(__GNUC__)
 #define FALLTHROUGH __attribute__((fallthrough))

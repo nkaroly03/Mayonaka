@@ -32,6 +32,7 @@
 
 #include "hdrs/Lang/Bytecode_compiler.h"
 #include "hdrs/Lang/IR_compiler.h"
+#include "hdrs/Lang/Interpreter.h"
 #include "hdrs/Lang/Lexer.h"
 #include "hdrs/Lang/Parser.h"
 #include "hdrs/Lang/Primitive.h"
@@ -110,13 +111,29 @@ int main(const int argc, const char *const *const argv){
             goto syntax_error;
     }
 
-    {
-        usize i = 0;
-        vec_base_for_each(bytecode_compile_result.bytecode, it){
-            printf("%hhu, ", *(u8*)it);
-            if (++i % 10 == 0)
-                putchar('\n');
-        }
+    for (usize i = 0; i < bytecode_compile_result.bytecode.m_size; ++i){
+        if (i % 10 == 0)
+            putchar('\n');
+        printf("%hhu, ", bytecode_compile_result.bytecode.m_data[i]);
+    }
+
+    printf("\n------------------------------------------------------------------------------------------------\n");
+
+    Allocator interpreter_alloc = raw_malloc_allocator();
+
+    Interpreter_run_result run_result = interpreter_run(interpreter_alloc, bytecode_compile_result.bytecode, argc, argv);
+    switch (run_result.error){
+        case INTERPRETER_RUN_ERROR_NONE:
+            printf("\nresult:\n");
+            primitive_print(&run_result.result);
+            primitive_deinit(&run_result.result, interpreter_alloc);
+            break;
+        case INTERPRETER_RUN_ERROR_OOM:
+            goto oom_error;
+        case INTERPRETER_RUN_ERROR_RUNTIME:
+            fprintf(stderr, "\x1b[38;2;255;0;0m%s\x1b[0m", run_result.error_info);
+            arena_deinit(&arena);
+            return 1;
     }
 
     arena_deinit(&arena);

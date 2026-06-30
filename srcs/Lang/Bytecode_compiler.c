@@ -160,7 +160,7 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                 if (label_to_str_result.error != COMPILE_ERROR_NONE)
                     return label_to_str_result;
 
-                Umap_insert_result ires = umap_base_insert(&self->label_offset_map, self->alloc, &label_str, &(usize){self->bytecode.m_size + 1});
+                Umap_insert_result ires = umap_base_insert(&self->label_offset_map, self->alloc, &label_str, &(usize){self->bytecode.m_size});
                 switch (ires.error){
                     case UMAP_INSERT_ERROR_NONE:             break;
                     case UMAP_INSERT_ERROR_OOM:              return OOM_ERROR;
@@ -467,7 +467,7 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
         memcpy(vec_base_at(&self->bytecode, jmp_info->bytecode_offset), label_bytecode_offset.as_u8s, sizeof(label_bytecode_offset.as_u8s));
     }
 
-    return (Bytecode_compile_result){.bytecode = self->bytecode, .error = COMPILE_ERROR_NONE};
+    return (Bytecode_compile_result){.bytecode = {.m_size = self->bytecode.m_size, .m_data = self->bytecode.m_data}, .error = COMPILE_ERROR_NONE};
 }
 
 // ------------------------------------------------------------------------------------------------

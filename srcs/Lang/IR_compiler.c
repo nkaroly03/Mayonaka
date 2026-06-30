@@ -9,6 +9,7 @@
 #include "../../hdrs/Data_structure/Umap_base.h"
 #include "../../hdrs/Data_structure/Vec_base.h"
 #include "../../hdrs/Utils/Num.h"
+#include "../../hdrs/Utils/Utils.h"
 
 #include "../../hdrs/Lang/Builtin_fn.h"
 #include "../../hdrs/Lang/IR_compiler.h"
@@ -476,8 +477,9 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                         case TOKEN_TYPE_LET:
                         case TOKEN_TYPE_RETURN:
                             push_back_after_assignment = true;
-                        default:
                             break;
+                        default:
+                            unreachable();
                     }
                 }
 
