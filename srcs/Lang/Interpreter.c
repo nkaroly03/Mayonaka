@@ -1,10 +1,14 @@
 #include <assert.h>
+#include <stdbool.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include "../../hdrs/Allocator/Allocator.h"
 #include "../../hdrs/Data_structure/Str_base.h"
+#include "../../hdrs/Random/Xoshiro256.h"
 #include "../../hdrs/Data_structure/Vec_base.h"
 #include "../../hdrs/Utils/Num.h"
 #include "../../hdrs/Utils/Utils.h"
@@ -19,6 +23,7 @@
 
 typedef struct Interpreter_state{
     Allocator alloc;
+    Xoshiro256 rand;
     Primitive argv;
     U8_slice bytecode;
     usize pc;
@@ -98,22 +103,18 @@ static bool interpreter_state_push(Interpreter_state *self){
             memcpy(&sp_offset, &self->bytecode.m_data[self->pc], sizeof(sp_offset));
             self->pc += sizeof(sp_offset);
             sp_ptr = vec_base_at(&self->stack, self->stack.m_size - sp_offset);
+            if (!vec_base_push_back(&self->stack, self->alloc, sp_ptr))
+                return false;
             switch (sp_ptr->m_tag){
                 case PRIMITIVE_TAG_BOOL:
                 case PRIMITIVE_TAG_CHAR:
                 case PRIMITIVE_TAG_INT:
                 case PRIMITIVE_TAG_FLOAT:
-                    if (!vec_base_push_back(&self->stack, self->alloc, sp_ptr))
-                        return false;
                     break;
                 case PRIMITIVE_TAG_STR:
-                    if (!vec_base_push_back(&self->stack, self->alloc, sp_ptr))
-                        return false;
                     ++sp_ptr->m_str_data_ptr->m_ref_count;
                     break;
                 case PRIMITIVE_TAG_LIST:
-                    if (!vec_base_push_back(&self->stack, self->alloc, sp_ptr))
-                        return false;
                     ++sp_ptr->m_list_data_ptr->m_ref_count;
                     break;
             }
@@ -220,7 +221,6 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                         {
                             Primitive val_to_print;
                             vec_base_pop_back_to(&self->stack, &val_to_print);
-
                             primitive_print(&val_to_print);
                             primitive_deinit(&val_to_print, self->alloc);
 
@@ -241,12 +241,14 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                                     interpreter_state_deinit(self);
                                     return (Interpreter_run_result){.error_info = "<ferror> on stdin", .error = INTERPRETER_RUN_ERROR_RUNTIME};
                             }
+
                             Primitive scanned = {.m_tag = PRIMITIVE_TAG_STR, .m_str_data_ptr = allocator_alloc(self->alloc, Primitive_str_data, 1)};
                             if (!scanned.m_str_data_ptr){
                                 str_base_deinit(&str_result, self->alloc);
                                 return oom_error();
                             }
                             *scanned.m_str_data_ptr = (Primitive_str_data){.m_ref_count = 1, .m_data = str_result};
+
                             op_result = primitive_mov(vec_base_at(&self->stack, self->stack.m_size - 1), self->alloc, &scanned);
                             primitive_deinit(&scanned, self->alloc);
                             if (op_result.error != PRIMITIVE_OP_ERROR_NONE)
@@ -255,9 +257,11 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                         break;
                     case BUILTIN_FN_TAG_LEN:
                         {
-                            Primitive *last = vec_base_at(&self->stack, self->stack.m_size - 1);
                             Primitive len = {.m_tag = PRIMITIVE_TAG_INT};
-                            switch (last->m_tag){
+
+                            Primitive list_like;
+                            vec_base_pop_back_to(&self->stack, &list_like);
+                            switch (list_like.m_tag){
                                 case PRIMITIVE_TAG_BOOL:
                                 case PRIMITIVE_TAG_CHAR:
                                 case PRIMITIVE_TAG_INT:
@@ -265,22 +269,28 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                                     interpreter_state_deinit(self);
                                     return (Interpreter_run_result){.error_info = "Trying to get the length of a numeric type", .error = INTERPRETER_RUN_ERROR_RUNTIME};
                                 case PRIMITIVE_TAG_STR:
-                                    len.m_int_data = (i64)str_base_size(&last->m_str_data_ptr->m_data);
+                                    len.m_int_data = (i64)str_base_size(&list_like.m_str_data_ptr->m_data);
                                     break;
                                 case PRIMITIVE_TAG_LIST:
-                                    len.m_int_data = (i64)last->m_list_data_ptr->m_data.m_size;
+                                    len.m_int_data = (i64)list_like.m_list_data_ptr->m_data.m_size;
                                     break;
                             }
-                            op_result = primitive_mov(vec_base_at(&self->stack, self->stack.m_size - 2), self->alloc, &len);
+                            primitive_deinit(&list_like, self->alloc);
+
+                            op_result = primitive_mov(vec_base_at(&self->stack, self->stack.m_size - 1), self->alloc, &len);
                             if (op_result.error != PRIMITIVE_OP_ERROR_NONE)
                                 goto primitive_op_error;
-                            primitive_deinit(last, self->alloc);
-                            vec_base_pop_back_discard(&self->stack);
                         }
                         break;
                     case BUILTIN_FN_TAG_RAND:
-                        fprintf(stderr, "Not implemented");
-                        abort();
+                        op_result = primitive_mov(
+                            vec_base_at(&self->stack, self->stack.m_size - 1),
+                            self->alloc,
+                            &(Primitive){.m_tag = PRIMITIVE_TAG_INT, .m_int_data = (i64)xoshiro256_next(&self->rand)}
+                        );
+                        if (op_result.error != PRIMITIVE_OP_ERROR_NONE)
+                            goto primitive_op_error;
+                        break;
                     case BUILTIN_FN_TAG_PUSH_BACK:
                         {
                             Primitive *dest = vec_base_at(&self->stack, self->stack.m_size - 2);
@@ -291,11 +301,7 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                                 return (Interpreter_run_result){.error_info = "<push_back> called on non-list type", .error = INTERPRETER_RUN_ERROR_RUNTIME};
                             }
 
-                            if (
-                                src->m_tag == PRIMITIVE_TAG_STR &&
-                                src->m_str_data_ptr->m_ref_count > 1 &&
-                                (op_result = primitive_to_str(src, self->alloc)).error != PRIMITIVE_OP_ERROR_NONE
-                            )
+                            if (src->m_tag == PRIMITIVE_TAG_STR && (op_result = primitive_to_str(src, self->alloc)).error != PRIMITIVE_OP_ERROR_NONE)
                                 goto primitive_op_error;
 
                             if (!vec_base_push_back(&dest->m_list_data_ptr->m_data, self->alloc, src))
@@ -333,14 +339,14 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                 break;
             case OP_CODE_JMPZ:
                 {
-                    Primitive *last = vec_base_at(&self->stack, self->stack.m_size - 1);
+                    Primitive *condition = vec_base_at(&self->stack, self->stack.m_size - 1);
 
-                    op_result = primitive_to_bool(last, self->alloc);
+                    op_result = primitive_to_bool(condition, self->alloc);
                     if (op_result.error != PRIMITIVE_OP_ERROR_NONE)
                         goto primitive_op_error;
 
-                    bool val = last->m_bool_data;
-                    primitive_deinit(last, self->alloc);
+                    bool val = condition->m_bool_data;
+                    primitive_deinit(condition, self->alloc);
                     vec_base_pop_back_discard(&self->stack);
 
                     usize offset;
@@ -424,6 +430,9 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
         }
     }
 
+    interpreter_state_deinit(self);
+    return (Interpreter_run_result){.error_info = "Program must exit with the builtin <exit> function", .error = INTERPRETER_RUN_ERROR_RUNTIME};
+
 primitive_op_error:
     interpreter_state_deinit(self);
     return (Interpreter_run_result){.error_info = op_result.error_msg, .error = (enum Interpreter_run_error)op_result.error};
@@ -434,8 +443,11 @@ primitive_op_error:
 // ------------------------------------------------------------------------------------------------
 
 Interpreter_run_result interpreter_run(Allocator alloc, U8_slice bytecode, int argc, const char *const *argv){
+    assert((argv || argc == 0) && "<argv> is only nullable if <argc> == 0");
+
     Interpreter_state state = {
         .alloc    = alloc,
+        .rand     = xoshiro256_init((u64)time(NULL)),
         .argv     = {.m_tag = PRIMITIVE_TAG_LIST, .m_list_data_ptr = allocator_alloc(alloc, Primitive_list_data, 1)},
         .bytecode = bytecode,
         .pc       = 0,
@@ -455,8 +467,7 @@ Interpreter_run_result interpreter_run(Allocator alloc, U8_slice bytecode, int a
         }
         *temp.m_str_data_ptr = (Primitive_str_data){.m_ref_count = 1, .m_data = {0}};
         if (!str_base_assign_raw(&temp.m_str_data_ptr->m_data, state.alloc, argv[i]) || !vec_base_push_back(&state.argv.m_list_data_ptr->m_data, state.alloc, &temp)){
-            str_base_deinit(&temp.m_str_data_ptr->m_data, state.alloc);
-            allocator_free(state.alloc, temp.m_str_data_ptr, 1);
+            primitive_deinit(&temp, state.alloc);
             interpreter_state_deinit(&state);
             goto oom_error;
         }

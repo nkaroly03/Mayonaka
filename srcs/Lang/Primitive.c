@@ -340,19 +340,19 @@ void primitive_deinit(const Primitive *self, Allocator alloc){
         case PRIMITIVE_TAG_FLOAT:
             break;
         case PRIMITIVE_TAG_STR:
-            fprintf(stderr, "str_ref_count_before: %zu\n", self->m_str_data_ptr->m_ref_count);
-            fprintf(stderr, "str_ref_count_after:  %zu\n", self->m_str_data_ptr->m_ref_count - 1);
+            // fprintf(stderr, "str_ref_count_before: %zu\n", self->m_str_data_ptr->m_ref_count);
+            // fprintf(stderr, "str_ref_count_after:  %zu\n", self->m_str_data_ptr->m_ref_count - 1);
             if (--self->m_str_data_ptr->m_ref_count == 0){
-                fprintf(stderr, "str deinit\n");
+                // fprintf(stderr, "str deinit\n");
                 str_base_deinit(&self->m_str_data_ptr->m_data, alloc);
                 allocator_free(alloc, self->m_str_data_ptr, 1);
             }
             break;
         case PRIMITIVE_TAG_LIST:
-            fprintf(stderr, "list_ref_count_before: %zu\n", self->m_list_data_ptr->m_ref_count);
-            fprintf(stderr, "list_ref_count_after:  %zu\n", self->m_list_data_ptr->m_ref_count - 1);
+            // fprintf(stderr, "list_ref_count_before: %zu\n", self->m_list_data_ptr->m_ref_count);
+            // fprintf(stderr, "list_ref_count_after:  %zu\n", self->m_list_data_ptr->m_ref_count - 1);
             if (--self->m_list_data_ptr->m_ref_count == 0){
-                fprintf(stderr, "list deinit\n");
+                // fprintf(stderr, "list deinit\n");
                 vec_base_for_each(self->m_list_data_ptr->m_data, it){
                     primitive_deinit(it, alloc);
                 }
@@ -380,6 +380,7 @@ void primitive_print(const Primitive *self){
             putchar(']');
             break;
     }
+    fflush(stdout);
 }
 
 Primitive_op_result primitive_to_bool(Primitive *self, Allocator alloc){
@@ -480,6 +481,7 @@ Primitive_op_result primitive_to_int(Primitive *self, Allocator alloc){
                         str_to_int_conversion_error:
                             return runtime_error("Failed to convert <str> to <int>");
                         }
+                        ++end;
                     }
                 }
 
@@ -523,6 +525,7 @@ Primitive_op_result primitive_to_float(Primitive *self, Allocator alloc){
                         str_to_float_conversion_error:
                             return runtime_error("Failed to convert <str> to <float>");
                         }
+                        ++end;
                     }
                 }
 
@@ -953,35 +956,37 @@ Primitive_op_result primitive_add(Primitive *self, Allocator alloc, const Primit
     if (self->m_tag == PRIMITIVE_TAG_LIST || other->m_tag == PRIMITIVE_TAG_LIST)
         return runtime_error("Trying to use addition on <list>");
 
+    Primitive temp;
+
     switch (self->m_tag){
         case PRIMITIVE_TAG_BOOL:
             switch (other->m_tag){
-                case PRIMITIVE_TAG_BOOL:  *self = (Primitive){.m_tag = PRIMITIVE_TAG_BOOL,  .m_bool_data  = (bool)(self->m_bool_data != other->m_bool_data)};  break;
-                case PRIMITIVE_TAG_CHAR:  *self = (Primitive){.m_tag = PRIMITIVE_TAG_CHAR,  .m_char_data  = (u8)((u8)self->m_bool_data + other->m_char_data)}; break;
-                case PRIMITIVE_TAG_INT:   *self = (Primitive){.m_tag = PRIMITIVE_TAG_INT,   .m_int_data   = (i64)self->m_bool_data + other->m_int_data};       break;
-                case PRIMITIVE_TAG_FLOAT: *self = (Primitive){.m_tag = PRIMITIVE_TAG_FLOAT, .m_float_data = (f64)self->m_bool_data + other->m_float_data};     break;
+                case PRIMITIVE_TAG_BOOL:  temp = (Primitive){.m_tag = PRIMITIVE_TAG_BOOL,  .m_bool_data  = (bool)(self->m_bool_data != other->m_bool_data)};  break;
+                case PRIMITIVE_TAG_CHAR:  temp = (Primitive){.m_tag = PRIMITIVE_TAG_CHAR,  .m_char_data  = (u8)((u8)self->m_bool_data + other->m_char_data)}; break;
+                case PRIMITIVE_TAG_INT:   temp = (Primitive){.m_tag = PRIMITIVE_TAG_INT,   .m_int_data   = (i64)self->m_bool_data + other->m_int_data};       break;
+                case PRIMITIVE_TAG_FLOAT: temp = (Primitive){.m_tag = PRIMITIVE_TAG_FLOAT, .m_float_data = (f64)self->m_bool_data + other->m_float_data};     break;
                 case PRIMITIVE_TAG_STR:   return runtime_error("Trying to use addition between <bool> and <str>");
                 default:                  unreachable();
             }
             break;
         case PRIMITIVE_TAG_CHAR:
             switch (other->m_tag){
-                case PRIMITIVE_TAG_BOOL:  *self = (Primitive){.m_tag = PRIMITIVE_TAG_CHAR,  .m_char_data  = (u8)(self->m_char_data + (u8)other->m_bool_data)}; break;
-                case PRIMITIVE_TAG_CHAR:  *self = (Primitive){.m_tag = PRIMITIVE_TAG_CHAR,  .m_char_data  = (u8)(self->m_char_data + other->m_char_data)};     break;
-                case PRIMITIVE_TAG_INT:   *self = (Primitive){.m_tag = PRIMITIVE_TAG_INT,   .m_int_data   = (i64)self->m_char_data + other->m_int_data};       break;
-                case PRIMITIVE_TAG_FLOAT: *self = (Primitive){.m_tag = PRIMITIVE_TAG_FLOAT, .m_float_data = (f64)self->m_char_data + other->m_float_data};     break;
+                case PRIMITIVE_TAG_BOOL:  temp = (Primitive){.m_tag = PRIMITIVE_TAG_CHAR,  .m_char_data  = (u8)(self->m_char_data + (u8)other->m_bool_data)}; break;
+                case PRIMITIVE_TAG_CHAR:  temp = (Primitive){.m_tag = PRIMITIVE_TAG_CHAR,  .m_char_data  = (u8)(self->m_char_data + other->m_char_data)};     break;
+                case PRIMITIVE_TAG_INT:   temp = (Primitive){.m_tag = PRIMITIVE_TAG_INT,   .m_int_data   = (i64)self->m_char_data + other->m_int_data};       break;
+                case PRIMITIVE_TAG_FLOAT: temp = (Primitive){.m_tag = PRIMITIVE_TAG_FLOAT, .m_float_data = (f64)self->m_char_data + other->m_float_data};     break;
                 case PRIMITIVE_TAG_STR:
-                    {
-                        Primitive temp = {.m_tag = PRIMITIVE_TAG_STR, .m_str_data_ptr = allocator_alloc(alloc, Primitive_str_data, 1)};
-                        if (!temp.m_str_data_ptr)
-                            return OOM_ERROR;
-                        *temp.m_str_data_ptr = (Primitive_str_data){.m_ref_count = 1, .m_data = {0}};
-                        if (self->m_char_data != '\0' && !str_base_push_back(&temp.m_str_data_ptr->m_data, alloc, (char)self->m_char_data)){
-                            allocator_free(alloc, temp.m_str_data_ptr, 1);
-                            return OOM_ERROR;
-                        }
-                        *self = temp;
-                    }
+                    temp = (Primitive){.m_tag = PRIMITIVE_TAG_STR, .m_str_data_ptr = allocator_alloc(alloc, Primitive_str_data, 1)};
+                    if (!temp.m_str_data_ptr)
+                        return OOM_ERROR;
+                    *temp.m_str_data_ptr = (Primitive_str_data){.m_ref_count = 1, .m_data = {0}};
+                    if (
+                        self->m_char_data != '\0' && (
+                            !str_base_push_back(&temp.m_str_data_ptr->m_data, alloc, (char)self->m_char_data) ||
+                            !str_base_append_str_base(&temp.m_str_data_ptr->m_data, alloc, &other->m_str_data_ptr->m_data)
+                        )
+                    )
+                        goto oom_error;
                     break;
                 default:
                     unreachable();
@@ -989,20 +994,20 @@ Primitive_op_result primitive_add(Primitive *self, Allocator alloc, const Primit
             break;
         case PRIMITIVE_TAG_INT:
             switch (other->m_tag){
-                case PRIMITIVE_TAG_BOOL:  *self = (Primitive){.m_tag = PRIMITIVE_TAG_INT,   .m_int_data   = self->m_int_data + (i64)other->m_bool_data};  break;
-                case PRIMITIVE_TAG_CHAR:  *self = (Primitive){.m_tag = PRIMITIVE_TAG_INT,   .m_int_data   = self->m_int_data + (i64)other->m_char_data};  break;
-                case PRIMITIVE_TAG_INT:   *self = (Primitive){.m_tag = PRIMITIVE_TAG_INT,   .m_int_data   = self->m_int_data + other->m_int_data};        break;
-                case PRIMITIVE_TAG_FLOAT: *self = (Primitive){.m_tag = PRIMITIVE_TAG_FLOAT, .m_float_data = (f64)self->m_int_data + other->m_float_data}; break;
+                case PRIMITIVE_TAG_BOOL:  temp = (Primitive){.m_tag = PRIMITIVE_TAG_INT,   .m_int_data   = self->m_int_data + (i64)other->m_bool_data};  break;
+                case PRIMITIVE_TAG_CHAR:  temp = (Primitive){.m_tag = PRIMITIVE_TAG_INT,   .m_int_data   = self->m_int_data + (i64)other->m_char_data};  break;
+                case PRIMITIVE_TAG_INT:   temp = (Primitive){.m_tag = PRIMITIVE_TAG_INT,   .m_int_data   = self->m_int_data + other->m_int_data};        break;
+                case PRIMITIVE_TAG_FLOAT: temp = (Primitive){.m_tag = PRIMITIVE_TAG_FLOAT, .m_float_data = (f64)self->m_int_data + other->m_float_data}; break;
                 case PRIMITIVE_TAG_STR:   return runtime_error("Trying to use addition between <int> and <str>");
                 default:                  unreachable();
             }
             break;
         case PRIMITIVE_TAG_FLOAT:
             switch (other->m_tag){
-                case PRIMITIVE_TAG_BOOL:  *self = (Primitive){.m_tag = PRIMITIVE_TAG_FLOAT, .m_float_data = self->m_float_data + (f64)other->m_bool_data}; break;
-                case PRIMITIVE_TAG_CHAR:  *self = (Primitive){.m_tag = PRIMITIVE_TAG_FLOAT, .m_float_data = self->m_float_data + (f64)other->m_char_data}; break;
-                case PRIMITIVE_TAG_INT:   *self = (Primitive){.m_tag = PRIMITIVE_TAG_FLOAT, .m_float_data = self->m_float_data + (f64)other->m_int_data};  break;
-                case PRIMITIVE_TAG_FLOAT: *self = (Primitive){.m_tag = PRIMITIVE_TAG_FLOAT, .m_float_data = self->m_float_data + other->m_float_data};     break;
+                case PRIMITIVE_TAG_BOOL:  temp = (Primitive){.m_tag = PRIMITIVE_TAG_FLOAT, .m_float_data = self->m_float_data + (f64)other->m_bool_data}; break;
+                case PRIMITIVE_TAG_CHAR:  temp = (Primitive){.m_tag = PRIMITIVE_TAG_FLOAT, .m_float_data = self->m_float_data + (f64)other->m_char_data}; break;
+                case PRIMITIVE_TAG_INT:   temp = (Primitive){.m_tag = PRIMITIVE_TAG_FLOAT, .m_float_data = self->m_float_data + (f64)other->m_int_data};  break;
+                case PRIMITIVE_TAG_FLOAT: temp = (Primitive){.m_tag = PRIMITIVE_TAG_FLOAT, .m_float_data = self->m_float_data + other->m_float_data};     break;
                 case PRIMITIVE_TAG_STR:   return runtime_error("Trying to use addition between <float> and <str>");
                 default:                  unreachable();
             }
@@ -1012,54 +1017,48 @@ Primitive_op_result primitive_add(Primitive *self, Allocator alloc, const Primit
                 case PRIMITIVE_TAG_BOOL:
                     return runtime_error("Trying to use addition between <str> and <bool>");
                 case PRIMITIVE_TAG_CHAR:
-                    {
-                        Primitive temp = {.m_tag = PRIMITIVE_TAG_STR, .m_str_data_ptr = allocator_alloc(alloc, Primitive_str_data, 1)};
-                        if (!temp.m_str_data_ptr)
-                            return OOM_ERROR;
-                        *temp.m_str_data_ptr = (Primitive_str_data){.m_ref_count = 1, .m_data = {0}};
-                        if (
-                            !str_base_assign_str_base(&temp.m_str_data_ptr->m_data, alloc, &self->m_str_data_ptr->m_data) ||
-                            !str_base_push_back(&temp.m_str_data_ptr->m_data, alloc, (char)other->m_char_data)
-                        ){
-                            str_base_deinit(&temp.m_str_data_ptr->m_data, alloc);
-                            allocator_free(alloc, temp.m_str_data_ptr, 1);
-                            return OOM_ERROR;
-                        }
-                        primitive_deinit(self, alloc);
-                        *self = temp;
-                    }
+                    temp = (Primitive){.m_tag = PRIMITIVE_TAG_STR, .m_str_data_ptr = allocator_alloc(alloc, Primitive_str_data, 1)};
+                    if (!temp.m_str_data_ptr)
+                        return OOM_ERROR;
+                    *temp.m_str_data_ptr = (Primitive_str_data){.m_ref_count = 1, .m_data = {0}};
+                    if (
+                        !str_base_assign_str_base(&temp.m_str_data_ptr->m_data, alloc, &self->m_str_data_ptr->m_data) ||
+                        !str_base_push_back(&temp.m_str_data_ptr->m_data, alloc, (char)other->m_char_data)
+                    )
+                        goto oom_error;
+                    primitive_deinit(self, alloc);
                     break;
                 case PRIMITIVE_TAG_INT:
                     return runtime_error("Trying to use addition between <str> and <int>");
                 case PRIMITIVE_TAG_FLOAT:
                     return runtime_error("Trying to use addition between <str> and <float>");
                 case PRIMITIVE_TAG_STR:
-                    {
-                        Primitive temp = {.m_tag = PRIMITIVE_TAG_STR, .m_str_data_ptr = allocator_alloc(alloc, Primitive_str_data, 1)};
-                        if (!temp.m_str_data_ptr)
-                            return OOM_ERROR;
-                        *temp.m_str_data_ptr = (Primitive_str_data){.m_ref_count = 1, .m_data = {0}};
-                        if (
-                            !str_base_assign_str_base(&temp.m_str_data_ptr->m_data, alloc, &self->m_str_data_ptr->m_data) ||
-                            !str_base_append_str_base(&temp.m_str_data_ptr->m_data, alloc, &other->m_str_data_ptr->m_data)
-                        ){
-                            str_base_deinit(&temp.m_str_data_ptr->m_data, alloc);
-                            allocator_free(alloc, temp.m_str_data_ptr, 1);
-                            return OOM_ERROR;
-                        }
-                        primitive_deinit(self, alloc);
-                        *self = temp;
-                    }
+                    temp = (Primitive){.m_tag = PRIMITIVE_TAG_STR, .m_str_data_ptr = allocator_alloc(alloc, Primitive_str_data, 1)};
+                    if (!temp.m_str_data_ptr)
+                        return OOM_ERROR;
+                    *temp.m_str_data_ptr = (Primitive_str_data){.m_ref_count = 1, .m_data = {0}};
+                    if (
+                        !str_base_assign_str_base(&temp.m_str_data_ptr->m_data, alloc, &self->m_str_data_ptr->m_data) ||
+                        !str_base_append_str_base(&temp.m_str_data_ptr->m_data, alloc, &other->m_str_data_ptr->m_data)
+                    )
+                        goto oom_error;
+                    primitive_deinit(self, alloc);
                     break;
-                    default:
-                        unreachable();
+                default:
+                    unreachable();
             }
             break;
         default:
             unreachable();
     }
 
+    *self = temp;
+
     return (Primitive_op_result){0};
+
+oom_error:
+    primitive_deinit(&temp, alloc);
+    return OOM_ERROR;
 }
 Primitive_op_result primitive_sub(Primitive *self, const Primitive *other){
     assert(self && "<self> is never null");

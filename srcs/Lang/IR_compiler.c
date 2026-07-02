@@ -484,6 +484,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                 }
 
                 if (lhs_node->m_token->m_type != TOKEN_TYPE_LBRACKET){
+                    // TODO?: change argv to be mutable
                     if (lhs_node->m_token->m_type == TOKEN_TYPE_ARGV)
                         return syntax_error("<argv> is immutable", lhs_node->m_token->m_line_number);
                     if (lhs_node->m_token->m_type != TOKEN_TYPE_ID)

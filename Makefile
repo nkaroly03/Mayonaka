@@ -16,6 +16,7 @@ BIN_DIR = bin
 ALLOCATOR_DIR = Allocator
 DATA_STRUCTURE_DIR = Data_structure
 LANG_DIR = Lang
+RANDOM_DIR = Random
 UTILS_DIR = Utils
 
 ALLOCATOR_SRCS = $(wildcard $(SRC_DIR)/$(ALLOCATOR_DIR)/*.c)
@@ -26,6 +27,9 @@ DATA_STRUCTURE_OBJS = $(patsubst $(SRC_DIR)/$(DATA_STRUCTURE_DIR)/%.c, $(OBJ_DIR
 
 LANG_SRCS = $(wildcard $(SRC_DIR)/$(LANG_DIR)/*.c)
 LANG_OBJS = $(patsubst $(SRC_DIR)/$(LANG_DIR)/%.c, $(OBJ_DIR)/$(LANG_DIR)_%.o, $(LANG_SRCS))
+
+RANDOM_SRCS = $(wildcard $(SRC_DIR)/$(RANDOM_DIR)/*.c)
+RANDOM_OBJS = $(patsubst $(SRC_DIR)/$(RANDOM_DIR)/%.c, $(OBJ_DIR)/$(RANDOM_DIR)_%.o, $(RANDOM_SRCS))
 
 UTILS_SRCS = $(wildcard $(SRC_DIR)/$(UTILS_DIR)/*.c)
 UTILS_OBJS = $(patsubst $(SRC_DIR)/$(UTILS_DIR)/%.c, $(OBJ_DIR)/$(UTILS_DIR)_%.o, $(UTILS_SRCS))
@@ -44,7 +48,7 @@ all: $(BIN_DIR)/$(BIN)
 
 remake: clean all
 
-$(BIN_DIR)/$(BIN): $(OBJ_DIR)/$(OBJ) $(ALLOCATOR_OBJS) $(DATA_STRUCTURE_OBJS) $(LANG_OBJS) $(UTILS_OBJS) | $(BIN_DIR)
+$(BIN_DIR)/$(BIN): $(OBJ_DIR)/$(OBJ) $(ALLOCATOR_OBJS) $(DATA_STRUCTURE_OBJS) $(LANG_OBJS) $(RANDOM_OBJS) $(UTILS_OBJS) | $(BIN_DIR)
 	$(CC) $(CFLAGS) $^ -o $@
 
 $(OBJ_DIR)/$(OBJ): $(SRC) | $(OBJ_DIR)
@@ -57,6 +61,9 @@ $(OBJ_DIR)/$(DATA_STRUCTURE_DIR)_%.o: $(SRC_DIR)/$(DATA_STRUCTURE_DIR)/%.c | $(O
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(OBJ_DIR)/$(LANG_DIR)_%.o: $(SRC_DIR)/$(LANG_DIR)/%.c | $(OBJ_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(OBJ_DIR)/$(RANDOM_DIR)_%.o: $(SRC_DIR)/$(RANDOM_DIR)/%.c | $(OBJ_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(OBJ_DIR)/$(UTILS_DIR)_%.o: $(SRC_DIR)/$(UTILS_DIR)/%.c | $(OBJ_DIR)

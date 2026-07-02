@@ -1,12 +1,4 @@
-let arr: [][]str = [];
-{
-    let temp: []str = [];
-    push_back(arr, temp);
-    push_back(arr, temp);
-    push_back(temp, "Hello");
+for (0..10) |_|{
+    print(rand());
+    print('\n');
 }
-let s: str = "";
-s = arr[0][0];
-arr[0][0] = "Test";
-print(arr);
-print(s);
