@@ -95,27 +95,28 @@ static Primitive_op_result interpreter_state_call_bin_op_fn(Interpreter_state *s
 
 static bool interpreter_state_push(Interpreter_state *self){
     usize sp_offset;
-    Primitive *sp_ptr;
+    Primitive sp_data;
+
     Primitive temp;
 
     switch ((enum Op_code_push_tag)self->bytecode.m_data[self->pc++]){
         case OP_CODE_PUSH_TAG_SP:
             memcpy(&sp_offset, &self->bytecode.m_data[self->pc], sizeof(sp_offset));
             self->pc += sizeof(sp_offset);
-            sp_ptr = vec_base_at(&self->stack, self->stack.m_size - sp_offset);
-            if (!vec_base_push_back(&self->stack, self->alloc, sp_ptr))
+            sp_data = *(Primitive*)vec_base_at(&self->stack, self->stack.m_size - sp_offset);
+            if (!vec_base_push_back(&self->stack, self->alloc, &sp_data))
                 return false;
-            switch (sp_ptr->m_tag){
+            switch (sp_data.m_tag){
                 case PRIMITIVE_TAG_BOOL:
                 case PRIMITIVE_TAG_CHAR:
                 case PRIMITIVE_TAG_INT:
                 case PRIMITIVE_TAG_FLOAT:
                     break;
                 case PRIMITIVE_TAG_STR:
-                    ++sp_ptr->m_str_data_ptr->m_ref_count;
+                    ++sp_data.m_str_data_ptr->m_ref_count;
                     break;
                 case PRIMITIVE_TAG_LIST:
-                    ++sp_ptr->m_list_data_ptr->m_ref_count;
+                    ++sp_data.m_list_data_ptr->m_ref_count;
                     break;
             }
             break;
@@ -274,6 +275,9 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                                 case PRIMITIVE_TAG_LIST:
                                     len.m_int_data = (i64)list_like.m_list_data_ptr->m_data.m_size;
                                     break;
+                                default:
+                                    fprintf(stderr, "unreachable");
+                                    abort();
                             }
                             primitive_deinit(&list_like, self->alloc);
 
@@ -286,29 +290,35 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                         op_result = primitive_mov(
                             vec_base_at(&self->stack, self->stack.m_size - 1),
                             self->alloc,
-                            &(Primitive){.m_tag = PRIMITIVE_TAG_INT, .m_int_data = (i64)xoshiro256_next(&self->rand)}
+                            &(Primitive){.m_tag = PRIMITIVE_TAG_INT, .m_int_data = (i64)xoshiro256_next(&self->rand)} // TODO?: make it return a positive int
                         );
                         if (op_result.error != PRIMITIVE_OP_ERROR_NONE)
                             goto primitive_op_error;
                         break;
                     case BUILTIN_FN_TAG_PUSH_BACK:
                         {
-                            Primitive *dest = vec_base_at(&self->stack, self->stack.m_size - 2);
-                            Primitive *src  = vec_base_at(&self->stack, self->stack.m_size - 1);
+                            Primitive *list = vec_base_at(&self->stack, self->stack.m_size - 2);
 
-                            if (dest->m_tag != PRIMITIVE_TAG_LIST){
+                            Primitive to_push;
+                            vec_base_pop_back_to(&self->stack, &to_push);
+
+                            if (list->m_tag != PRIMITIVE_TAG_LIST){
+                                primitive_deinit(&to_push, self->alloc);
                                 interpreter_state_deinit(self);
                                 return (Interpreter_run_result){.error_info = "<push_back> called on non-list type", .error = INTERPRETER_RUN_ERROR_RUNTIME};
                             }
 
-                            if (src->m_tag == PRIMITIVE_TAG_STR && (op_result = primitive_to_str(src, self->alloc)).error != PRIMITIVE_OP_ERROR_NONE)
+                            if (to_push.m_tag == PRIMITIVE_TAG_STR && (op_result = primitive_to_str(&to_push, self->alloc)).error != PRIMITIVE_OP_ERROR_NONE){
+                                primitive_deinit(&to_push, self->alloc);
                                 goto primitive_op_error;
+                            }
 
-                            if (!vec_base_push_back(&dest->m_list_data_ptr->m_data, self->alloc, src))
+                            if (!vec_base_push_back(&list->m_list_data_ptr->m_data, self->alloc, &to_push)){
+                                primitive_deinit(&to_push, self->alloc);
                                 return oom_error();
+                            }
 
-                            primitive_deinit(dest, self->alloc);
-                            vec_base_pop_back_discard(&self->stack);
+                            primitive_deinit(list, self->alloc);
                             vec_base_pop_back_discard(&self->stack);
                         }
                         break;

@@ -58,7 +58,6 @@ Type_info builtin_fn_tag_return_type_info(enum Builtin_fn_tag tag){
         case BUILTIN_FN_TAG_LEN:
         case BUILTIN_FN_TAG_RAND:
             return (Type_info){.m_tag = TYPE_INFO_TAG_INT, .m_dimensions = 0};
-        case BUILTIN_FN_TAG_NONE:
         default:
             return (Type_info){0};
     }
@@ -77,7 +76,6 @@ bool builtin_fn_tag_is_callable(enum Builtin_fn_tag tag, Type_info_slice args){
             return args.m_size == 2 && args.m_data[0].m_tag == args.m_data[1].m_tag && args.m_data[0].m_dimensions - 1 == args.m_data[1].m_dimensions;
         case BUILTIN_FN_TAG_POP_BACK:
             return args.m_size == 1 && args.m_data[0].m_dimensions > 0;
-        case BUILTIN_FN_TAG_NONE:
         default:
             return false;
     }
