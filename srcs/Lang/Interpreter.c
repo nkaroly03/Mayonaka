@@ -17,8 +17,6 @@
 
 // ------------------------------------------------------------------------------------------------
 
-static const Interpreter_run_result OOM_ERROR = {.error_info = "Out of memory\n", .error = INTERPRETER_RUN_ERROR_OOM};
-
 typedef struct Interpreter_state{
     Allocator alloc;
     Primitive argv;
@@ -28,11 +26,20 @@ typedef struct Interpreter_state{
 } Interpreter_state;
 
 static void interpreter_state_deinit(Interpreter_state *self){
-    for (usize i = 0; i < self->stack.m_size; ++i)
-        primitive_deinit(vec_base_at(&self->stack, i), self->alloc);
+    while (self->stack.m_size > 0){
+        Primitive popped;
+        vec_base_pop_back_to(&self->stack, &popped);
+        primitive_deinit(&popped, self->alloc);
+    }
     vec_base_deinit(&self->stack, self->alloc);
     primitive_deinit(&self->argv, self->alloc);
 }
+
+static Interpreter_run_result interpreter_state_oom_error(Interpreter_state *self){
+    interpreter_state_deinit(self);
+    return (Interpreter_run_result){.error_info = "Out of memory", .error = INTERPRETER_RUN_ERROR_OOM};
+}
+#define oom_error() interpreter_state_oom_error(self)
 
 static Primitive_op_result interpreter_state_call_un_op_fn(Interpreter_state *self, enum Op_code op_code){
     Primitive *last = vec_base_at(&self->stack, self->stack.m_size - 1);
@@ -81,6 +88,96 @@ static Primitive_op_result interpreter_state_call_bin_op_fn(Interpreter_state *s
     }
 }
 
+static bool interpreter_state_push(Interpreter_state *self){
+    usize sp_offset;
+    Primitive *sp_ptr;
+    Primitive temp;
+
+    switch ((enum Op_code_push_tag)self->bytecode.m_data[self->pc++]){
+        case OP_CODE_PUSH_TAG_SP:
+            memcpy(&sp_offset, &self->bytecode.m_data[self->pc], sizeof(sp_offset));
+            self->pc += sizeof(sp_offset);
+            sp_ptr = vec_base_at(&self->stack, self->stack.m_size - sp_offset);
+            switch (sp_ptr->m_tag){
+                case PRIMITIVE_TAG_BOOL:
+                case PRIMITIVE_TAG_CHAR:
+                case PRIMITIVE_TAG_INT:
+                case PRIMITIVE_TAG_FLOAT:
+                    if (!vec_base_push_back(&self->stack, self->alloc, sp_ptr))
+                        return false;
+                    break;
+                case PRIMITIVE_TAG_STR:
+                    if (!vec_base_push_back(&self->stack, self->alloc, sp_ptr))
+                        return false;
+                    ++sp_ptr->m_str_data_ptr->m_ref_count;
+                    break;
+                case PRIMITIVE_TAG_LIST:
+                    if (!vec_base_push_back(&self->stack, self->alloc, sp_ptr))
+                        return false;
+                    ++sp_ptr->m_list_data_ptr->m_ref_count;
+                    break;
+            }
+            break;
+        case OP_CODE_PUSH_TAG_ARGV:
+            if (!vec_base_push_back(&self->stack, self->alloc, &self->argv))
+                return false;
+            ++self->argv.m_list_data_ptr->m_ref_count;
+            break;
+        case OP_CODE_PUSH_TAG_BOOL:
+            if (!vec_base_push_back(&self->stack, self->alloc, &(Primitive){.m_tag = PRIMITIVE_TAG_BOOL, .m_bool_data = (bool)self->bytecode.m_data[self->pc++]}))
+                return false;
+            break;
+        case OP_CODE_PUSH_TAG_CHAR:
+            if (!vec_base_push_back(&self->stack, self->alloc, &(Primitive){.m_tag = PRIMITIVE_TAG_CHAR, .m_char_data = self->bytecode.m_data[self->pc++]}))
+                return false;
+            break;
+        case OP_CODE_PUSH_TAG_INT:
+            if (!vec_base_push_back(
+                &self->stack,
+                self->alloc,
+                &(Primitive){.m_tag = PRIMITIVE_TAG_INT, .m_int_data = *(i64*)memcpy(&(i64){0}, &self->bytecode.m_data[self->pc], sizeof(i64))}
+            ))
+                return false;
+            self->pc += sizeof(i64);
+            break;
+        case OP_CODE_PUSH_TAG_FLOAT:
+            if (!vec_base_push_back(
+                &self->stack,
+                self->alloc,
+                &(Primitive){.m_tag = PRIMITIVE_TAG_FLOAT, .m_float_data = *(f64*)memcpy(&(f64){0}, &self->bytecode.m_data[self->pc], sizeof(f64))}
+            ))
+                return false;
+            self->pc += sizeof(f64);
+            break;
+        case OP_CODE_PUSH_TAG_STR:
+            temp = (Primitive){.m_tag = PRIMITIVE_TAG_STR, .m_str_data_ptr = allocator_alloc(self->alloc, Primitive_str_data, 1)};
+            if (!temp.m_str_data_ptr)
+                return false;
+            *temp.m_str_data_ptr = (Primitive_str_data){.m_ref_count = 1, .m_data = {0}};
+            if (
+                !str_base_assign_raw(&temp.m_str_data_ptr->m_data, self->alloc, (const char*)&self->bytecode.m_data[self->pc]) ||
+                !vec_base_push_back(&self->stack, self->alloc, &temp)
+            ){
+                primitive_deinit(&temp, self->alloc);
+                return false;
+            }
+            self->pc += (str_base_size(&temp.m_str_data_ptr->m_data) + 1);
+            break;
+        case OP_CODE_PUSH_TAG_LIST:
+            temp = (Primitive){.m_tag = PRIMITIVE_TAG_LIST, .m_list_data_ptr = allocator_alloc(self->alloc, Primitive_list_data, 1)};
+            if (!temp.m_list_data_ptr)
+                return false;
+            *temp.m_list_data_ptr = (Primitive_list_data){.m_ref_count = 1, .m_data = vec_base_init(Primitive)};
+            if (!vec_base_push_back(&self->stack, self->alloc, &temp)){
+                primitive_deinit(&temp, self->alloc);
+                return false;
+            }
+            break;
+    }
+
+    return true;
+}
+
 static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
     Primitive_op_result op_result;
 
@@ -88,95 +185,8 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
         enum Op_code op_code = (enum Op_code)self->bytecode.m_data[self->pc++];
         switch (op_code){
             case OP_CODE_PUSH:
-                switch ((enum Op_code_push_tag)self->bytecode.m_data[self->pc++]){
-                    case OP_CODE_PUSH_TAG_SP:
-                        {
-                            usize offset;
-                            memcpy(&offset, &self->bytecode.m_data[self->pc], sizeof(offset));
-                            self->pc += sizeof(offset);
-
-                            Primitive *pushed = vec_base_at(&self->stack, self->stack.m_size - offset);
-                            switch (pushed->m_tag){
-                                case PRIMITIVE_TAG_BOOL:
-                                case PRIMITIVE_TAG_CHAR:
-                                case PRIMITIVE_TAG_INT:
-                                case PRIMITIVE_TAG_FLOAT:
-                                    if (!vec_base_push_back(&self->stack, self->alloc, pushed))
-                                        goto oom_error;
-                                    break;
-                                case PRIMITIVE_TAG_STR:
-                                    if (!vec_base_push_back(&self->stack, self->alloc, pushed))
-                                        goto oom_error;
-                                    ++pushed->m_str_data_ptr->m_ref_count;
-                                    break;
-                                case PRIMITIVE_TAG_LIST:
-                                    if (!vec_base_push_back(&self->stack, self->alloc, pushed))
-                                        goto oom_error;
-                                    ++pushed->m_list_data_ptr->m_ref_count;
-                                    break;
-                            }
-                        }
-                        break;
-                    case OP_CODE_PUSH_TAG_ARGV:
-                        if (!vec_base_push_back(&self->stack, self->alloc, &self->argv))
-                            goto oom_error;
-                        ++self->argv.m_list_data_ptr->m_ref_count;
-                        break;
-                    case OP_CODE_PUSH_TAG_BOOL:
-                        if (!vec_base_push_back(&self->stack, self->alloc, &(Primitive){.m_tag = PRIMITIVE_TAG_BOOL, .m_bool_data = (bool)self->bytecode.m_data[self->pc++]}))
-                            goto oom_error;
-                        break;
-                    case OP_CODE_PUSH_TAG_CHAR:
-                        if (!vec_base_push_back(&self->stack, self->alloc, &(Primitive){.m_tag = PRIMITIVE_TAG_CHAR, .m_char_data = (u8)self->bytecode.m_data[self->pc++]}))
-                            goto oom_error;
-                        break;
-                    case OP_CODE_PUSH_TAG_INT:
-                        if (!vec_base_push_back(
-                            &self->stack,
-                            self->alloc,
-                            &(Primitive){.m_tag = PRIMITIVE_TAG_INT, .m_int_data = *(i64*)memcpy(&(i64){0}, &self->bytecode.m_data[self->pc], sizeof(i64))}
-                        ))
-                            goto oom_error;
-                        self->pc += sizeof(i64);
-                        break;
-                    case OP_CODE_PUSH_TAG_FLOAT:
-                        if (!vec_base_push_back(
-                            &self->stack,
-                            self->alloc,
-                            &(Primitive){.m_tag = PRIMITIVE_TAG_FLOAT, .m_float_data = *(f64*)memcpy(&(f64){0}, &self->bytecode.m_data[self->pc], sizeof(f64))}
-                        ))
-                            goto oom_error;
-                        self->pc += sizeof(f64);
-                        break;
-                    case OP_CODE_PUSH_TAG_STR:
-                        {
-                            Primitive temp = {.m_tag = PRIMITIVE_TAG_STR, .m_str_data_ptr = allocator_alloc(self->alloc, Primitive_str_data, 1)};
-                            if (!temp.m_str_data_ptr)
-                                goto oom_error;
-                            *temp.m_str_data_ptr = (Primitive_str_data){.m_ref_count = 1, .m_data = {0}};
-                            if (
-                                !str_base_assign_raw(&temp.m_str_data_ptr->m_data, self->alloc, (const char*)&self->bytecode.m_data[self->pc]) ||
-                                !vec_base_push_back(&self->stack, self->alloc, &temp)
-                            ){
-                                primitive_deinit(&temp, self->alloc);
-                                goto oom_error;
-                            }
-                            self->pc += (str_base_size(&temp.m_str_data_ptr->m_data) + 1);
-                        }
-                        break;
-                    case OP_CODE_PUSH_TAG_LIST:
-                        {
-                            Primitive temp = {.m_tag = PRIMITIVE_TAG_LIST, .m_list_data_ptr = allocator_alloc(self->alloc, Primitive_list_data, 1)};
-                            if (!temp.m_list_data_ptr)
-                                goto oom_error;
-                            *temp.m_list_data_ptr = (Primitive_list_data){.m_ref_count = 1, .m_data = vec_base_init(Primitive)};
-                            if (!vec_base_push_back(&self->stack, self->alloc, &temp)){
-                                primitive_deinit(&temp, self->alloc);
-                                goto oom_error;
-                            }
-                        }
-                        break;
-                }
+                if (!interpreter_state_push(self))
+                    return oom_error();
                 break;
             case OP_CODE_POP:
                 {
@@ -193,26 +203,26 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                         abort();
                     case BUILTIN_FN_TAG_EXIT:
                         {
-                            Primitive last;
-                            vec_base_pop_back_to(&self->stack, &last);
+                            Primitive exit_val;
+                            vec_base_pop_back_to(&self->stack, &exit_val);
                             interpreter_state_deinit(self);
-                            return (Interpreter_run_result){.result = last, .error = INTERPRETER_RUN_ERROR_NONE};
+                            return (Interpreter_run_result){.result = exit_val, .error = INTERPRETER_RUN_ERROR_NONE};
                         }
                     case BUILTIN_FN_TAG_PRINT:
                         {
-                            Primitive last;
-                            vec_base_pop_back_to(&self->stack, &last);
-                            primitive_print(&last);
-                            primitive_deinit(&last, self->alloc);
+                            Primitive val_to_print;
+                            vec_base_pop_back_to(&self->stack, &val_to_print);
+                            primitive_print(&val_to_print);
+                            primitive_deinit(&val_to_print, self->alloc);
                         }
                         break;
                     case BUILTIN_FN_TAG_SCAN:
                         {
-                            Primitive last;
-                            vec_base_pop_back_to(&self->stack, &last);
+                            Primitive val_to_print;
+                            vec_base_pop_back_to(&self->stack, &val_to_print);
 
-                            primitive_print(&last);
-                            primitive_deinit(&last, self->alloc);
+                            primitive_print(&val_to_print);
+                            primitive_deinit(&val_to_print, self->alloc);
 
                             Str_base str_result = {0};
                             enum Str_getline_error getline_result = str_base_getline(&str_result, self->alloc, stdin);
@@ -221,7 +231,7 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                                     break;
                                 case STR_GETLINE_ERROR_OOM:
                                     str_base_deinit(&str_result, self->alloc);
-                                    goto oom_error;
+                                    return oom_error();
                                 case STR_GETLINE_ERROR_FEOF:
                                     str_base_deinit(&str_result, self->alloc);
                                     interpreter_state_deinit(self);
@@ -234,7 +244,7 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                             Primitive scanned = {.m_tag = PRIMITIVE_TAG_STR, .m_str_data_ptr = allocator_alloc(self->alloc, Primitive_str_data, 1)};
                             if (!scanned.m_str_data_ptr){
                                 str_base_deinit(&str_result, self->alloc);
-                                goto oom_error;
+                                return oom_error();
                             }
                             *scanned.m_str_data_ptr = (Primitive_str_data){.m_ref_count = 1, .m_data = str_result};
                             op_result = primitive_mov(vec_base_at(&self->stack, self->stack.m_size - 1), self->alloc, &scanned);
@@ -273,18 +283,25 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                         abort();
                     case BUILTIN_FN_TAG_PUSH_BACK:
                         {
-                            Primitive *list = vec_base_at(&self->stack, self->stack.m_size - 2);
-                            Primitive *last = vec_base_at(&self->stack, self->stack.m_size - 1);
+                            Primitive *dest = vec_base_at(&self->stack, self->stack.m_size - 2);
+                            Primitive *src  = vec_base_at(&self->stack, self->stack.m_size - 1);
 
-                            if (list->m_tag != PRIMITIVE_TAG_LIST){
+                            if (dest->m_tag != PRIMITIVE_TAG_LIST){
                                 interpreter_state_deinit(self);
                                 return (Interpreter_run_result){.error_info = "<push_back> called on non-list type", .error = INTERPRETER_RUN_ERROR_RUNTIME};
                             }
-                            if (!vec_base_push_back(&list->m_list_data_ptr->m_data, self->alloc, last))
-                                goto oom_error;
 
-                            primitive_deinit(last, self->alloc);
-                            primitive_deinit(list, self->alloc);
+                            if (
+                                src->m_tag == PRIMITIVE_TAG_STR &&
+                                src->m_str_data_ptr->m_ref_count > 1 &&
+                                (op_result = primitive_to_str(src, self->alloc)).error != PRIMITIVE_OP_ERROR_NONE
+                            )
+                                goto primitive_op_error;
+
+                            if (!vec_base_push_back(&dest->m_list_data_ptr->m_data, self->alloc, src))
+                                return oom_error();
+
+                            primitive_deinit(dest, self->alloc);
                             vec_base_pop_back_discard(&self->stack);
                             vec_base_pop_back_discard(&self->stack);
                         }
@@ -410,10 +427,9 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
 primitive_op_error:
     interpreter_state_deinit(self);
     return (Interpreter_run_result){.error_info = op_result.error_msg, .error = (enum Interpreter_run_error)op_result.error};
-oom_error:
-    interpreter_state_deinit(self);
-    return OOM_ERROR;
 }
+
+#undef oom_error
 
 // ------------------------------------------------------------------------------------------------
 
@@ -427,7 +443,7 @@ Interpreter_run_result interpreter_run(Allocator alloc, U8_slice bytecode, int a
     };
 
     if (!state.argv.m_list_data_ptr)
-        return OOM_ERROR;
+        goto oom_error;
 
     *state.argv.m_list_data_ptr = (Primitive_list_data){.m_ref_count = 1, .m_data = vec_base_init(Primitive)};
 
@@ -435,16 +451,19 @@ Interpreter_run_result interpreter_run(Allocator alloc, U8_slice bytecode, int a
         Primitive temp = {.m_tag = PRIMITIVE_TAG_STR, .m_str_data_ptr = allocator_alloc(state.alloc, Primitive_str_data, 1)};
         if (!temp.m_str_data_ptr){
             interpreter_state_deinit(&state);
-            return OOM_ERROR;
+            goto oom_error;
         }
         *temp.m_str_data_ptr = (Primitive_str_data){.m_ref_count = 1, .m_data = {0}};
         if (!str_base_assign_raw(&temp.m_str_data_ptr->m_data, state.alloc, argv[i]) || !vec_base_push_back(&state.argv.m_list_data_ptr->m_data, state.alloc, &temp)){
             str_base_deinit(&temp.m_str_data_ptr->m_data, state.alloc);
             allocator_free(state.alloc, temp.m_str_data_ptr, 1);
             interpreter_state_deinit(&state);
-            return OOM_ERROR;
+            goto oom_error;
         }
     }
 
     return interpreter_state_run(&state);
+
+oom_error:
+    return (Interpreter_run_result){.error_info = "Out of memory", .error = INTERPRETER_RUN_ERROR_OOM};
 }
