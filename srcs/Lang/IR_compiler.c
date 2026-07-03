@@ -329,6 +329,9 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                             IR_compiler_state_compile_result compile_result = IR_compiler_state_compile(self, fn_args.m_data[i]);
                             if (compile_result.error != COMPILE_ERROR_NONE)
                                 return compile_result;
+                            Type_info last_type_info = *(Type_info*)vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1);
+                            if (last_type_info.m_dimensions == 0)
+                                add_instruction("%s", op_code_to_str(OP_CODE_TO_BOOL + (last_type_info.m_tag - TYPE_INFO_TAG_BOOL)));
                         }
 
                         Type_info_slice arg_type_infos = {.m_size = fn_args.m_size, vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - fn_args.m_size)};

@@ -6,6 +6,13 @@
 #include <string.h>
 #include <time.h>
 
+#ifdef _WIN32
+#include <conio.h>
+#else
+#include <termios.h>
+#include <unistd.h>
+#endif // _WIN32
+
 #include "../../hdrs/Allocator/Allocator.h"
 #include "../../hdrs/Data_structure/Str_base.h"
 #include "../../hdrs/Random/Xoshiro256.h"
@@ -93,93 +100,6 @@ static Primitive_op_result interpreter_state_call_bin_op_fn(Interpreter_state *s
     }
 }
 
-static bool interpreter_state_push(Interpreter_state *self){
-    usize sp_offset;
-    Primitive sp_data;
-
-    Primitive temp;
-
-    switch ((enum Op_code_push_tag)self->bytecode.m_data[self->pc++]){
-        case OP_CODE_PUSH_TAG_SP:
-            memcpy(&sp_offset, &self->bytecode.m_data[self->pc], sizeof(sp_offset));
-            self->pc += sizeof(sp_offset);
-            sp_data = *(Primitive*)vec_base_at(&self->stack, self->stack.m_size - sp_offset);
-            if (!vec_base_push_back(&self->stack, self->alloc, &sp_data))
-                return false;
-            switch (sp_data.m_tag){
-                case PRIMITIVE_TAG_BOOL:
-                case PRIMITIVE_TAG_CHAR:
-                case PRIMITIVE_TAG_INT:
-                case PRIMITIVE_TAG_FLOAT:
-                    break;
-                case PRIMITIVE_TAG_STR:
-                    ++sp_data.m_str_data_ptr->m_ref_count;
-                    break;
-                case PRIMITIVE_TAG_LIST:
-                    ++sp_data.m_list_data_ptr->m_ref_count;
-                    break;
-            }
-            break;
-        case OP_CODE_PUSH_TAG_ARGV:
-            if (!vec_base_push_back(&self->stack, self->alloc, &self->argv))
-                return false;
-            ++self->argv.m_list_data_ptr->m_ref_count;
-            break;
-        case OP_CODE_PUSH_TAG_BOOL:
-            if (!vec_base_push_back(&self->stack, self->alloc, &(Primitive){.m_tag = PRIMITIVE_TAG_BOOL, .m_bool_data = (bool)self->bytecode.m_data[self->pc++]}))
-                return false;
-            break;
-        case OP_CODE_PUSH_TAG_CHAR:
-            if (!vec_base_push_back(&self->stack, self->alloc, &(Primitive){.m_tag = PRIMITIVE_TAG_CHAR, .m_char_data = self->bytecode.m_data[self->pc++]}))
-                return false;
-            break;
-        case OP_CODE_PUSH_TAG_INT:
-            if (!vec_base_push_back(
-                &self->stack,
-                self->alloc,
-                &(Primitive){.m_tag = PRIMITIVE_TAG_INT, .m_int_data = *(i64*)memcpy(&(i64){0}, &self->bytecode.m_data[self->pc], sizeof(i64))}
-            ))
-                return false;
-            self->pc += sizeof(i64);
-            break;
-        case OP_CODE_PUSH_TAG_FLOAT:
-            if (!vec_base_push_back(
-                &self->stack,
-                self->alloc,
-                &(Primitive){.m_tag = PRIMITIVE_TAG_FLOAT, .m_float_data = *(f64*)memcpy(&(f64){0}, &self->bytecode.m_data[self->pc], sizeof(f64))}
-            ))
-                return false;
-            self->pc += sizeof(f64);
-            break;
-        case OP_CODE_PUSH_TAG_STR:
-            temp = (Primitive){.m_tag = PRIMITIVE_TAG_STR, .m_str_data_ptr = allocator_alloc(self->alloc, Primitive_str_data, 1)};
-            if (!temp.m_str_data_ptr)
-                return false;
-            *temp.m_str_data_ptr = (Primitive_str_data){.m_ref_count = 1, .m_data = {0}};
-            if (
-                !str_base_assign_raw(&temp.m_str_data_ptr->m_data, self->alloc, (const char*)&self->bytecode.m_data[self->pc]) ||
-                !vec_base_push_back(&self->stack, self->alloc, &temp)
-            ){
-                primitive_deinit(&temp, self->alloc);
-                return false;
-            }
-            self->pc += (str_base_size(&temp.m_str_data_ptr->m_data) + 1);
-            break;
-        case OP_CODE_PUSH_TAG_LIST:
-            temp = (Primitive){.m_tag = PRIMITIVE_TAG_LIST, .m_list_data_ptr = allocator_alloc(self->alloc, Primitive_list_data, 1)};
-            if (!temp.m_list_data_ptr)
-                return false;
-            *temp.m_list_data_ptr = (Primitive_list_data){.m_ref_count = 1, .m_data = vec_base_init(Primitive)};
-            if (!vec_base_push_back(&self->stack, self->alloc, &temp)){
-                primitive_deinit(&temp, self->alloc);
-                return false;
-            }
-            break;
-    }
-
-    return true;
-}
-
 static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
     Primitive_op_result op_result;
 
@@ -187,8 +107,90 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
         enum Op_code op_code = (enum Op_code)self->bytecode.m_data[self->pc++];
         switch (op_code){
             case OP_CODE_PUSH:
-                if (!interpreter_state_push(self))
-                    return oom_error();
+                {
+                    usize sp_offset;
+                    Primitive sp_data;
+
+                    Primitive temp;
+
+                    switch ((enum Op_code_push_tag)self->bytecode.m_data[self->pc++]){
+                        case OP_CODE_PUSH_TAG_SP:
+                            memcpy(&sp_offset, &self->bytecode.m_data[self->pc], sizeof(sp_offset));
+                            self->pc += sizeof(sp_offset);
+                            sp_data = *(Primitive*)vec_base_at(&self->stack, self->stack.m_size - sp_offset);
+                            if (!vec_base_push_back(&self->stack, self->alloc, &sp_data))
+                                return oom_error();
+                            switch (sp_data.m_tag){
+                                case PRIMITIVE_TAG_BOOL:
+                                case PRIMITIVE_TAG_CHAR:
+                                case PRIMITIVE_TAG_INT:
+                                case PRIMITIVE_TAG_FLOAT:
+                                    break;
+                                case PRIMITIVE_TAG_STR:
+                                    ++sp_data.m_str_data_ptr->m_ref_count;
+                                    break;
+                                case PRIMITIVE_TAG_LIST:
+                                    ++sp_data.m_list_data_ptr->m_ref_count;
+                                    break;
+                            }
+                            break;
+                        case OP_CODE_PUSH_TAG_ARGV:
+                            if (!vec_base_push_back(&self->stack, self->alloc, &self->argv))
+                                return oom_error();
+                            ++self->argv.m_list_data_ptr->m_ref_count;
+                            break;
+                        case OP_CODE_PUSH_TAG_BOOL:
+                            if (!vec_base_push_back(&self->stack, self->alloc, &(Primitive){.m_tag = PRIMITIVE_TAG_BOOL, .m_bool_data = (bool)self->bytecode.m_data[self->pc++]}))
+                                return oom_error();
+                            break;
+                        case OP_CODE_PUSH_TAG_CHAR:
+                            if (!vec_base_push_back(&self->stack, self->alloc, &(Primitive){.m_tag = PRIMITIVE_TAG_CHAR, .m_char_data = self->bytecode.m_data[self->pc++]}))
+                                return oom_error();
+                            break;
+                        case OP_CODE_PUSH_TAG_INT:
+                            if (!vec_base_push_back(
+                                &self->stack,
+                                self->alloc,
+                                &(Primitive){.m_tag = PRIMITIVE_TAG_INT, .m_int_data = *(i64*)memcpy(&(i64){0}, &self->bytecode.m_data[self->pc], sizeof(i64))}
+                            ))
+                                return oom_error();
+                            self->pc += sizeof(i64);
+                            break;
+                        case OP_CODE_PUSH_TAG_FLOAT:
+                            if (!vec_base_push_back(
+                                &self->stack,
+                                self->alloc,
+                                &(Primitive){.m_tag = PRIMITIVE_TAG_FLOAT, .m_float_data = *(f64*)memcpy(&(f64){0}, &self->bytecode.m_data[self->pc], sizeof(f64))}
+                            ))
+                                return oom_error();
+                            self->pc += sizeof(f64);
+                            break;
+                        case OP_CODE_PUSH_TAG_STR:
+                            temp = (Primitive){.m_tag = PRIMITIVE_TAG_STR, .m_str_data_ptr = allocator_alloc(self->alloc, Primitive_str_data, 1)};
+                            if (!temp.m_str_data_ptr)
+                                return oom_error();
+                            *temp.m_str_data_ptr = (Primitive_str_data){.m_ref_count = 1, .m_data = {0}};
+                            if (
+                                !str_base_assign_raw(&temp.m_str_data_ptr->m_data, self->alloc, (const char*)&self->bytecode.m_data[self->pc]) ||
+                                !vec_base_push_back(&self->stack, self->alloc, &temp)
+                            ){
+                                primitive_deinit(&temp, self->alloc);
+                                return oom_error();
+                            }
+                            self->pc += (str_base_size(&temp.m_str_data_ptr->m_data) + 1);
+                            break;
+                        case OP_CODE_PUSH_TAG_LIST:
+                            temp = (Primitive){.m_tag = PRIMITIVE_TAG_LIST, .m_list_data_ptr = allocator_alloc(self->alloc, Primitive_list_data, 1)};
+                            if (!temp.m_list_data_ptr)
+                                return oom_error();
+                            *temp.m_list_data_ptr = (Primitive_list_data){.m_ref_count = 1, .m_data = vec_base_init(Primitive)};
+                            if (!vec_base_push_back(&self->stack, self->alloc, &temp)){
+                                primitive_deinit(&temp, self->alloc);
+                                return oom_error();
+                            }
+                            break;
+                    }
+                }
                 break;
             case OP_CODE_POP:
                 {
@@ -256,6 +258,34 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                                 goto primitive_op_error;
                         }
                         break;
+                    case BUILTIN_FN_TAG_POLL_KEYPRESS:
+                        {
+                            char keypress = '\0';
+#ifdef _WIN32
+                            if (kbhit()){
+                                keypress = (char)getch();
+                                while (kbhit())
+                                    (void)getch();
+                            }
+#else
+                            struct termios old_settings, new_settings = (tcgetattr(STDIN_FILENO, &old_settings), old_settings);
+                            new_settings.c_lflag &= ~(ICANON | ECHO);
+                            new_settings.c_cc[VTIME] = 0;
+                            new_settings.c_cc[VMIN]  = 0;
+                            tcsetattr(STDIN_FILENO, TCSANOW, &new_settings);
+                            if (read(STDIN_FILENO, &keypress, 1) > 0)
+                                while (read(STDIN_FILENO, &(char){0}, 1) > 0);
+                            tcsetattr(STDIN_FILENO, TCSANOW, &old_settings);
+#endif // _WIN32
+                            op_result = primitive_mov(
+                                vec_base_at(&self->stack, self->stack.m_size - 1),
+                                self->alloc,
+                                &(Primitive){.m_tag = PRIMITIVE_TAG_CHAR, .m_char_data = (u8)keypress}
+                            );
+                            if (op_result.error != PRIMITIVE_OP_ERROR_NONE)
+                                goto primitive_op_error;
+                        }
+                        break;
                     case BUILTIN_FN_TAG_LEN:
                         {
                             Primitive len = {.m_tag = PRIMITIVE_TAG_INT};
@@ -275,9 +305,6 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                                 case PRIMITIVE_TAG_LIST:
                                     len.m_int_data = (i64)list_like.m_list_data_ptr->m_data.m_size;
                                     break;
-                                default:
-                                    fprintf(stderr, "unreachable");
-                                    abort();
                             }
                             primitive_deinit(&list_like, self->alloc);
 
@@ -308,10 +335,10 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                                 return (Interpreter_run_result){.error_info = "<push_back> called on non-list type", .error = INTERPRETER_RUN_ERROR_RUNTIME};
                             }
 
-                            if (to_push.m_tag == PRIMITIVE_TAG_STR && (op_result = primitive_to_str(&to_push, self->alloc)).error != PRIMITIVE_OP_ERROR_NONE){
-                                primitive_deinit(&to_push, self->alloc);
-                                goto primitive_op_error;
-                            }
+                            // if (to_push.m_tag == PRIMITIVE_TAG_STR && (op_result = primitive_to_str(&to_push, self->alloc)).error != PRIMITIVE_OP_ERROR_NONE){
+                                // primitive_deinit(&to_push, self->alloc);
+                                // goto primitive_op_error;
+                            // }
 
                             if (!vec_base_push_back(&list->m_list_data_ptr->m_data, self->alloc, &to_push)){
                                 primitive_deinit(&to_push, self->alloc);
@@ -381,11 +408,11 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
 
             case OP_CODE_MOV:
                 {
-                    usize offset;
-                    memcpy(&offset, &self->bytecode.m_data[self->pc], sizeof(offset));
-                    self->pc += sizeof(offset);
+                    usize sp_offset;
+                    memcpy(&sp_offset, &self->bytecode.m_data[self->pc], sizeof(sp_offset));
+                    self->pc += sizeof(sp_offset);
 
-                    Primitive *lhs = vec_base_at(&self->stack, self->stack.m_size - offset);
+                    Primitive *lhs = vec_base_at(&self->stack, self->stack.m_size - sp_offset);
                     Primitive *rhs = vec_base_at(&self->stack, self->stack.m_size - 1);
 
                     op_result = primitive_mov(lhs, self->alloc, rhs);
@@ -461,7 +488,7 @@ Interpreter_run_result interpreter_run(Allocator alloc, U8_slice bytecode, int a
         .argv     = {.m_tag = PRIMITIVE_TAG_LIST, .m_list_data_ptr = allocator_alloc(alloc, Primitive_list_data, 1)},
         .bytecode = bytecode,
         .pc       = 0,
-        .stack    = vec_base_init(Primitive),
+        .stack    = vec_base_init(Primitive)
     };
 
     if (!state.argv.m_list_data_ptr)

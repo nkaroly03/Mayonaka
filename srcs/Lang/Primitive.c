@@ -356,6 +356,7 @@ void primitive_deinit(const Primitive *self, Allocator alloc){
                 vec_base_for_each(self->m_list_data_ptr->m_data, it){
                     primitive_deinit(it, alloc);
                 }
+                vec_base_deinit(&self->m_list_data_ptr->m_data, alloc);
                 allocator_free(alloc, self->m_list_data_ptr, 1);
             }
             break;

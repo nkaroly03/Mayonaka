@@ -1,4 +1,0 @@
-for (0..10) |_|{
-    print(rand());
-    print('\n');
-}

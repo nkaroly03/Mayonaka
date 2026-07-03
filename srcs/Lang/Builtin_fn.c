@@ -9,14 +9,15 @@
 // ------------------------------------------------------------------------------------------------
 
 static const char *BUILTIN_FN_TAG_SYMBOLS[] = {
-    [BUILTIN_FN_TAG_NONE]      = NULL,
-    [BUILTIN_FN_TAG_EXIT]      = "exit",
-    [BUILTIN_FN_TAG_PRINT]     = "print",
-    [BUILTIN_FN_TAG_SCAN]      = "scan",
-    [BUILTIN_FN_TAG_LEN]       = "len",
-    [BUILTIN_FN_TAG_RAND]      = "rand",
-    [BUILTIN_FN_TAG_PUSH_BACK] = "push_back",
-    [BUILTIN_FN_TAG_POP_BACK]  = "pop_back",
+    [BUILTIN_FN_TAG_NONE]          = NULL,
+    [BUILTIN_FN_TAG_EXIT]          = "exit",
+    [BUILTIN_FN_TAG_PRINT]         = "print",
+    [BUILTIN_FN_TAG_SCAN]          = "scan",
+    [BUILTIN_FN_TAG_POLL_KEYPRESS] = "poll_keypress",
+    [BUILTIN_FN_TAG_LEN]           = "len",
+    [BUILTIN_FN_TAG_RAND]          = "rand",
+    [BUILTIN_FN_TAG_PUSH_BACK]     = "push_back",
+    [BUILTIN_FN_TAG_POP_BACK]      = "pop_back",
 };
 
 // ------------------------------------------------------------------------------------------------
@@ -30,6 +31,8 @@ enum Builtin_fn_tag builtin_fn_tag_init(const char *str){
         return BUILTIN_FN_TAG_PRINT;
     if (strcmp(str, builtin_fn_tag_to_str(BUILTIN_FN_TAG_SCAN)) == 0)
         return BUILTIN_FN_TAG_SCAN;
+    if (strcmp(str, builtin_fn_tag_to_str(BUILTIN_FN_TAG_POLL_KEYPRESS)) == 0)
+        return BUILTIN_FN_TAG_POLL_KEYPRESS;
     if (strcmp(str, builtin_fn_tag_to_str(BUILTIN_FN_TAG_LEN)) == 0)
         return BUILTIN_FN_TAG_LEN;
     if (strcmp(str, builtin_fn_tag_to_str(BUILTIN_FN_TAG_RAND)) == 0)
@@ -55,6 +58,8 @@ Type_info builtin_fn_tag_return_type_info(enum Builtin_fn_tag tag){
             return (Type_info){.m_tag = TYPE_INFO_TAG_VOID, .m_dimensions = 0};
         case BUILTIN_FN_TAG_SCAN:
             return (Type_info){.m_tag = TYPE_INFO_TAG_STR, .m_dimensions = 0};
+        case BUILTIN_FN_TAG_POLL_KEYPRESS:
+            return (Type_info){.m_tag = TYPE_INFO_TAG_CHAR, .m_dimensions = 0};
         case BUILTIN_FN_TAG_LEN:
         case BUILTIN_FN_TAG_RAND:
             return (Type_info){.m_tag = TYPE_INFO_TAG_INT, .m_dimensions = 0};
@@ -70,6 +75,7 @@ bool builtin_fn_tag_is_callable(enum Builtin_fn_tag tag, Type_info_slice args){
             return args.m_size == 1;
         case BUILTIN_FN_TAG_LEN:
             return args.m_size == 1 && (args.m_data[0].m_tag == TYPE_INFO_TAG_STR || args.m_data[0].m_dimensions > 0);
+        case BUILTIN_FN_TAG_POLL_KEYPRESS:
         case BUILTIN_FN_TAG_RAND:
             return args.m_size == 0;
         case BUILTIN_FN_TAG_PUSH_BACK:
