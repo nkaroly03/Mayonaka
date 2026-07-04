@@ -1,3 +1,6 @@
-let i: int = "0x33";
+{
+    let s: str = "";
+    s = "";
 
-print("i: "); print(i); print('\n');
+    print(s);
+}

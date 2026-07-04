@@ -478,7 +478,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                         push_back_after_assignment = true;
                         break;
                     default:
-                        unreachable();
+                        break;
                 }
             }
 
