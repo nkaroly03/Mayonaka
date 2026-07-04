@@ -166,21 +166,20 @@ static Parser_state_parse_result parser_state_parse_arithm_expr(Parser_state *se
             case TOKEN_TYPE_PLUS:
             case TOKEN_TYPE_MINUS:
             case TOKEN_TYPE_TILDE:
-            case TOKEN_TYPE_NOT:
-                {
-                    Parser_state_parse_result unary_rhs = parser_state_parse_arithm_expr(self, BINDING_POWERS_UNARY.rhs);
-                    if (unary_rhs.error != PARSE_ERROR_NONE)
-                        return unary_rhs;
+            case TOKEN_TYPE_NOT:{
+                Parser_state_parse_result unary_rhs = parser_state_parse_arithm_expr(self, BINDING_POWERS_UNARY.rhs);
+                if (unary_rhs.error != PARSE_ERROR_NONE)
+                    return unary_rhs;
 
-                    Vec_base sub_nodes = vec_base_init(AST_node*);
-                    lhs = parser_state_ast_node_alloc(self, tok);
-                    if (!lhs || !vec_base_push_back(&sub_nodes, self->alloc, &unary_rhs.ast_node_ptr))
-                        return OOM_ERROR;
+                Vec_base sub_nodes = vec_base_init(AST_node*);
+                lhs = parser_state_ast_node_alloc(self, tok);
+                if (!lhs || !vec_base_push_back(&sub_nodes, self->alloc, &unary_rhs.ast_node_ptr))
+                    return OOM_ERROR;
 
-                    lhs->m_sub_nodes = (AST_node_ptr_slice){.m_size = sub_nodes.m_size, .m_data = sub_nodes.m_data};
-                    unary_rhs.ast_node_ptr->m_parent = lhs;
-                }
+                lhs->m_sub_nodes = (AST_node_ptr_slice){.m_size = sub_nodes.m_size, .m_data = sub_nodes.m_data};
+                unary_rhs.ast_node_ptr->m_parent = lhs;
                 break;
+            }
             default:
                 return syntax_error("Found invalid token <%s>", tok->m_line_number, str_base_data_const(&tok->m_id));
         }

@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <ctype.h>
+#include <errno.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -399,23 +400,22 @@ Primitive_op_result primitive_to_bool(Primitive *self, Allocator alloc){
         case PRIMITIVE_TAG_FLOAT:
             *self = (Primitive){.m_tag = PRIMITIVE_TAG_BOOL, .m_bool_data = (bool)self->m_float_data};
             break;
-        case PRIMITIVE_TAG_STR:
-            {
-                Str_view sv = str_view_trim_right_while(str_view_trim_left_while(str_base_to_str_view(&self->m_str_data_ptr->m_data), isspace), isspace);
+        case PRIMITIVE_TAG_STR:{
+            Str_view sv = str_view_trim_right_while(str_view_trim_left_while(str_base_to_str_view(&self->m_str_data_ptr->m_data), isspace), isspace);
 
-                Str_view match;
-                bool val;
-                if (
-                    (val = false, match = str_view_init("false"), cmp_eq_Str_view(&sv, &match)) ||
-                    (val = true,  match = str_view_init("true" ), cmp_eq_Str_view(&sv, &match))
-                ){
-                    primitive_deinit(self, alloc);
-                    *self = (Primitive){.m_tag = PRIMITIVE_TAG_BOOL, .m_bool_data = val};
-                }
-                else
-                    return runtime_error("Trying to convert <str> not containing \"false\" or \"true\" to <bool>");
+            Str_view match;
+            bool val;
+            if (
+                (val = false, match = str_view_init("false"), cmp_eq_Str_view(&sv, &match)) ||
+                (val = true,  match = str_view_init("true" ), cmp_eq_Str_view(&sv, &match))
+            ){
+                primitive_deinit(self, alloc);
+                *self = (Primitive){.m_tag = PRIMITIVE_TAG_BOOL, .m_bool_data = val};
             }
+            else
+                return runtime_error("Trying to convert <str> not containing \"false\" or \"true\" to <bool>");
             break;
+        }
         case PRIMITIVE_TAG_LIST:
             return runtime_error("Trying to convert <list> to <bool>");
     }
@@ -467,29 +467,22 @@ Primitive_op_result primitive_to_int(Primitive *self, Allocator alloc){
         case PRIMITIVE_TAG_FLOAT:
             *self = (Primitive){.m_tag = PRIMITIVE_TAG_INT, .m_int_data = (i64)self->m_float_data};
             break;
-        case PRIMITIVE_TAG_STR:
-            {
-                char *data = str_base_data(&self->m_str_data_ptr->m_data);
+        case PRIMITIVE_TAG_STR:{
+            Str_view sv = str_view_trim_right_while(str_view_trim_left_while(str_base_to_str_view(&self->m_str_data_ptr->m_data), isspace), isspace);
 
-                char *end;
-                i64 val = (i64)strtoll(data, &end, 0);
+            char *end;
+            i64 val = (errno = 0, (i64)strtoll(sv.m_str, &end, 0));
 
-                if (data == end)
-                    goto str_to_int_conversion_error;
-                else{
-                    while (*end){
-                        if (*end != ' '){
-                        str_to_int_conversion_error:
-                            return runtime_error("Failed to convert <str> to <int>");
-                        }
-                        ++end;
-                    }
-                }
+            if (end == sv.m_str || end != &sv.m_str[sv.m_size])
+                return runtime_error("Failed to convert <str> to <int>");
 
-                primitive_deinit(self, alloc);
-                *self = (Primitive){.m_tag = PRIMITIVE_TAG_INT, .m_int_data = val};
-            }
+            if (errno != 0)
+                return runtime_error("<str> converted to <int> is out of range");
+
+            primitive_deinit(self, alloc);
+            *self = (Primitive){.m_tag = PRIMITIVE_TAG_INT, .m_int_data = val};
             break;
+        }
         case PRIMITIVE_TAG_LIST:
             return runtime_error("Trying to convert <list> to <int>");
     }
@@ -511,29 +504,22 @@ Primitive_op_result primitive_to_float(Primitive *self, Allocator alloc){
             break;
         case PRIMITIVE_TAG_FLOAT:
             break;
-        case PRIMITIVE_TAG_STR:
-            {
-                char *data = str_base_data(&self->m_str_data_ptr->m_data);
+        case PRIMITIVE_TAG_STR:{
+            Str_view sv = str_view_trim_right_while(str_view_trim_left_while(str_base_to_str_view(&self->m_str_data_ptr->m_data), isspace), isspace);
 
-                char *end;
-                f64 val = (f64)strtod(data, &end);
+            char *end;
+            f64 val = (errno = 0, (f64)strtod(sv.m_str, &end));
 
-                if (data == end)
-                    goto str_to_float_conversion_error;
-                else{
-                    while (*end){
-                        if (*end != ' '){
-                        str_to_float_conversion_error:
-                            return runtime_error("Failed to convert <str> to <float>");
-                        }
-                        ++end;
-                    }
-                }
+            if (end == sv.m_str || end != &sv.m_str[sv.m_size])
+                return runtime_error("Failed to convert <str> to <float>");
 
-                primitive_deinit(self, alloc);
-                *self = (Primitive){.m_tag = PRIMITIVE_TAG_FLOAT, .m_float_data = val};
-            }
+            if (errno != 0)
+                return runtime_error("<str> converted to <float> is out of range");
+
+            primitive_deinit(self, alloc);
+            *self = (Primitive){.m_tag = PRIMITIVE_TAG_FLOAT, .m_float_data = val};
             break;
+        }
         case PRIMITIVE_TAG_LIST:
             return runtime_error("Trying to convert <list> to <float>");
     }
@@ -639,22 +625,21 @@ Primitive_op_result primitive_mov(Primitive *self, Allocator alloc, const Primit
                 case PRIMITIVE_TAG_CHAR:  self->m_bool_data = (bool)other->m_char_data;  break;
                 case PRIMITIVE_TAG_INT:   self->m_bool_data = (bool)other->m_int_data;   break;
                 case PRIMITIVE_TAG_FLOAT: self->m_bool_data = (bool)other->m_float_data; break;
-                case PRIMITIVE_TAG_STR:
-                    {
-                        Str_view sv = str_view_trim_right_while(str_view_trim_left_while(str_base_to_str_view(&other->m_str_data_ptr->m_data), isspace), isspace);
-                        Str_view match;
-                        bool val;
-                        if (
-                            (val = false, match = str_view_init("false"), cmp_eq_Str_view(&sv, &match)) ||
-                            (val = true,  match = str_view_init("true" ), cmp_eq_Str_view(&sv, &match))
-                        )
-                            self->m_bool_data = val;
-                        else
-                            return runtime_error("Trying to mov <str> not containing \"false\" or \"true\" to <bool>");
-                    }
+                case PRIMITIVE_TAG_STR:{
+                    Str_view sv = str_view_trim_right_while(str_view_trim_left_while(str_base_to_str_view(&other->m_str_data_ptr->m_data), isspace), isspace);
+                    Str_view match;
+                    bool val;
+                    if (
+                        (val = false, match = str_view_init("false"), cmp_eq_Str_view(&sv, &match)) ||
+                        (val = true,  match = str_view_init("true" ), cmp_eq_Str_view(&sv, &match))
+                    )
+                        self->m_bool_data = val;
+                    else
+                        return runtime_error("Trying to move <str> not containing \"false\" or \"true\" to <bool>");
                     break;
+                }
                 case PRIMITIVE_TAG_LIST:
-                    return runtime_error("Trying to mov <list> into <bool>");
+                    return runtime_error("Trying to move <list> into <bool>");
             }
             break;
         case PRIMITIVE_TAG_CHAR:
@@ -665,11 +650,11 @@ Primitive_op_result primitive_mov(Primitive *self, Allocator alloc, const Primit
                 case PRIMITIVE_TAG_FLOAT: self->m_char_data = (u8)other->m_float_data; break;
                 case PRIMITIVE_TAG_STR:
                     if (str_base_size(&other->m_str_data_ptr->m_data) != 1)
-                        return runtime_error("Trying to mov <str> with size != 1 into <char>");
+                        return runtime_error("Trying to move <str> with size != 1 into <char>");
                     self->m_char_data = (u8)str_base_data_const(&other->m_str_data_ptr->m_data)[0];
                     break;
                 case PRIMITIVE_TAG_LIST:
-                    return runtime_error("Trying to mov <list> into <char>");
+                    return runtime_error("Trying to move <list> into <char>");
             }
             break;
         case PRIMITIVE_TAG_INT:
@@ -678,29 +663,23 @@ Primitive_op_result primitive_mov(Primitive *self, Allocator alloc, const Primit
                 case PRIMITIVE_TAG_CHAR:  self->m_int_data = other->m_char_data;       break;
                 case PRIMITIVE_TAG_INT:   self->m_int_data = other->m_int_data;        break;
                 case PRIMITIVE_TAG_FLOAT: self->m_int_data = (i64)other->m_float_data; break;
-                case PRIMITIVE_TAG_STR:
-                    {
-                        const char *data = str_base_data_const(&other->m_str_data_ptr->m_data);
+                case PRIMITIVE_TAG_STR:{
+                    Str_view sv = str_view_trim_right_while(str_view_trim_left_while(str_base_to_str_view(&other->m_str_data_ptr->m_data), isspace), isspace);
 
-                        char *end;
-                        i64 val = (i64)strtoll(data, &end, 0);
+                    char *end;
+                    i64 val = (errno = 0, (i64)strtoll(sv.m_str, &end, 0));
 
-                        if (data == end)
-                            goto str_to_int_mov_error;
-                        else{
-                            while (*end){
-                                if (*end != ' '){
-                                str_to_int_mov_error:
-                                    return runtime_error("Failed to mov <str> into <int>");
-                                }
-                            }
-                        }
+                    if (end == sv.m_str || end != &sv.m_str[sv.m_size])
+                        return runtime_error("Failed to convert <str> to <int> during move");
 
-                        self->m_int_data = val;
-                    }
+                    if (errno != 0)
+                        return runtime_error("<str> converted to <int> is out of range during move");
+
+                    self->m_int_data = val;
                     break;
+                }
                 case PRIMITIVE_TAG_LIST:
-                    return runtime_error("Trying to mov <list> into <int>");
+                    return runtime_error("Trying to move <list> into <int>");
             }
             break;
         case PRIMITIVE_TAG_FLOAT:
@@ -709,29 +688,23 @@ Primitive_op_result primitive_mov(Primitive *self, Allocator alloc, const Primit
                 case PRIMITIVE_TAG_CHAR:  self->m_int_data = other->m_char_data;       break;
                 case PRIMITIVE_TAG_INT:   self->m_int_data = other->m_int_data;        break;
                 case PRIMITIVE_TAG_FLOAT: self->m_int_data = (i64)other->m_float_data; break;
-                case PRIMITIVE_TAG_STR:
-                    {
-                        const char *data = str_base_data_const(&other->m_str_data_ptr->m_data);
+                case PRIMITIVE_TAG_STR:{
+                    Str_view sv = str_view_trim_right_while(str_view_trim_left_while(str_base_to_str_view(&other->m_str_data_ptr->m_data), isspace), isspace);
 
-                        char *end;
-                        f64 val = (f64)strtod(data, &end);
+                    char *end;
+                    f64 val = (errno = 0, (f64)strtod(sv.m_str, &end));
 
-                        if (data == end)
-                            goto str_to_float_mov_error;
-                        else{
-                            while (*end){
-                                if (*end != ' '){
-                                str_to_float_mov_error:
-                                    return runtime_error("Failed to mov <str> into <int>");
-                                }
-                            }
-                        }
+                    if (end == sv.m_str || end != &sv.m_str[sv.m_size])
+                        return runtime_error("Failed to convert <str> to <float> during move");
 
-                        self->m_float_data = val;
-                    }
+                    if (errno != 0)
+                        return runtime_error("<str> converted to <float> is out of range during move");
+
+                    self->m_float_data = val;
                     break;
+                }
                 case PRIMITIVE_TAG_LIST:
-                    return runtime_error("Trying to mov <list> into <float>");
+                    return runtime_error("Trying to move <list> into <float>");
             }
             break;
         case PRIMITIVE_TAG_STR:
@@ -757,16 +730,16 @@ Primitive_op_result primitive_mov(Primitive *self, Allocator alloc, const Primit
                         return OOM_ERROR;
                     break;
                 case PRIMITIVE_TAG_LIST:
-                    return runtime_error("Trying to mov <list> into <str>");
+                    return runtime_error("Trying to move <list> into <str>");
             }
             break;
         case PRIMITIVE_TAG_LIST:
             switch (other->m_tag){
-                case PRIMITIVE_TAG_BOOL:  return runtime_error("Trying to mov <bool> into <list>");
-                case PRIMITIVE_TAG_CHAR:  return runtime_error("Trying to mov <char> into <list>");
-                case PRIMITIVE_TAG_INT:   return runtime_error("Trying to mov <int> into <list>");
-                case PRIMITIVE_TAG_FLOAT: return runtime_error("Trying to mov <float> into <list>");
-                case PRIMITIVE_TAG_STR:   return runtime_error("Trying to mov <str> into <list>");
+                case PRIMITIVE_TAG_BOOL:  return runtime_error("Trying to move <bool> into <list>");
+                case PRIMITIVE_TAG_CHAR:  return runtime_error("Trying to move <char> into <list>");
+                case PRIMITIVE_TAG_INT:   return runtime_error("Trying to move <int> into <list>");
+                case PRIMITIVE_TAG_FLOAT: return runtime_error("Trying to move <float> into <list>");
+                case PRIMITIVE_TAG_STR:   return runtime_error("Trying to move <str> into <list>");
                 case PRIMITIVE_TAG_LIST:
                     primitive_deinit(self, alloc);
                     self->m_list_data_ptr = other->m_list_data_ptr;
@@ -828,16 +801,15 @@ Primitive_op_result primitive_mov_deref(Primitive *self, Allocator alloc, const 
                     else
                         goto truncate_str;
                     break;
-                case PRIMITIVE_TAG_STR:
-                    {
-                        usize other_size = str_base_size(&other->m_str_data_ptr->m_data);
-                        if (other_size == 0)
-                            return runtime_error("Trying to set <str>'s <char> to empty <str>");
-                        if (other_size > 1)
-                            return runtime_error("Trying to set <str>'s <char> to <str> with size > 0");
-                        str_base_data(&self->m_str_data_ptr->m_data)[i] = str_base_data_const(&other->m_str_data_ptr->m_data)[0];
-                    }
+                case PRIMITIVE_TAG_STR:{
+                    usize other_size = str_base_size(&other->m_str_data_ptr->m_data);
+                    if (other_size == 0)
+                        return runtime_error("Trying to set <str>'s <char> to empty <str>");
+                    if (other_size > 1)
+                        return runtime_error("Trying to set <str>'s <char> to <str> with size > 0");
+                    str_base_data(&self->m_str_data_ptr->m_data)[i] = str_base_data_const(&other->m_str_data_ptr->m_data)[0];
                     break;
+                }
                 case PRIMITIVE_TAG_LIST:
                     return runtime_error("Trying to to set <str>'s <char> to <list>");
                 truncate_str:
@@ -875,39 +847,37 @@ Primitive_op_result primitive_deref(Primitive *self, Allocator alloc, const Prim
         case PRIMITIVE_TAG_CHAR:  return runtime_error("Trying to index a <char>");
         case PRIMITIVE_TAG_INT:   return runtime_error("Trying to index an <int>");
         case PRIMITIVE_TAG_FLOAT: return runtime_error("Trying to index a <float>");
-        case PRIMITIVE_TAG_STR:
-            {
-                if (idx >= (i64)str_base_size(&self->m_str_data_ptr->m_data))
-                    return runtime_error("Idx out of range");
-                u8 c = (u8)str_base_data(&self->m_str_data_ptr->m_data)[idx];
-                primitive_deinit(self, alloc);
-                *self = (Primitive){.m_tag = PRIMITIVE_TAG_CHAR, .m_char_data = c};
-            }
+        case PRIMITIVE_TAG_STR:{
+            if (idx >= (i64)str_base_size(&self->m_str_data_ptr->m_data))
+                return runtime_error("Idx out of range");
+            u8 c = (u8)str_base_data(&self->m_str_data_ptr->m_data)[idx];
+            primitive_deinit(self, alloc);
+            *self = (Primitive){.m_tag = PRIMITIVE_TAG_CHAR, .m_char_data = c};
             break;
-        case PRIMITIVE_TAG_LIST:
-            {
-                if (idx >= (i64)self->m_list_data_ptr->m_data.m_size)
-                    return runtime_error("Idx out of range");
-                Primitive *val = vec_base_at(&self->m_list_data_ptr->m_data, (usize)idx);
-                Primitive new_val = {.m_tag = val->m_tag};
-                switch (val->m_tag){
-                    case PRIMITIVE_TAG_BOOL:  new_val.m_bool_data  = val->m_bool_data;  break;
-                    case PRIMITIVE_TAG_CHAR:  new_val.m_char_data  = val->m_char_data;  break;
-                    case PRIMITIVE_TAG_INT:   new_val.m_int_data   = val->m_int_data;   break;
-                    case PRIMITIVE_TAG_FLOAT: new_val.m_float_data = val->m_float_data; break;
-                    case PRIMITIVE_TAG_STR:
-                        new_val.m_str_data_ptr = val->m_str_data_ptr;
-                        ++new_val.m_str_data_ptr->m_ref_count;
-                        break;
-                    case PRIMITIVE_TAG_LIST:
-                        new_val.m_list_data_ptr = val->m_list_data_ptr;
-                        ++new_val.m_list_data_ptr->m_ref_count;
-                        break;
-                }
-                primitive_deinit(self, alloc);
-                *self = new_val;
+        }
+        case PRIMITIVE_TAG_LIST:{
+            if (idx >= (i64)self->m_list_data_ptr->m_data.m_size)
+                return runtime_error("Idx out of range");
+            Primitive *val = vec_base_at(&self->m_list_data_ptr->m_data, (usize)idx);
+            Primitive new_val = {.m_tag = val->m_tag};
+            switch (val->m_tag){
+                case PRIMITIVE_TAG_BOOL:  new_val.m_bool_data  = val->m_bool_data;  break;
+                case PRIMITIVE_TAG_CHAR:  new_val.m_char_data  = val->m_char_data;  break;
+                case PRIMITIVE_TAG_INT:   new_val.m_int_data   = val->m_int_data;   break;
+                case PRIMITIVE_TAG_FLOAT: new_val.m_float_data = val->m_float_data; break;
+                case PRIMITIVE_TAG_STR:
+                    new_val.m_str_data_ptr = val->m_str_data_ptr;
+                    ++new_val.m_str_data_ptr->m_ref_count;
+                    break;
+                case PRIMITIVE_TAG_LIST:
+                    new_val.m_list_data_ptr = val->m_list_data_ptr;
+                    ++new_val.m_list_data_ptr->m_ref_count;
+                    break;
             }
+            primitive_deinit(self, alloc);
+            *self = new_val;
             break;
+        }
     }
 
     return (Primitive_op_result){0};

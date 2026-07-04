@@ -1,0 +1,3 @@
+let i: int = "0x33";
+
+print("i: "); print(i); print('\n');

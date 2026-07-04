@@ -130,16 +130,15 @@ Lex_result lex(Arena *arena, const char *path){
                 break;
             case STR_GETLINE_ERROR_OOM:
                 return oom_error();
-            case STR_GETLINE_ERROR_FERROR:
-                {
-                    Str_base_result error_info = str_base_init_raw(state.alloc, "<ferror> during tokenization");
-                    if (!error_info.success)
-                        return oom_error();
+            case STR_GETLINE_ERROR_FERROR:{
+                Str_base_result error_info = str_base_init_raw(state.alloc, "<ferror> during tokenization");
+                if (!error_info.success)
+                    return oom_error();
 
-                    lexer_state_cleanup(&state);
+                lexer_state_cleanup(&state);
 
-                    return (Lex_result){.error_info = error_info.result, .error = LEX_ERROR_FILE};
-                }
+                return (Lex_result){.error_info = error_info.result, .error = LEX_ERROR_FILE};
+            }
         }
     }
 

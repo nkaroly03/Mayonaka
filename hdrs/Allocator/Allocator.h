@@ -23,7 +23,8 @@ typedef struct Allocator{
     const struct Allocator_vtable *m_vtable;
 } Allocator;
 
-#define assert_alignment(type, alignment) (assert(is_power_of_2((alignment)) && "Alignments are always a power of 2"), assert((alignment) >= alignof(type) && "Alignment is not strict enough for given type"))
+#define assert_alignment(type, alignment) \
+    (assert(is_power_of_2((alignment)) && "Alignments are always a power of 2"), assert((alignment) >= alignof(type) && "Alignment is not strict enough for given type"))
 
 void* allocator_alloc_(Allocator alloc, usize alignment, usize byte_size);
 bool allocator_resize_(Allocator alloc, void *ptr, usize old_byte_size, usize new_byte_size);
