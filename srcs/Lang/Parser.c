@@ -320,13 +320,6 @@ static bool parser_state_for_to_while_tokens_push_back(Parser_state *self, Vec_b
 }
 
 static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
-    Vec_base for_to_while_tokens = vec_base_init(Token);
-    #define for_to_while_push_back(id, token_type) \
-        do{ \
-            if (!parser_state_for_to_while_tokens_push_back(self, &for_to_while_tokens, (id), (token_type))) \
-                return OOM_ERROR; \
-        } while (0)
-
     Parser_state_parse_result parse_result;
     AST_node *node, *node_temp;
     Vec_base sub_nodes = vec_base_init(AST_node*);
@@ -558,15 +551,26 @@ static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
 
             const char *capture_id = str_base_data_const(&for_capture_node->m_token->m_id);
 
-            Str_base_result end_var_id = str_base_init_fmt(self->alloc, "$%s", capture_id);
+            Str_base_result start_var_id = str_base_init_fmt(self->alloc, "$%s_start", capture_id);
+            if (!start_var_id.success)
+                return OOM_ERROR;
+            char *start_var = str_base_data(&start_var_id.result);
+
+            Str_base_result end_var_id = str_base_init_fmt(self->alloc, "$%s_end", capture_id);
             if (!end_var_id.success)
                 return OOM_ERROR;
+            char *end_var = str_base_data(&end_var_id.result);
 
-            const char *end_var = str_base_data_const(&end_var_id.result);
+            Vec_base for_to_while_tokens = vec_base_init(Token);
+            #define for_to_while_push_back(id, token_type) \
+                do{ \
+                    if (!parser_state_for_to_while_tokens_push_back(self, &for_to_while_tokens, (id), (token_type))) \
+                        return OOM_ERROR; \
+                } while (0)
 
             for_to_while_push_back("{", TOKEN_TYPE_LBRACE);
             for_to_while_push_back("let", TOKEN_TYPE_LET);
-            for_to_while_push_back(capture_id, TOKEN_TYPE_ID);
+            for_to_while_push_back(start_var, TOKEN_TYPE_ID);
             for_to_while_push_back(":", TOKEN_TYPE_COLON);
             for_to_while_push_back("int", TOKEN_TYPE_INT);
             for_to_while_push_back("=", TOKEN_TYPE_EQUALS1);
@@ -585,21 +589,28 @@ static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
             for_to_while_push_back(";", TOKEN_TYPE_SEMICOLON);
             for_to_while_push_back("while", TOKEN_TYPE_WHILE);
             for_to_while_push_back("(", TOKEN_TYPE_LPAREN);
-            for_to_while_push_back(capture_id, TOKEN_TYPE_ID);
+            for_to_while_push_back(start_var, TOKEN_TYPE_ID);
             for_to_while_push_back("<", TOKEN_TYPE_LESS_THAN1);
             for_to_while_push_back(end_var, TOKEN_TYPE_ID);
             for_to_while_push_back(")", TOKEN_TYPE_RPAREN);
             for_to_while_push_back("{", TOKEN_TYPE_LBRACE);
+            for_to_while_push_back("let", TOKEN_TYPE_LET);
+            for_to_while_push_back(capture_id, TOKEN_TYPE_ID);
+            for_to_while_push_back(":", TOKEN_TYPE_COLON);
+            for_to_while_push_back("int", TOKEN_TYPE_INT);
+            for_to_while_push_back("=", TOKEN_TYPE_EQUALS1);
+            for_to_while_push_back(start_var, TOKEN_TYPE_ID);
+            for_to_while_push_back(";", TOKEN_TYPE_SEMICOLON);
+            for_to_while_push_back(start_var, TOKEN_TYPE_ID);
+            for_to_while_push_back("=", TOKEN_TYPE_EQUALS1);
+            for_to_while_push_back(start_var, TOKEN_TYPE_ID);
+            for_to_while_push_back("+", TOKEN_TYPE_PLUS);
+            for_to_while_push_back("1", TOKEN_TYPE_INT_LIT);
+            for_to_while_push_back(";", TOKEN_TYPE_SEMICOLON);
             if (!for_body_empty)
                 for (usize i = for_body_start_pos; i < self->token_idx; ++i)
                     if (!vec_base_push_back(&for_to_while_tokens, self->alloc, &self->tokens.m_data[i]))
                         return OOM_ERROR;
-            for_to_while_push_back(capture_id, TOKEN_TYPE_ID);
-            for_to_while_push_back("=", TOKEN_TYPE_EQUALS1);
-            for_to_while_push_back(capture_id, TOKEN_TYPE_ID);
-            for_to_while_push_back("+", TOKEN_TYPE_PLUS);
-            for_to_while_push_back("1", TOKEN_TYPE_INT_LIT);
-            for_to_while_push_back(";", TOKEN_TYPE_SEMICOLON);
             for_to_while_push_back("}", TOKEN_TYPE_RBRACE);
             for_to_while_push_back("}", TOKEN_TYPE_RBRACE);
 
@@ -620,6 +631,18 @@ static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
             node = parse_result.ast_node_ptr;
             break;
 
+        case TOKEN_TYPE_BREAK:
+        case TOKEN_TYPE_CONTINUE:
+            if (self->token_idx >= self->tokens.m_size || self->tokens.m_data[self->token_idx++].m_type != TOKEN_TYPE_SEMICOLON)
+                return syntax_error("<%s> must be followed by a <;>", tok->m_line_number, str_base_data_const(&tok->m_id));
+            
+            node = parser_state_ast_node_alloc(self, tok);
+            if (!node)
+                return OOM_ERROR;
+
+            node->m_sub_nodes = (AST_node_ptr_slice){.m_size = sub_nodes.m_size, .m_data = sub_nodes.m_data};
+            break;
+
         case TOKEN_TYPE_RETURN:
             if (self->token_idx >= self->tokens.m_size)
                 return syntax_error("<return> must be followed by a <;> or an arithmetic expression", tok->m_line_number);
@@ -637,8 +660,8 @@ static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
                     return OOM_ERROR;
 
                 parse_result.ast_node_ptr->m_parent = node;
-                node->m_sub_nodes = (AST_node_ptr_slice){.m_size = sub_nodes.m_size, .m_data = sub_nodes.m_data};
             }
+            node->m_sub_nodes = (AST_node_ptr_slice){.m_size = sub_nodes.m_size, .m_data = sub_nodes.m_data};
 
             if (self->token_idx >= self->tokens.m_size || self->tokens.m_data[self->token_idx++].m_type != TOKEN_TYPE_SEMICOLON)
                 return syntax_error("<return> statement must end with <;>", tok->m_line_number);

@@ -344,25 +344,27 @@ Lex_result lex(Arena *arena, const char *path){
                     sv = str_view_trim_left(sv, keyword_sv.m_size); \
                 } while (0)
 
-            if      (keyword_match("argv"  )) keyword_match_token_push_back(TOKEN_TYPE_ARGV);
-            else if (keyword_match("false" )) keyword_match_token_push_back(TOKEN_TYPE_FALSE);
-            else if (keyword_match("true"  )) keyword_match_token_push_back(TOKEN_TYPE_TRUE);
-            else if (keyword_match("and"   )) keyword_match_token_push_back(TOKEN_TYPE_AND);
-            else if (keyword_match("or"    )) keyword_match_token_push_back(TOKEN_TYPE_OR);
-            else if (keyword_match("not"   )) keyword_match_token_push_back(TOKEN_TYPE_NOT);
-            else if (keyword_match("fn"    )) keyword_match_token_push_back(TOKEN_TYPE_FN);
-            else if (keyword_match("let"   )) keyword_match_token_push_back(TOKEN_TYPE_LET);
-            else if (keyword_match("void"  )) keyword_match_token_push_back(TOKEN_TYPE_VOID);
-            else if (keyword_match("bool"  )) keyword_match_token_push_back(TOKEN_TYPE_BOOL);
-            else if (keyword_match("char"  )) keyword_match_token_push_back(TOKEN_TYPE_CHAR);
-            else if (keyword_match("int"   )) keyword_match_token_push_back(TOKEN_TYPE_INT);
-            else if (keyword_match("float" )) keyword_match_token_push_back(TOKEN_TYPE_FLOAT);
-            else if (keyword_match("str"   )) keyword_match_token_push_back(TOKEN_TYPE_STR);
-            else if (keyword_match("if"    )) keyword_match_token_push_back(TOKEN_TYPE_IF);
-            else if (keyword_match("else"  )) keyword_match_token_push_back(TOKEN_TYPE_ELSE);
-            else if (keyword_match("while" )) keyword_match_token_push_back(TOKEN_TYPE_WHILE);
-            else if (keyword_match("for"   )) keyword_match_token_push_back(TOKEN_TYPE_FOR);
-            else if (keyword_match("return")) keyword_match_token_push_back(TOKEN_TYPE_RETURN);
+            if      (keyword_match("argv"    )) keyword_match_token_push_back(TOKEN_TYPE_ARGV);
+            else if (keyword_match("false"   )) keyword_match_token_push_back(TOKEN_TYPE_FALSE);
+            else if (keyword_match("true"    )) keyword_match_token_push_back(TOKEN_TYPE_TRUE);
+            else if (keyword_match("and"     )) keyword_match_token_push_back(TOKEN_TYPE_AND);
+            else if (keyword_match("or"      )) keyword_match_token_push_back(TOKEN_TYPE_OR);
+            else if (keyword_match("not"     )) keyword_match_token_push_back(TOKEN_TYPE_NOT);
+            else if (keyword_match("fn"      )) keyword_match_token_push_back(TOKEN_TYPE_FN);
+            else if (keyword_match("let"     )) keyword_match_token_push_back(TOKEN_TYPE_LET);
+            else if (keyword_match("void"    )) keyword_match_token_push_back(TOKEN_TYPE_VOID);
+            else if (keyword_match("bool"    )) keyword_match_token_push_back(TOKEN_TYPE_BOOL);
+            else if (keyword_match("char"    )) keyword_match_token_push_back(TOKEN_TYPE_CHAR);
+            else if (keyword_match("int"     )) keyword_match_token_push_back(TOKEN_TYPE_INT);
+            else if (keyword_match("float"   )) keyword_match_token_push_back(TOKEN_TYPE_FLOAT);
+            else if (keyword_match("str"     )) keyword_match_token_push_back(TOKEN_TYPE_STR);
+            else if (keyword_match("if"      )) keyword_match_token_push_back(TOKEN_TYPE_IF);
+            else if (keyword_match("else"    )) keyword_match_token_push_back(TOKEN_TYPE_ELSE);
+            else if (keyword_match("while"   )) keyword_match_token_push_back(TOKEN_TYPE_WHILE);
+            else if (keyword_match("for"     )) keyword_match_token_push_back(TOKEN_TYPE_FOR);
+            else if (keyword_match("break"   )) keyword_match_token_push_back(TOKEN_TYPE_BREAK);
+            else if (keyword_match("continue")) keyword_match_token_push_back(TOKEN_TYPE_CONTINUE);
+            else if (keyword_match("return"  )) keyword_match_token_push_back(TOKEN_TYPE_RETURN);
             else{
                 Str_base_result id = str_base_init_str_view(state.alloc, id_sv);
                 if (!id.success || !vec_base_push_back(&state.tokens, state.alloc, &(Token){.m_type = TOKEN_TYPE_ID, .m_id = id.result, .m_line_number = state.line_number}))

@@ -89,17 +89,13 @@ static bool page_resize(void *state, void *ptr, usize old_byte_size, usize new_b
 
     usize page_aligned_old_byte_size = align_forward(old_byte_size, page_size), page_aligned_new_byte_size = align_forward(new_byte_size, page_size);
 
-    bool success = (new_byte_size <= old_byte_size);
+    bool success = (page_aligned_new_byte_size <= page_aligned_old_byte_size);
     if (success){
         if (page_aligned_new_byte_size < page_aligned_old_byte_size)
             VirtualFree((u8*)ptr + page_aligned_new_byte_size, page_aligned_old_byte_size - page_aligned_new_byte_size, MEM_DECOMMIT);
     }
-    else if (align_forward(new_byte_size, granularity) <= align_forward(old_byte_size, granularity)){
-        success = (
-            page_aligned_old_byte_size == page_aligned_new_byte_size ||
-            VirtualAlloc((u8*)ptr + page_aligned_old_byte_size, page_aligned_new_byte_size - page_aligned_old_byte_size, MEM_COMMIT, PAGE_READWRITE) != NULL
-        );
-    }
+    else if (align_forward(page_aligned_new_byte_size, granularity) == align_forward(page_aligned_old_byte_size, granularity))
+        success = (VirtualAlloc((u8*)ptr + page_aligned_old_byte_size, page_aligned_new_byte_size - page_aligned_old_byte_size, MEM_COMMIT, PAGE_READWRITE) != NULL);
 
     return success;
 }

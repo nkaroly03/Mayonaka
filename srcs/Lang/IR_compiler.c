@@ -95,14 +95,20 @@ typedef struct Id_info{
     Type_info type_info;
 } Id_info;
 
+typedef struct While_label_info{
+    usize start_label, end_label;
+    usize let_decl_count_stack_idx;
+} While_label_info;
+
 typedef struct IR_compiler_state{
     Allocator alloc;
-    usize label_counter;
     Vec_base fn_return_type_stack;
     Vec_base let_decl_count_stack;
     Vec_base id_stack;
     Umap_base id_info_map;
     Vec_base type_info_stack;
+    usize label_counter;
+    Vec_base while_label_stack;
     Str_base IR;
 } IR_compiler_state;
 
@@ -800,11 +806,14 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
         }
 
         case TOKEN_TYPE_WHILE:{
+            usize start_label = self->label_counter++;
+            usize end_label   = self->label_counter++;
+
             char while_start_label_str_buf[32];
             char while_end_label_str_buf[32];
 
-            sprintf(while_start_label_str_buf, "." LABEL_SYMBOL USIZE_PFMT, self->label_counter++);
-            sprintf(while_end_label_str_buf, "." LABEL_SYMBOL USIZE_PFMT, self->label_counter++);
+            sprintf(while_start_label_str_buf, "." LABEL_SYMBOL USIZE_PFMT, start_label);
+            sprintf(while_end_label_str_buf, "." LABEL_SYMBOL USIZE_PFMT, end_label);
 
             if (!str_base_append_fmt(&self->IR, self->alloc, "%s:\n", while_start_label_str_buf))
                 return OOM_ERROR;
@@ -823,13 +832,21 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
             add_instruction("%s %s", op_code_to_str(OP_CODE_JMPZ), while_end_label_str_buf);
 
             if (ast_node->m_sub_nodes.m_size > 1){
-                if (!vec_base_push_back(&self->let_decl_count_stack, self->alloc, &(usize){0}))
+                if (
+                    !vec_base_push_back(
+                        &self->while_label_stack,
+                        self->alloc,
+                        &(While_label_info){.start_label = start_label, .end_label = end_label, .let_decl_count_stack_idx = self->let_decl_count_stack.m_size}
+                    ) ||
+                    !vec_base_push_back(&self->let_decl_count_stack, self->alloc, &(usize){0})
+                )
                     return OOM_ERROR;
                 compile_result = IR_compiler_state_compile(self, ast_node->m_sub_nodes.m_data[1]);
                 if (compile_result.error != COMPILE_ERROR_NONE)
                     return compile_result;
                 if (!IR_compiler_state_pop_ids_in_current_scope(self))
                     return OOM_ERROR;
+                vec_base_pop_back_discard(&self->while_label_stack);
             }
 
             add_instruction("%s %s", op_code_to_str(OP_CODE_JMP), while_start_label_str_buf);
@@ -839,6 +856,28 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
             break;
         }
 
+        case TOKEN_TYPE_BREAK:
+        case TOKEN_TYPE_CONTINUE:{
+            if (self->while_label_stack.m_size == 0)
+                return syntax_error("<%s> must be used inside a loop", ast_node->m_token->m_line_number, str_base_data_const(&ast_node->m_token->m_id));
+            While_label_info while_label_info = *(While_label_info*)vec_base_at(&self->while_label_stack, self->while_label_stack.m_size - 1);
+            Vec_base type_info_stack_temp = vec_base_init(Type_info);
+            for (usize i = self->let_decl_count_stack.m_size; i-- > while_label_info.let_decl_count_stack_idx;){
+                for (usize let_decl_count = *(usize*)vec_base_at(&self->let_decl_count_stack, i); let_decl_count-- > 0;){
+                    if (!vec_base_push_back(&type_info_stack_temp, self->alloc, vec_base_pop_back_to(&self->type_info_stack, &(Type_info){0})))
+                        return OOM_ERROR;
+                    add_instruction("%s", op_code_to_str(OP_CODE_POP));
+                }
+            }
+            add_instruction(
+                "%s ." LABEL_SYMBOL USIZE_PFMT,
+                op_code_to_str(OP_CODE_JMP),
+                (ast_node->m_token->m_type == TOKEN_TYPE_BREAK) ? while_label_info.end_label : while_label_info.start_label
+            );
+            while (type_info_stack_temp.m_size > 0)
+                vec_base_push_back(&self->type_info_stack, self->alloc, vec_base_pop_back_to(&type_info_stack_temp, &(Type_info){0}));
+            break;
+        }
         case TOKEN_TYPE_RETURN:
             if (self->fn_return_type_stack.m_size == 0){
                 if (ast_node->m_sub_nodes.m_size != 1)
@@ -874,11 +913,12 @@ IR_compile_result IR_compile(Arena *arena, AST_node_ptr_slice ast_nodes){
 
     IR_compiler_state state = {
         .alloc                = arena_allocator(arena),
-        .label_counter        = 0,
         .let_decl_count_stack = vec_base_init(usize),
         .id_stack             = vec_base_init(Str_base),
         .id_info_map          = umap_base_init(Str_base, Id_info),
         .type_info_stack      = vec_base_init(Type_info),
+        .label_counter        = 0,
+        .while_label_stack    = vec_base_init(While_label_info),
         .IR                   = {0}
     };
 

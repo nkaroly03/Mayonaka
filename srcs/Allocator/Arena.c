@@ -20,17 +20,17 @@ typedef struct Arena_node{
 static void* arena_alloc(void *state, usize alignment, usize byte_size){
     Arena *a = state;
 
-    void *aligned_ptr;
+    usize aligned_ptr;
 
-    if (!a->m_head || (u8*)(aligned_ptr = (void*)align_forward((usize)a->m_current, alignment)) + byte_size > (u8*)a->m_end){
+    if (!a->m_head || (aligned_ptr = align_forward((usize)a->m_current, alignment)) + byte_size > (usize)a->m_end){
         usize old_byte_size = (usize)a->m_end - (usize)a->m_head;
         usize node_alloc_byte_size = sizeof(Arena_node) + 16 + byte_size + alignment;
 
         if (a->m_head){
-            if (allocator_resize(a->m_child_alloc, (u8*)a->m_head, old_byte_size, (usize)((u8*)aligned_ptr - (u8*)a->m_head) + byte_size)){
+            if (allocator_resize(a->m_child_alloc, (u8*)a->m_head, old_byte_size, (aligned_ptr - (usize)a->m_head) + byte_size)){
                 a->m_current = a->m_end = ((Arena_node*)a->m_head)->m_end = (u8*)aligned_ptr + byte_size;
 
-                return aligned_ptr;
+                return (void*)aligned_ptr;
             }
             node_alloc_byte_size = (old_byte_size + byte_size + alignment) * 2;
         }
@@ -45,12 +45,12 @@ static void* arena_alloc(void *state, usize alignment, usize byte_size){
         a->m_current = new_node + 1;
         a->m_end = new_node->m_end = (u8*)new_node + node_alloc_byte_size;
 
-        aligned_ptr = (void*)align_forward((usize)a->m_current, alignment);
+        aligned_ptr = align_forward((usize)a->m_current, alignment);
     }
 
     a->m_current = (u8*)aligned_ptr + byte_size;
 
-    return aligned_ptr;
+    return (void*)aligned_ptr;
 }
 static bool arena_resize(void *state, void *ptr, usize old_byte_size, usize new_byte_size){
     Arena *a = state;
@@ -58,14 +58,14 @@ static bool arena_resize(void *state, void *ptr, usize old_byte_size, usize new_
     bool success = (new_byte_size <= old_byte_size);
 
     if ((u8*)a->m_current == (u8*)ptr + old_byte_size){
-        void *new_current = (u8*)ptr + new_byte_size;
+        usize new_current = (usize)ptr + new_byte_size;
 
-        success = (new_current <= a->m_end);
+        success = (new_current <= (usize)a->m_end);
         if (success)
-            a->m_current = new_current;
-        else if (allocator_resize(a->m_child_alloc, (u8*)a->m_head, (usize)((u8*)a->m_end - (u8*)a->m_head), (usize)((u8*)new_current - (u8*)a->m_head))){
+            a->m_current = (void*)new_current;
+        else if (allocator_resize(a->m_child_alloc, (u8*)a->m_head, (usize)((u8*)a->m_end - (u8*)a->m_head), new_current - (usize)a->m_head)){
             success = true;
-            a->m_current = a->m_end = ((Arena_node*)a->m_head)->m_end = new_current;
+            a->m_current = a->m_end = ((Arena_node*)a->m_head)->m_end = (void*)new_current;
         }
     }
 

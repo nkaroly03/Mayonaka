@@ -15,7 +15,7 @@ static void* raw_malloc_alloc(void *state, usize alignment, usize byte_size){
 
     assert(alignment <= alignof(max_align_t) && "Raw malloc only supports alignment upto alignof(max_align_t)");
 
-    return (byte_size > 0) ? malloc(byte_size) : NULL;
+    return malloc(byte_size);
 }
 static bool raw_malloc_resize(void *state, void *ptr, usize old_byte_size, usize new_byte_size){
     (void)state;
