@@ -13,8 +13,8 @@
 typedef struct Snode Snode;
 
 typedef struct Arena_node{
-    Snode m_base;
-    void *m_end;
+    Snode base;
+    void *end;
 } Arena_node;
 
 static void* arena_alloc(void *state, usize alignment, usize byte_size){
@@ -28,7 +28,7 @@ static void* arena_alloc(void *state, usize alignment, usize byte_size){
 
         if (a->m_head){
             if (allocator_resize(a->m_child_alloc, (u8*)a->m_head, old_byte_size, (aligned_ptr - (usize)a->m_head) + byte_size)){
-                a->m_current = a->m_end = ((Arena_node*)a->m_head)->m_end = (u8*)aligned_ptr + byte_size;
+                a->m_current = a->m_end = ((Arena_node*)a->m_head)->end = (u8*)aligned_ptr + byte_size;
 
                 return (void*)aligned_ptr;
             }
@@ -39,11 +39,11 @@ static void* arena_alloc(void *state, usize alignment, usize byte_size){
         if (!new_node)
             return NULL;
 
-        new_node->m_base.m_next = a->m_head;
-        a->m_head = &new_node->m_base;
+        new_node->base.m_next = a->m_head;
+        a->m_head = &new_node->base;
 
         a->m_current = new_node + 1;
-        a->m_end = new_node->m_end = (u8*)new_node + node_alloc_byte_size;
+        a->m_end = new_node->end = (u8*)new_node + node_alloc_byte_size;
 
         aligned_ptr = align_forward((usize)a->m_current, alignment);
     }
@@ -65,7 +65,7 @@ static bool arena_resize(void *state, void *ptr, usize old_byte_size, usize new_
             a->m_current = (void*)new_current;
         else if (allocator_resize(a->m_child_alloc, (u8*)a->m_head, (usize)((u8*)a->m_end - (u8*)a->m_head), new_current - (usize)a->m_head)){
             success = true;
-            a->m_current = a->m_end = ((Arena_node*)a->m_head)->m_end = (void*)new_current;
+            a->m_current = a->m_end = ((Arena_node*)a->m_head)->end = (void*)new_current;
         }
     }
 
@@ -96,7 +96,7 @@ void arena_deinit(Arena *self){
     Snode *current = self->m_head, *next;
     while (current){
         next = current->m_next;
-        allocator_free(self->m_child_alloc, (u8*)current, (usize)((u8*)((Arena_node*)current)->m_end - (u8*)current));
+        allocator_free(self->m_child_alloc, (u8*)current, (usize)((u8*)((Arena_node*)current)->end - (u8*)current));
         current = next;
     }
 }

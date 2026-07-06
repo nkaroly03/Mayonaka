@@ -41,12 +41,12 @@ static Primitive_op_result primitive_cmp(Primitive *self, Allocator alloc, const
 
         bool cmp;
         switch (op){
-            case CMP_BIN_OP_EQ:  cmp = cmp_eq_Str_base (&self->m_str_data_ptr, &other->m_str_data_ptr); break;
-            case CMP_BIN_OP_NEQ: cmp = cmp_neq_Str_base(&self->m_str_data_ptr, &other->m_str_data_ptr); break;
-            case CMP_BIN_OP_LE:  cmp = cmp_le_Str_base (&self->m_str_data_ptr, &other->m_str_data_ptr); break;
-            case CMP_BIN_OP_LEQ: cmp = cmp_leq_Str_base(&self->m_str_data_ptr, &other->m_str_data_ptr); break;
-            case CMP_BIN_OP_GE:  cmp = cmp_ge_Str_base (&self->m_str_data_ptr, &other->m_str_data_ptr); break;
-            case CMP_BIN_OP_GEQ: cmp = cmp_geq_Str_base(&self->m_str_data_ptr, &other->m_str_data_ptr); break;
+            case CMP_BIN_OP_EQ:  cmp = cmp_eq_Str_base (&self->m_str_data_ptr->m_data, &other->m_str_data_ptr->m_data); break;
+            case CMP_BIN_OP_NEQ: cmp = cmp_neq_Str_base(&self->m_str_data_ptr->m_data, &other->m_str_data_ptr->m_data); break;
+            case CMP_BIN_OP_LE:  cmp = cmp_le_Str_base (&self->m_str_data_ptr->m_data, &other->m_str_data_ptr->m_data); break;
+            case CMP_BIN_OP_LEQ: cmp = cmp_leq_Str_base(&self->m_str_data_ptr->m_data, &other->m_str_data_ptr->m_data); break;
+            case CMP_BIN_OP_GE:  cmp = cmp_ge_Str_base (&self->m_str_data_ptr->m_data, &other->m_str_data_ptr->m_data); break;
+            case CMP_BIN_OP_GEQ: cmp = cmp_geq_Str_base(&self->m_str_data_ptr->m_data, &other->m_str_data_ptr->m_data); break;
         }
 
         primitive_deinit(self, alloc);

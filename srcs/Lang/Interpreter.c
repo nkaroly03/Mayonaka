@@ -225,13 +225,14 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                         switch (getline_result){
                             case STR_GETLINE_ERROR_NONE:
                                 break;
+                            case STR_GETLINE_ERROR_FEOF:
+                                if (str_base_push_back(&str_result, self->alloc, '\n'))
+                                    break;
+                                FALLTHROUGH;
                             case STR_GETLINE_ERROR_OOM:
                                 str_base_deinit(&str_result, self->alloc);
                                 return oom_error();
-                            case STR_GETLINE_ERROR_FEOF:
-                                str_base_deinit(&str_result, self->alloc);
-                                interpreter_state_deinit(self);
-                                return (Interpreter_run_result){.error_info = "<feof> on stdin", .error = INTERPRETER_RUN_ERROR_RUNTIME};
+                                break;
                             case STR_GETLINE_ERROR_FERROR:
                                 str_base_deinit(&str_result, self->alloc);
                                 interpreter_state_deinit(self);
@@ -261,12 +262,12 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                         }
 #else
                         struct termios old_settings, new_settings = (tcgetattr(STDIN_FILENO, &old_settings), old_settings);
-                        new_settings.c_lflag &= ~(ICANON | ECHO);
+                        new_settings.c_lflag = (tcflag_t)(new_settings.c_lflag & (tcflag_t)~(ICANON | ECHO));
                         new_settings.c_cc[VTIME] = 0;
                         new_settings.c_cc[VMIN]  = 0;
                         tcsetattr(STDIN_FILENO, TCSANOW, &new_settings);
                         if (read(STDIN_FILENO, &keypress, 1) > 0)
-                            while (read(STDIN_FILENO, &(char){0}, 1) > 0);
+                            tcflush(STDIN_FILENO, TCIFLUSH);
                         tcsetattr(STDIN_FILENO, TCSANOW, &old_settings);
 #endif // _WIN32
                         op_result = primitive_mov(
