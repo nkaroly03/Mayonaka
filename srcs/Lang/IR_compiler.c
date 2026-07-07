@@ -455,6 +455,11 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
             bool push_back_after_assignment = false;
             if (ast_node->m_parent){
                 switch (ast_node->m_parent->m_token->m_type){
+                    case TOKEN_TYPE_IF:
+                    case TOKEN_TYPE_WHILE:
+                        if (ast_node->m_parent->m_sub_nodes.m_data[0] != ast_node)
+                            break;
+                        FALLTHROUGH;
                     case TOKEN_TYPE_LPAREN:
                     case TOKEN_TYPE_TILDE:
                     case TOKEN_TYPE_NOT:

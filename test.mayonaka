@@ -1,14 +1,14 @@
 /*/
 
 for (start..end) |id|
-    expr;
+    expr
 
 current:
 {
     let id: int = start;
     let $id: int = end;
     while (id < $id){
-        expr;
+        expr
         id = id + 1;
     }
 }
@@ -20,8 +20,17 @@ new:
     while ($id1 < $id2){
         let id: int = $id1;
         $id1 = $id + 1;
-        expr;
+        expr
     }
 }
 
 /*/
+
+let i: int = 1;
+let s: str = "";
+while ((s = (scan("") != "\n"))){
+    print('<');
+    print(i);
+    print(">: " + s + '\n');
+    i = i + 1;
+}
