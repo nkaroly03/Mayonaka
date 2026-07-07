@@ -49,7 +49,7 @@ all: $(BIN_DIR)/$(BIN)
 remake: clean all
 
 $(BIN_DIR)/$(BIN): $(OBJ_DIR)/$(OBJ) $(ALLOCATOR_OBJS) $(DATA_STRUCTURE_OBJS) $(LANG_OBJS) $(RANDOM_OBJS) $(UTILS_OBJS) | $(BIN_DIR)
-	$(CC) $(CFLAGS) $^ -o $@
+	$(CC) $(CFLAGS) $^ -lm -o $@
 
 $(OBJ_DIR)/$(OBJ): $(SRC) | $(OBJ_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@

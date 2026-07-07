@@ -221,7 +221,15 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                         primitive_deinit(&val_to_print, self->alloc);
 
                         Str_base str_result = {0};
+#ifdef _WIN32
                         enum Str_getline_error getline_result = str_base_getline(&str_result, self->alloc, stdin);
+#else
+                        struct termios old_settings, new_settings = (tcgetattr(0, &old_settings), old_settings);
+                        new_settings.c_lflag |= (tcflag_t)ECHO;
+                        tcsetattr(0, TCSANOW, &new_settings);
+                        enum Str_getline_error getline_result = str_base_getline(&str_result, self->alloc, stdin);
+                        tcsetattr(0, TCSANOW, &old_settings);
+#endif // _WIN32
                         switch (getline_result){
                             case STR_GETLINE_ERROR_NONE:
                                 break;
@@ -232,7 +240,6 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                             case STR_GETLINE_ERROR_OOM:
                                 str_base_deinit(&str_result, self->alloc);
                                 return oom_error();
-                                break;
                             case STR_GETLINE_ERROR_FERROR:
                                 str_base_deinit(&str_result, self->alloc);
                                 interpreter_state_deinit(self);
@@ -261,14 +268,14 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                                 (void)getch();
                         }
 #else
-                        struct termios old_settings, new_settings = (tcgetattr(STDIN_FILENO, &old_settings), old_settings);
-                        new_settings.c_lflag = (tcflag_t)(new_settings.c_lflag & (tcflag_t)~(ICANON | ECHO));
+                        struct termios old_settings, new_settings = (tcgetattr(0, &old_settings), old_settings);
+                        new_settings.c_lflag &= (tcflag_t)~ICANON;
                         new_settings.c_cc[VTIME] = 0;
                         new_settings.c_cc[VMIN]  = 0;
-                        tcsetattr(STDIN_FILENO, TCSANOW, &new_settings);
-                        if (read(STDIN_FILENO, &keypress, 1) > 0)
-                            tcflush(STDIN_FILENO, TCIFLUSH);
-                        tcsetattr(STDIN_FILENO, TCSANOW, &old_settings);
+                        tcsetattr(0, TCSANOW, &new_settings);
+                        if (read(0, &keypress, 1) > 0)
+                            tcflush(0, TCIFLUSH);
+                        tcsetattr(0, TCSANOW, &old_settings);
 #endif // _WIN32
                         op_result = primitive_mov(
                             vec_base_at(&self->stack, self->stack.m_size - 1),
@@ -491,7 +498,16 @@ Interpreter_run_result interpreter_run(Allocator alloc, U8_slice bytecode, int a
         }
     }
 
+#ifdef _WIN32
     return interpreter_state_run(&state);
+#else
+    struct termios old_settings, new_settings = (tcgetattr(0, &old_settings), old_settings);
+    new_settings.c_lflag &= (tcflag_t)~ECHO;
+    tcsetattr(0, TCSANOW, &new_settings);
+    Interpreter_run_result result = interpreter_state_run(&state);
+    tcsetattr(0, TCSANOW, &old_settings);
+    return result;
+#endif // _WIN32
 
 oom_error:
     return (Interpreter_run_result){.error_info = "Out of memory", .error = INTERPRETER_RUN_ERROR_OOM};

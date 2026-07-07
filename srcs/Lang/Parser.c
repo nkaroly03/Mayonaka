@@ -240,7 +240,7 @@ static Parser_state_parse_result parser_state_parse_arithm_expr(Parser_state *se
                 }
                 ++self->token_idx;
                 break;
-            default:
+            default:{
                 if (!token_type_is_operation(op->m_type))
                     return syntax_error("Found invalid token <%s>", op->m_line_number, str_base_data_const(&op->m_id));
 
@@ -260,6 +260,7 @@ static Parser_state_parse_result parser_state_parse_arithm_expr(Parser_state *se
 
                 rhs_result.ast_node_ptr->m_parent = new_lhs;
                 break;
+            }
         }
 
         lhs->m_parent = new_lhs;
@@ -283,7 +284,7 @@ static Parser_state_parse_result parser_state_parse_type(Parser_state *self, boo
         return OOM_ERROR;
 
     switch (tok->m_type){
-        case TOKEN_TYPE_LBRACKET:
+        case TOKEN_TYPE_LBRACKET:{
             if (self->token_idx >= self->tokens.m_size || (tok = &self->tokens.m_data[self->token_idx++])->m_type != TOKEN_TYPE_RBRACKET)
                 return syntax_error("<[> must be closed by <]>", tok->m_line_number);
 
@@ -296,6 +297,7 @@ static Parser_state_parse_result parser_state_parse_type(Parser_state *self, boo
 
             parse_result.ast_node_ptr->m_parent = node;
             break;
+        }
         case TOKEN_TYPE_VOID:
             if (!void_is_allowed)
                 return syntax_error("<void> is not allowed as a type in the current context", tok->m_line_number);
@@ -376,7 +378,6 @@ static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
         case TOKEN_TYPE_FN:
             fprintf(stderr, "Not implemented");
             abort();
-            break;
         case TOKEN_TYPE_LET:
             node = parser_state_ast_node_alloc(self, tok);
             if (!node)
@@ -497,7 +498,7 @@ static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
             node->m_sub_nodes = (AST_node_ptr_slice){.m_size = sub_nodes.m_size, .m_data = sub_nodes.m_data};
             break;
 
-        case TOKEN_TYPE_FOR:
+        case TOKEN_TYPE_FOR:{
             if (self->token_idx >= self->tokens.m_size || self->tokens.m_data[self->token_idx++].m_type != TOKEN_TYPE_LPAREN)
                 return syntax_error("<for> must be followed by <(>", tok->m_line_number);
 
@@ -630,6 +631,7 @@ static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
 
             node = parse_result.ast_node_ptr;
             break;
+        }
 
         case TOKEN_TYPE_BREAK:
         case TOKEN_TYPE_CONTINUE:

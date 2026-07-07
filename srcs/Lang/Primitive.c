@@ -341,19 +341,13 @@ void primitive_deinit(const Primitive *self, Allocator alloc){
         case PRIMITIVE_TAG_FLOAT:
             break;
         case PRIMITIVE_TAG_STR:
-            // fprintf(stderr, "str_ref_count_before: %zu\n", self->m_str_data_ptr->m_ref_count);
-            // fprintf(stderr, "str_ref_count_after:  %zu\n", self->m_str_data_ptr->m_ref_count - 1);
             if (--self->m_str_data_ptr->m_ref_count == 0){
-                // fprintf(stderr, "str deinit\n");
                 str_base_deinit(&self->m_str_data_ptr->m_data, alloc);
                 allocator_free(alloc, self->m_str_data_ptr, 1);
             }
             break;
         case PRIMITIVE_TAG_LIST:
-            // fprintf(stderr, "list_ref_count_before: %zu\n", self->m_list_data_ptr->m_ref_count);
-            // fprintf(stderr, "list_ref_count_after:  %zu\n", self->m_list_data_ptr->m_ref_count - 1);
             if (--self->m_list_data_ptr->m_ref_count == 0){
-                // fprintf(stderr, "list deinit\n");
                 vec_base_for_each(self->m_list_data_ptr->m_data, it){
                     primitive_deinit(it, alloc);
                 }
@@ -591,7 +585,7 @@ Primitive_op_result primitive_neg(Primitive *self){
     switch (self->m_tag){
         case PRIMITIVE_TAG_BOOL:  self->m_bool_data  = !self->m_bool_data;     break;
         case PRIMITIVE_TAG_CHAR:  self->m_char_data  = (u8)-self->m_char_data; break;
-        case PRIMITIVE_TAG_INT:   self->m_int_data   = (i64)-self->m_int_data; break;
+        case PRIMITIVE_TAG_INT:   self->m_int_data   = -self->m_int_data;      break;
         case PRIMITIVE_TAG_FLOAT: self->m_float_data = -self->m_float_data;    break;
         case PRIMITIVE_TAG_STR:   return runtime_error("Trying to use negation on <str>");
         case PRIMITIVE_TAG_LIST:  return runtime_error("Trying to use negation on <list>");
@@ -605,7 +599,7 @@ Primitive_op_result primitive_bneg(Primitive *self){
     switch (self->m_tag){
         case PRIMITIVE_TAG_BOOL:  self->m_bool_data = !self->m_bool_data;     break;
         case PRIMITIVE_TAG_CHAR:  self->m_char_data = (u8)~self->m_char_data; break;
-        case PRIMITIVE_TAG_INT:   self->m_int_data  = (i64)~self->m_int_data; break;
+        case PRIMITIVE_TAG_INT:   self->m_int_data  = ~self->m_int_data;      break;
         case PRIMITIVE_TAG_FLOAT: return runtime_error("Trying to use bitwise negation on <float>");
         case PRIMITIVE_TAG_STR:   return runtime_error("Trying to use bitwise negation on <str>");
         case PRIMITIVE_TAG_LIST:  return runtime_error("Trying to use bitwise negation on <list>");

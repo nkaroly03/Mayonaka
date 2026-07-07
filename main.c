@@ -68,8 +68,8 @@ int main(const int argc, const char *const *const argv){
             goto syntax_error;
     }
 
-    // token_slice_print(lex_result.tokens);
-    // printf("------------------------------------------------------------------------------------------------\n");
+    token_slice_print(lex_result.tokens);
+    printf("------------------------------------------------------------------------------------------------\n");
 
     Parse_result parse_result = parse(&arena, lex_result.tokens);
     switch (parse_result.error){
@@ -82,8 +82,8 @@ int main(const int argc, const char *const *const argv){
             goto syntax_error;
     }
 
-    // ast_node_ptr_slice_print(parse_result.ast_nodes);
-    // printf("------------------------------------------------------------------------------------------------\n");
+    ast_node_ptr_slice_print(parse_result.ast_nodes);
+    printf("------------------------------------------------------------------------------------------------\n");
 
     IR_compile_result IR_compile_result = IR_compile(&arena, parse_result.ast_nodes);
 
@@ -97,8 +97,8 @@ int main(const int argc, const char *const *const argv){
             goto syntax_error;
     }
 
-    // printf("%s", str_base_data(&IR_compile_result.IR));
-    // printf("------------------------------------------------------------------------------------------------\n");
+    printf("%s", str_base_data(&IR_compile_result.IR));
+    printf("------------------------------------------------------------------------------------------------\n");
 
     Bytecode_compile_result bytecode_compile_result = bytecode_compile(&arena, &IR_compile_result.IR);
     switch (bytecode_compile_result.error){
@@ -111,13 +111,13 @@ int main(const int argc, const char *const *const argv){
             goto syntax_error;
     }
 
-    // for (usize i = 0; i < bytecode_compile_result.bytecode.m_size; ++i){
-        // if (i % 10 == 0)
-            // putchar('\n');
-        // printf("%hhu, ", bytecode_compile_result.bytecode.m_data[i]);
-    // }
+    for (usize i = 0; i < bytecode_compile_result.bytecode.m_size; ++i){
+        if (i % 10 == 0)
+            putchar('\n');
+        printf("%hhu, ", bytecode_compile_result.bytecode.m_data[i]);
+    }
 
-    // printf("\n------------------------------------------------------------------------------------------------\n");
+    printf("\n------------------------------------------------------------------------------------------------\n");
 
     Allocator interpreter_alloc = raw_malloc_allocator();
 

@@ -693,6 +693,10 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
 
             let_decl_type_info.m_tag = (enum Type_info_tag)(TYPE_INFO_TAG_BOOL + (type_node->m_token->m_type - TOKEN_TYPE_BOOL));
 
+            IR_compiler_state_compile_result compile_result = IR_compiler_state_compile(self, expr_node);
+            if (compile_result.error != COMPILE_ERROR_NONE)
+                return compile_result;
+            
             Umap_insert_result ires = umap_base_insert(
                 &self->id_info_map,
                 self->alloc,
@@ -709,10 +713,6 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                     return syntax_error("Identifier <%s> is already in use", id_node->m_token->m_line_number, str_base_data_const(&id_node->m_token->m_id));
             }
 
-            IR_compiler_state_compile_result compile_result = IR_compiler_state_compile(self, expr_node);
-            if (compile_result.error != COMPILE_ERROR_NONE)
-                return compile_result;
-            
             if (!vec_base_push_back(&self->id_stack, self->alloc, &id_node->m_token->m_id))
                 return OOM_ERROR;
 
@@ -875,7 +875,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                 (ast_node->m_token->m_type == TOKEN_TYPE_BREAK) ? while_label_info.end_label : while_label_info.start_label
             );
             while (type_info_stack_temp.m_size > 0)
-                vec_base_push_back(&self->type_info_stack, self->alloc, vec_base_pop_back_to(&type_info_stack_temp, &(Type_info){0}));
+                (void)vec_base_push_back(&self->type_info_stack, self->alloc, vec_base_pop_back_to(&type_info_stack_temp, &(Type_info){0}));
             break;
         }
         case TOKEN_TYPE_RETURN:
