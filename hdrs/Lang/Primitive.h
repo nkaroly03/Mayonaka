@@ -51,7 +51,7 @@ enum Primitive_op_error{
 
 typedef struct Primitive_op_result{
     enum Primitive_op_error error;
-    const char *error_msg;
+    const char *error_info;
 } Primitive_op_result;
 
 void primitive_deinit(const Primitive *self, Allocator alloc);

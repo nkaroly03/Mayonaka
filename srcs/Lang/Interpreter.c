@@ -53,7 +53,19 @@ static Interpreter_run_result interpreter_state_oom_error(Interpreter_state *sel
 }
 #define oom_error() interpreter_state_oom_error(self)
 
-static Primitive_op_result interpreter_state_call_un_op_fn(Interpreter_state *self, enum Op_code op_code){
+static Interpreter_run_result interpreter_state_primitive_op_error(Interpreter_state *self, Primitive_op_result op_result){
+    interpreter_state_deinit(self);
+    return (Interpreter_run_result){.error_info = op_result.error_info, .error = (enum Interpreter_run_error)op_result.error};
+}
+#define primitive_op_error(op_result) interpreter_state_primitive_op_error(self, (op_result))
+
+static Interpreter_run_result interpreter_state_runtime_error(Interpreter_state *self, const char *error_info){
+    interpreter_state_deinit(self);
+    return (Interpreter_run_result){.error_info = error_info, .error = INTERPRETER_RUN_ERROR_RUNTIME};
+}
+#define runtime_error(error_info) interpreter_state_runtime_error(self, (error_info))
+
+static Primitive_op_result interpreter_state_call_unary_op_fn(Interpreter_state *self, enum Op_code op_code){
     Primitive *last = vec_base_at(&self->stack, self->stack.m_size - 1);
     switch (op_code){
         case OP_CODE_TO_BOOL:  return primitive_to_bool (last, self->alloc);
@@ -69,7 +81,7 @@ static Primitive_op_result interpreter_state_call_un_op_fn(Interpreter_state *se
     }
 }
 
-static Primitive_op_result interpreter_state_call_bin_op_fn(Interpreter_state *self, enum Op_code op_code){
+static Primitive_op_result interpreter_state_call_binary_op_fn(Interpreter_state *self, enum Op_code op_code){
     Primitive *lhs = vec_base_at(&self->stack, self->stack.m_size - 2);
     Primitive *rhs = vec_base_at(&self->stack, self->stack.m_size - 1);
     switch (op_code){
@@ -96,7 +108,7 @@ static Primitive_op_result interpreter_state_call_bin_op_fn(Interpreter_state *s
         case OP_CODE_BOR:     return primitive_bor (lhs, rhs);
         case OP_CODE_XOR:     return primitive_xor (lhs, rhs);
 
-        default: unreachable();
+        default:              unreachable();
     }
 }
 
@@ -215,10 +227,8 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                         break;
                     }
                     case BUILTIN_FN_TAG_SCAN:{
-                        Primitive val_to_print;
-                        vec_base_pop_back_to(&self->stack, &val_to_print);
-                        primitive_print(&val_to_print);
-                        primitive_deinit(&val_to_print, self->alloc);
+                        Primitive *val_to_print = vec_base_at(&self->stack, self->stack.m_size - 1);
+                        primitive_print(val_to_print);
 
                         Str_base str_result = {0};
 #ifdef _WIN32
@@ -242,8 +252,7 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                                 return oom_error();
                             case STR_GETLINE_ERROR_FERROR:
                                 str_base_deinit(&str_result, self->alloc);
-                                interpreter_state_deinit(self);
-                                return (Interpreter_run_result){.error_info = "<ferror> on stdin", .error = INTERPRETER_RUN_ERROR_RUNTIME};
+                                return runtime_error("<ferror> on stdin");
                         }
 
                         Primitive scanned = {.m_tag = PRIMITIVE_TAG_STR, .m_str_data_ptr = allocator_alloc(self->alloc, Primitive_str_data, 1)};
@@ -253,10 +262,8 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                         }
                         *scanned.m_str_data_ptr = (Primitive_str_data){.m_ref_count = 1, .m_data = str_result};
 
-                        op_result = primitive_mov(vec_base_at(&self->stack, self->stack.m_size - 1), self->alloc, &scanned);
-                        primitive_deinit(&scanned, self->alloc);
-                        if (op_result.error != PRIMITIVE_OP_ERROR_NONE)
-                            goto primitive_op_error;
+                        primitive_deinit(val_to_print, self->alloc);
+                        *val_to_print = scanned;
                         break;
                     }
                     case BUILTIN_FN_TAG_POLL_KEYPRESS:{
@@ -277,49 +284,35 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                             tcflush(0, TCIFLUSH);
                         tcsetattr(0, TCSANOW, &old_settings);
 #endif // _WIN32
-                        op_result = primitive_mov(
-                            vec_base_at(&self->stack, self->stack.m_size - 1),
-                            self->alloc,
-                            &(Primitive){.m_tag = PRIMITIVE_TAG_CHAR, .m_char_data = (u8)keypress}
-                        );
-                        if (op_result.error != PRIMITIVE_OP_ERROR_NONE)
-                            goto primitive_op_error;
+                        if (!vec_base_push_back(&self->stack, self->alloc, &(Primitive){.m_tag = PRIMITIVE_TAG_CHAR, .m_char_data = (u8)keypress}))
+                            return oom_error();
                         break;
                     }
                     case BUILTIN_FN_TAG_LEN:{
                         Primitive len = {.m_tag = PRIMITIVE_TAG_INT};
 
-                        Primitive list_like;
-                        vec_base_pop_back_to(&self->stack, &list_like);
-                        switch (list_like.m_tag){
+                        Primitive *list_like = vec_base_at(&self->stack, self->stack.m_size - 1);
+                        switch (list_like->m_tag){
                             case PRIMITIVE_TAG_BOOL:
                             case PRIMITIVE_TAG_CHAR:
                             case PRIMITIVE_TAG_INT:
                             case PRIMITIVE_TAG_FLOAT:
-                                interpreter_state_deinit(self);
-                                return (Interpreter_run_result){.error_info = "Trying to get the length of a numeric type", .error = INTERPRETER_RUN_ERROR_RUNTIME};
+                                return runtime_error("Trying to get the length of a numeric type");
                             case PRIMITIVE_TAG_STR:
-                                len.m_int_data = (i64)str_base_size(&list_like.m_str_data_ptr->m_data);
+                                len.m_int_data = (i64)str_base_size(&list_like->m_str_data_ptr->m_data);
                                 break;
                             case PRIMITIVE_TAG_LIST:
-                                len.m_int_data = (i64)list_like.m_list_data_ptr->m_data.m_size;
+                                len.m_int_data = (i64)list_like->m_list_data_ptr->m_data.m_size;
                                 break;
                         }
-                        primitive_deinit(&list_like, self->alloc);
+                        primitive_deinit(list_like, self->alloc);
 
-                        op_result = primitive_mov(vec_base_at(&self->stack, self->stack.m_size - 1), self->alloc, &len);
-                        if (op_result.error != PRIMITIVE_OP_ERROR_NONE)
-                            goto primitive_op_error;
+                        *list_like = len;
                         break;
                     }
                     case BUILTIN_FN_TAG_RAND:
-                        op_result = primitive_mov(
-                            vec_base_at(&self->stack, self->stack.m_size - 1),
-                            self->alloc,
-                            &(Primitive){.m_tag = PRIMITIVE_TAG_INT, .m_int_data = (i64)xoshiro256_next(&self->rand)}
-                        );
-                        if (op_result.error != PRIMITIVE_OP_ERROR_NONE)
-                            goto primitive_op_error;
+                        if (!vec_base_push_back(&self->stack, self->alloc, &(Primitive){.m_tag = PRIMITIVE_TAG_INT, .m_int_data = (i64)xoshiro256_next(&self->rand)}))
+                            return oom_error();
                         break;
                     case BUILTIN_FN_TAG_PUSH_BACK:{
                         Primitive to_push;
@@ -328,8 +321,7 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                         Primitive *list = vec_base_at(&self->stack, self->stack.m_size - 1);
                         if (list->m_tag != PRIMITIVE_TAG_LIST){
                             primitive_deinit(&to_push, self->alloc);
-                            interpreter_state_deinit(self);
-                            return (Interpreter_run_result){.error_info = "<push_back> called on non-list type", .error = INTERPRETER_RUN_ERROR_RUNTIME};
+                            return runtime_error("<push_back> called on non-list type");
                         }
 
                         if (!vec_base_push_back(&list->m_list_data_ptr->m_data, self->alloc, &to_push)){
@@ -343,10 +335,8 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                     }
                     case BUILTIN_FN_TAG_POP_BACK:{
                         Primitive *list = vec_base_at(&self->stack, self->stack.m_size - 1);
-                        if (list->m_tag != PRIMITIVE_TAG_LIST){
-                            interpreter_state_deinit(self);
-                            return (Interpreter_run_result){.error_info = "<pop_back> called on non-list type", .error = INTERPRETER_RUN_ERROR_RUNTIME};
-                        }
+                        if (list->m_tag != PRIMITIVE_TAG_LIST)
+                            return runtime_error("<pop_back> called on non-list type");
 
                         Primitive popped;
                         vec_base_pop_back_to(&list->m_list_data_ptr->m_data, &popped);
@@ -370,7 +360,7 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
 
                 op_result = primitive_to_bool(condition, self->alloc);
                 if (op_result.error != PRIMITIVE_OP_ERROR_NONE)
-                    goto primitive_op_error;
+                    return primitive_op_error(op_result);
 
                 bool val = condition->m_bool_data;
                 primitive_deinit(condition, self->alloc);
@@ -391,9 +381,9 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
             case OP_CODE_TO_STR:
             case OP_CODE_NEG:
             case OP_CODE_BNEG:
-                op_result = interpreter_state_call_un_op_fn(self, op_code);
+                op_result = interpreter_state_call_unary_op_fn(self, op_code);
                 if (op_result.error != PRIMITIVE_OP_ERROR_NONE)
-                    goto primitive_op_error;
+                    return primitive_op_error(op_result);
                 break;
 
             case OP_CODE_MOV:{
@@ -406,7 +396,7 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
 
                 op_result = primitive_mov(lhs, self->alloc, rhs);
                 if (op_result.error != PRIMITIVE_OP_ERROR_NONE)
-                    goto primitive_op_error;
+                    return primitive_op_error(op_result);
 
                 primitive_deinit(rhs, self->alloc);
                 vec_base_pop_back_discard(&self->stack);
@@ -418,7 +408,7 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                 Primitive *rhs = vec_base_at(&self->stack, self->stack.m_size - 1);
                 op_result = primitive_mov_deref(lhs, self->alloc, idx, rhs);
                 if (op_result.error != PRIMITIVE_OP_ERROR_NONE)
-                    goto primitive_op_error;
+                    return primitive_op_error(op_result);
                 primitive_deinit(rhs, self->alloc);
                 primitive_deinit(idx, self->alloc);
                 primitive_deinit(lhs, self->alloc);
@@ -446,24 +436,17 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
             case OP_CODE_BAND:
             case OP_CODE_BOR:
             case OP_CODE_XOR:
-                op_result = interpreter_state_call_bin_op_fn(self, op_code);
+                op_result = interpreter_state_call_binary_op_fn(self, op_code);
                 if (op_result.error != PRIMITIVE_OP_ERROR_NONE)
-                    goto primitive_op_error;
+                    return primitive_op_error(op_result);
                 primitive_deinit(vec_base_at(&self->stack, self->stack.m_size - 1), self->alloc);
                 vec_base_pop_back_discard(&self->stack);
                 break;
         }
     }
 
-    interpreter_state_deinit(self);
-    return (Interpreter_run_result){.error_info = "Program must exit with the builtin <exit> function", .error = INTERPRETER_RUN_ERROR_RUNTIME};
-
-primitive_op_error:
-    interpreter_state_deinit(self);
-    return (Interpreter_run_result){.error_info = op_result.error_msg, .error = (enum Interpreter_run_error)op_result.error};
+    return runtime_error("Program must exit with the builtin <exit> function");
 }
-
-#undef oom_error
 
 // ------------------------------------------------------------------------------------------------
 
@@ -480,21 +463,18 @@ Interpreter_run_result interpreter_run(Allocator alloc, U8_slice bytecode, int a
     };
 
     if (!state.argv.m_list_data_ptr)
-        goto oom_error;
+        return (Interpreter_run_result){.error_info = "Out of memory", .error = INTERPRETER_RUN_ERROR_OOM};
 
     *state.argv.m_list_data_ptr = (Primitive_list_data){.m_ref_count = 1, .m_data = vec_base_init(Primitive)};
 
     for (int i = 0; i < argc; ++i){
         Primitive temp = {.m_tag = PRIMITIVE_TAG_STR, .m_str_data_ptr = allocator_alloc(state.alloc, Primitive_str_data, 1)};
-        if (!temp.m_str_data_ptr){
-            interpreter_state_deinit(&state);
-            goto oom_error;
-        }
+        if (!temp.m_str_data_ptr)
+            return interpreter_state_oom_error(&state);
         *temp.m_str_data_ptr = (Primitive_str_data){.m_ref_count = 1, .m_data = {0}};
         if (!str_base_assign_raw(&temp.m_str_data_ptr->m_data, state.alloc, argv[i]) || !vec_base_push_back(&state.argv.m_list_data_ptr->m_data, state.alloc, &temp)){
             primitive_deinit(&temp, state.alloc);
-            interpreter_state_deinit(&state);
-            goto oom_error;
+            return interpreter_state_oom_error(&state);
         }
     }
 
@@ -508,7 +488,4 @@ Interpreter_run_result interpreter_run(Allocator alloc, U8_slice bytecode, int a
     tcsetattr(0, TCSANOW, &old_settings);
     return result;
 #endif // _WIN32
-
-oom_error:
-    return (Interpreter_run_result){.error_info = "Out of memory", .error = INTERPRETER_RUN_ERROR_OOM};
 }

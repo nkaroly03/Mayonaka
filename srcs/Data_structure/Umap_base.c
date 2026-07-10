@@ -189,7 +189,7 @@ Umap_insert_result umap_base_insert(Umap_base *self, Allocator alloc, const void
         if (new_node){
             if (self->m_bucket_count > 0){
                 if ((f32)self->m_size / (f32)self->m_bucket_count >= UMAP_BASE_LOAD_FACTOR)
-                    umap_base_rehash(self, alloc, self->m_bucket_count * 2);
+                    (void)umap_base_rehash(self, alloc, self->m_bucket_count * 2);
             }
             else if (!umap_base_rehash(self, alloc, 32)){
                 snode_dealloc(new_node, alloc, node_size);
@@ -316,7 +316,7 @@ bool umap_base_rehash(Umap_base *self, Allocator alloc, usize new_bucket_capacit
     bool success = (new_bucket_capacity > 0);
     if (success){
         Snode *new_buckets = allocator_alloc(alloc, Snode, new_bucket_capacity);
-        success = new_buckets;
+        success = (new_buckets != NULL);
         if (success){
             Snode_offsets offsets = umap_base_snode_offsets(self);
 

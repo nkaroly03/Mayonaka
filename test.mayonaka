@@ -25,12 +25,3 @@ new:
 }
 
 /*/
-
-let i: int = 1;
-let s: str = "";
-while ((s = (scan("") != "\n"))){
-    print('<');
-    print(i);
-    print(">: " + s + '\n');
-    i = i + 1;
-}

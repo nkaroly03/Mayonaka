@@ -18,9 +18,9 @@
 
 // ------------------------------------------------------------------------------------------------
 
-static const Primitive_op_result OOM_ERROR = {.error = PRIMITIVE_OP_ERROR_OOM, .error_msg = "Out of memory"};
+static const Primitive_op_result OOM_ERROR = {.error = PRIMITIVE_OP_ERROR_OOM, .error_info = "Out of memory"};
 
-#define runtime_error(msg) (Primitive_op_result){.error = PRIMITIVE_OP_ERROR_RUNTIME, .error_msg = (msg)}
+#define runtime_error(error_info_) (Primitive_op_result){.error = PRIMITIVE_OP_ERROR_RUNTIME, .error_info = (error_info_)}
 
 enum Cmp_bin_op{
     CMP_BIN_OP_EQ,
@@ -37,7 +37,7 @@ static Primitive_op_result primitive_cmp(Primitive *self, Allocator alloc, const
 
     if (self->m_tag == PRIMITIVE_TAG_STR || other->m_tag == PRIMITIVE_TAG_STR){
         if (self->m_tag != PRIMITIVE_TAG_STR || other->m_tag != PRIMITIVE_TAG_STR)
-            return runtime_error("Trying to compare a <str> to a non-str");
+            return runtime_error("Trying to compare <str> to non-str");
 
         bool cmp;
         switch (op){

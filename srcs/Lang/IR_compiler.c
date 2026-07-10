@@ -125,10 +125,7 @@ static IR_compiler_state_compile_result IR_compiler_state_syntax_error(IR_compil
     Str_base_result error_info = str_base_init_fmt_va_list(self->alloc, fmt, args);
     va_end(args);
 
-    return (error_info.success)
-        ? (IR_compiler_state_compile_result){.error_info = error_info.result, .error = COMPILE_ERROR_SYNTAX}
-        : (IR_compiler_state_compile_result){.error = COMPILE_ERROR_OOM}
-    ;
+    return (error_info.success) ? (IR_compiler_state_compile_result){.error_info = error_info.result, .error = COMPILE_ERROR_SYNTAX} : OOM_ERROR;
 }
 #define syntax_error(...) IR_compiler_state_syntax_error(self, "On line <" USIZE_PFMT ">: " __VA_ARGS__)
 
@@ -300,34 +297,6 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
 
             enum Builtin_fn_tag bfn_tag = builtin_fn_tag_init(fn_id);
             if (bfn_tag != BUILTIN_FN_TAG_NONE){
-                Type_info bfn_return_type_info = builtin_fn_tag_return_type_info(bfn_tag);
-                if (bfn_return_type_info.m_dimensions > 0){
-                    if (!vec_base_push_back(&self->type_info_stack, self->alloc, &bfn_return_type_info))
-                        return OOM_ERROR;
-                    add_instruction("%s []", op_code_to_str(OP_CODE_PUSH));
-                }
-                else if (bfn_return_type_info.m_tag != TYPE_INFO_TAG_VOID){
-                    if (!vec_base_push_back(&self->type_info_stack, self->alloc, &bfn_return_type_info))
-                        return OOM_ERROR;
-                    add_instruction("%s 0", op_code_to_str(OP_CODE_PUSH));
-                    add_instruction("%s", op_code_to_str(OP_CODE_TO_BOOL + (bfn_return_type_info.m_tag - TYPE_INFO_TAG_BOOL)));
-                }
-                else if (ast_node->m_parent){
-                    const AST_node *parent = ast_node->m_parent;
-                    switch (parent->m_token->m_type){
-                        case TOKEN_TYPE_LBRACE:
-                        case TOKEN_TYPE_ELSE:
-                            break;
-                        case TOKEN_TYPE_IF:
-                        case TOKEN_TYPE_WHILE:
-                            if (parent->m_sub_nodes.m_data[0] != ast_node)
-                                break;
-                            FALLTHROUGH;
-                        default:
-                            return syntax_error("Builtin function <%s> returning type <void> is used in an expression", ast_node->m_token->m_line_number, fn_id);
-                    }
-                }
-
                 if (fn_args.m_size > 0){
                     for (usize i = 0; i < fn_args.m_size; ++i){
                         IR_compiler_state_compile_result compile_result = IR_compiler_state_compile(self, fn_args.m_data[i]);
@@ -335,7 +304,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                             return compile_result;
                         Type_info last_type_info = *(Type_info*)vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1);
                         if (last_type_info.m_dimensions == 0)
-                            add_instruction("%s", op_code_to_str(OP_CODE_TO_BOOL + (last_type_info.m_tag - TYPE_INFO_TAG_BOOL)));
+                            add_instruction("%s", op_code_to_str((enum Op_code)(OP_CODE_TO_BOOL + (last_type_info.m_tag - TYPE_INFO_TAG_BOOL))));
                     }
 
                     Type_info_slice arg_type_infos = {.m_size = fn_args.m_size, vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - fn_args.m_size)};
@@ -363,7 +332,29 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                 else if (!builtin_fn_tag_is_callable(bfn_tag, (Type_info_slice){0}))
                     return syntax_error("Builtin function <%s> is not callable without arguments", ast_node->m_token->m_line_number, fn_id);
 
+                Type_info bfn_return_type_info = builtin_fn_tag_return_type_info(bfn_tag);
+                if (bfn_return_type_info.m_tag != TYPE_INFO_TAG_VOID){
+                    if (!vec_base_push_back(&self->type_info_stack, self->alloc, &bfn_return_type_info))
+                        return OOM_ERROR;
+                }
+                else if (ast_node->m_parent){
+                    const AST_node *parent = ast_node->m_parent;
+                    switch (parent->m_token->m_type){
+                        case TOKEN_TYPE_LBRACE:
+                        case TOKEN_TYPE_ELSE:
+                            break;
+                        case TOKEN_TYPE_IF:
+                        case TOKEN_TYPE_WHILE:
+                            if (parent->m_sub_nodes.m_data[0] != ast_node)
+                                break;
+                            FALLTHROUGH;
+                        default:
+                            return syntax_error("Builtin function <%s> returning type <void> is used in an expression", ast_node->m_token->m_line_number, fn_id);
+                    }
+                }
+
                 add_instruction("%s %s", op_code_to_str(OP_CODE_CALL), fn_id);
+
                 if (bfn_return_type_info.m_tag != TYPE_INFO_TAG_VOID)
                     pop_on_discarded_expression(ast_node);
             }
@@ -764,23 +755,20 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
             add_instruction("%s %s", op_code_to_str(OP_CODE_JMPZ), if_label_str_buf);
 
             if (ast_node->m_sub_nodes.m_size > 1){
-                if (ast_node->m_sub_nodes.m_data[1]->m_token->m_type != TOKEN_TYPE_ELSE){
+                bool has_body = (ast_node->m_sub_nodes.m_data[1]->m_token->m_type != TOKEN_TYPE_ELSE);
+                bool has_else = (ast_node->m_sub_nodes.m_data[ast_node->m_sub_nodes.m_size - 1]->m_token->m_type == TOKEN_TYPE_ELSE);
+                
+                if (has_body){
                     if (!vec_base_push_back(&self->let_decl_count_stack, self->alloc, &(usize){0}))
                         return OOM_ERROR;
                     compile_result = IR_compiler_state_compile(self, ast_node->m_sub_nodes.m_data[1]);
                     if (compile_result.error != COMPILE_ERROR_NONE)
                         return compile_result;
-                    if (
-                        !IR_compiler_state_pop_ids_in_current_scope(self) || (
-                            ast_node->m_sub_nodes.m_size == 2 &&
-                            !str_base_append_fmt(&self->IR, self->alloc, "%s:\n", if_label_str_buf)
-                        )
-                    )
+                    if (!IR_compiler_state_pop_ids_in_current_scope(self) || (!has_else && !str_base_append_fmt(&self->IR, self->alloc, "%s:\n", if_label_str_buf)))
                         return OOM_ERROR;
                 }
 
-                usize last_idx = ast_node->m_sub_nodes.m_size - 1;
-                if (ast_node->m_sub_nodes.m_data[last_idx]->m_token->m_type == TOKEN_TYPE_ELSE){
+                if (has_else){
                     char else_label_str_buf[32];
                     sprintf(else_label_str_buf, "." LABEL_SYMBOL USIZE_PFMT, self->label_counter++);
 
@@ -789,7 +777,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                     if (!str_base_append_fmt(&self->IR, self->alloc, "%s:\n", if_label_str_buf))
                         return OOM_ERROR;
 
-                    AST_node_ptr_slice else_node_sub_nodes = ast_node->m_sub_nodes.m_data[last_idx]->m_sub_nodes;
+                    AST_node_ptr_slice else_node_sub_nodes = ast_node->m_sub_nodes.m_data[ast_node->m_sub_nodes.m_size - 1]->m_sub_nodes;
                     if (else_node_sub_nodes.m_size > 0){
                         if (!vec_base_push_back(&self->let_decl_count_stack, self->alloc, &(usize){0}))
                             return OOM_ERROR;
@@ -803,7 +791,6 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                     if (!str_base_append_fmt(&self->IR, self->alloc, "%s:\n", else_label_str_buf))
                         return OOM_ERROR;
                 }
-
             }
             else if (!str_base_append_fmt(&self->IR, self->alloc, "%s:\n", if_label_str_buf))
                 return OOM_ERROR;

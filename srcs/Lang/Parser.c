@@ -323,7 +323,7 @@ static bool parser_state_for_to_while_tokens_push_back(Parser_state *self, Vec_b
 
 static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
     Parser_state_parse_result parse_result;
-    AST_node *node, *node_temp;
+    AST_node *node;
     Vec_base sub_nodes = vec_base_init(AST_node*);
 
     const Token *tok = &self->tokens.m_data[self->token_idx++], *tok_temp;
@@ -386,11 +386,11 @@ static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
             if (self->token_idx >= self->tokens.m_size || (tok = &self->tokens.m_data[self->token_idx++])->m_type != TOKEN_TYPE_ID)
                 return syntax_error("<let> must be followed by an identifier", tok->m_line_number);
 
-            node_temp = parser_state_ast_node_alloc(self, tok);
-            if (!node_temp || !vec_base_push_back(&sub_nodes, self->alloc, &node_temp))
+            AST_node *id_node = parser_state_ast_node_alloc(self, tok);
+            if (!id_node || !vec_base_push_back(&sub_nodes, self->alloc, &id_node))
                 return OOM_ERROR;
 
-            node_temp->m_parent = node;
+            id_node->m_parent = node;
 
             if (self->token_idx >= self->tokens.m_size || (tok_temp = &self->tokens.m_data[self->token_idx++])->m_type != TOKEN_TYPE_COLON)
                 return syntax_error("<%s> must be followed by <:>", tok->m_line_number, str_base_data_const(&tok->m_id));
@@ -441,19 +441,14 @@ static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
             parse_result.ast_node_ptr->m_parent = node;
 
             tok_temp = &self->tokens.m_data[self->token_idx++];
-            if (tok_temp->m_type != TOKEN_TYPE_RPAREN){
-                return syntax_error(
-                    "<%s> statement's conditional expression must be closed by <)>",
-                    tok_temp->m_line_number,
-                    str_base_data_const(&tok->m_id)
-                );
-            }
-
-            if (self->token_idx >= self->tokens.m_size)
-                return syntax_error("<%s> statement is missing body", tok_temp->m_line_number, str_base_data_const(&tok->m_id));
+            if (tok_temp->m_type != TOKEN_TYPE_RPAREN)
+                return syntax_error("<%s> statement's conditional expression must be closed by <)>", tok_temp->m_line_number, str_base_data_const(&tok->m_id));
 
             if (!vec_base_push_back(&sub_nodes, self->alloc, &parse_result.ast_node_ptr))
                 return OOM_ERROR;
+
+            if (self->token_idx >= self->tokens.m_size)
+                return syntax_error("<%s> statement is missing body", tok_temp->m_line_number, str_base_data_const(&tok->m_id));
 
             if (self->tokens.m_data[self->token_idx].m_type != TOKEN_TYPE_SEMICOLON){
                 parse_result = parser_state_parse_expr(self);

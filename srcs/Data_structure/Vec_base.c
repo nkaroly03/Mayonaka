@@ -18,7 +18,6 @@ static bool vec_base_realloc(Vec_base *self, Allocator alloc, usize new_capacity
         if (!new_location)
             return false;
 
-        // this branch is needed because undefined behaviour on memcpy(non-null, null, 0) which shouldn't be a thing
         if (self->m_capacity > 0){
             memcpy(new_location, self->m_data, self->m_data_size * self->m_size);
             allocator_free(alloc, (u8*)self->m_data, old_byte_cap);
@@ -124,9 +123,7 @@ void* vec_base_pop_back_to(Vec_base *self, void *dest){
     assert(!vec_base_empty(self) && "<self> is empty");
     assert(dest && "<dest> is not nullable");
 
-    memcpy(dest, vec_base_at_unchecked(self, --self->m_size), self->m_data_size);
-
-    return dest;
+    return memcpy(dest, vec_base_at_unchecked(self, --self->m_size), self->m_data_size);
 }
 void vec_base_erase_discard(Vec_base *self, usize idx){
     assert(self && "<self> is never null");

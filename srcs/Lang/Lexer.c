@@ -108,10 +108,7 @@ Lex_result lex(Arena *arena, const char *path){
 
     if (!state.file){
         Str_base_result error_info = str_base_init_raw(state.alloc, "File not found");
-        return (error_info.success)
-            ? (Lex_result){.error_info = error_info.result, .error = LEX_ERROR_FILE}
-            : (Lex_result){.error = LEX_ERROR_OOM}
-        ;
+        return (error_info.success) ? (Lex_result){.error_info = error_info.result, .error = LEX_ERROR_FILE} : (Lex_result){.error = LEX_ERROR_OOM};
     }
 
     Str_base lines = {0};

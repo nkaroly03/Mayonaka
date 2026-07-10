@@ -2,12 +2,16 @@
 
 #include "../../hdrs/Lang/Type_info.h"
 
+// ------------------------------------------------------------------------------------------------
+
 static bool type_info_tag_is_int_like(enum Type_info_tag tag){
     return tag >= TYPE_INFO_TAG_BOOL && tag <= TYPE_INFO_TAG_INT;
 }
 static bool type_info_tag_is_arithmetic(enum Type_info_tag tag){
     return tag >= TYPE_INFO_TAG_BOOL && tag <= TYPE_INFO_TAG_FLOAT;
 }
+
+// ------------------------------------------------------------------------------------------------
 
 Type_info unary_op_type_info_result(enum Unary_op op, Type_info type_info){
     Type_info result = {0};
