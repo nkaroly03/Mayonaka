@@ -96,7 +96,7 @@ typedef struct Id_info{
 } Id_info;
 
 typedef struct While_label_info{
-    usize start_label, end_label;
+    usize break_label, continue_label;
     usize let_decl_count_stack_idx;
 } While_label_info;
 
@@ -198,6 +198,7 @@ static bool IR_compiler_state_pop_on_discarded_expression(IR_compiler_state *sel
     if (ast_node->m_parent){
         const AST_node *parent = ast_node->m_parent;
         switch (parent->m_token->m_type){
+            case TOKEN_TYPE_COLON:
             case TOKEN_TYPE_LBRACE:
             case TOKEN_TYPE_ELSE:
                 break;
@@ -340,6 +341,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                 else if (ast_node->m_parent){
                     const AST_node *parent = ast_node->m_parent;
                     switch (parent->m_token->m_type){
+                        case TOKEN_TYPE_COLON:
                         case TOKEN_TYPE_LBRACE:
                         case TOKEN_TYPE_ELSE:
                             break;
@@ -798,14 +800,17 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
         }
 
         case TOKEN_TYPE_WHILE:{
-            usize start_label = self->label_counter++;
-            usize end_label   = self->label_counter++;
+            usize start_label    = self->label_counter++;
+            usize break_label    = self->label_counter++;
+            usize continue_label = self->label_counter++;
 
             char while_start_label_str_buf[32];
-            char while_end_label_str_buf[32];
+            char while_break_label_str_buf[32];
+            char while_continue_label_str_buf[32];
 
             sprintf(while_start_label_str_buf, "." LABEL_SYMBOL USIZE_PFMT, start_label);
-            sprintf(while_end_label_str_buf, "." LABEL_SYMBOL USIZE_PFMT, end_label);
+            sprintf(while_break_label_str_buf, "." LABEL_SYMBOL USIZE_PFMT, break_label);
+            sprintf(while_continue_label_str_buf, "." LABEL_SYMBOL USIZE_PFMT, continue_label);
 
             if (!str_base_append_fmt(&self->IR, self->alloc, "%s:\n", while_start_label_str_buf))
                 return OOM_ERROR;
@@ -821,29 +826,47 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
             if (binary_op_type_info_result(BINARY_OP_ASSIGNMENT, bool_type_info, last_type_info).m_tag == TYPE_INFO_TAG_NONE)
                 return IR_compiler_state_type_conversion_error(self, ast_node, (Type_info){.m_tag = TYPE_INFO_TAG_BOOL, .m_dimensions = 0}, last_type_info);
 
-            add_instruction("%s %s", op_code_to_str(OP_CODE_JMPZ), while_end_label_str_buf);
+            add_instruction("%s %s", op_code_to_str(OP_CODE_JMPZ), while_break_label_str_buf);
 
+            bool has_continue_expr = false;
             if (ast_node->m_sub_nodes.m_size > 1){
-                if (
-                    !vec_base_push_back(
-                        &self->while_label_stack,
-                        self->alloc,
-                        &(While_label_info){.start_label = start_label, .end_label = end_label, .let_decl_count_stack_idx = self->let_decl_count_stack.m_size}
-                    ) ||
-                    !vec_base_push_back(&self->let_decl_count_stack, self->alloc, &(usize){0})
-                )
+                has_continue_expr = (ast_node->m_sub_nodes.m_data[1]->m_token->m_type == TOKEN_TYPE_COLON);
+                bool has_body = (ast_node->m_sub_nodes.m_data[ast_node->m_sub_nodes.m_size - 1]->m_token->m_type != TOKEN_TYPE_COLON);
+
+                if (has_body){
+                    if (
+                        !vec_base_push_back(
+                            &self->while_label_stack,
+                            self->alloc,
+                            &(While_label_info){.break_label = break_label, .continue_label = continue_label, .let_decl_count_stack_idx = self->let_decl_count_stack.m_size}
+                        ) ||
+                        !vec_base_push_back(&self->let_decl_count_stack, self->alloc, &(usize){0})
+                    )
+                        return OOM_ERROR;
+                    compile_result = IR_compiler_state_compile(self, ast_node->m_sub_nodes.m_data[ast_node->m_sub_nodes.m_size - 1]);
+                    if (compile_result.error != COMPILE_ERROR_NONE)
+                        return compile_result;
+                    if (!IR_compiler_state_pop_ids_in_current_scope(self))
+                        return OOM_ERROR;
+                    vec_base_pop_back_discard(&self->while_label_stack);
+                }
+            }
+
+            if (!str_base_append_fmt(&self->IR, self->alloc, "%s:\n", while_continue_label_str_buf))
+                return OOM_ERROR;
+            if (has_continue_expr){
+                if (!vec_base_push_back(&self->let_decl_count_stack, self->alloc, &(usize){0}))
                     return OOM_ERROR;
-                compile_result = IR_compiler_state_compile(self, ast_node->m_sub_nodes.m_data[1]);
+                compile_result = IR_compiler_state_compile(self, ast_node->m_sub_nodes.m_data[1]->m_sub_nodes.m_data[0]);
                 if (compile_result.error != COMPILE_ERROR_NONE)
                     return compile_result;
                 if (!IR_compiler_state_pop_ids_in_current_scope(self))
                     return OOM_ERROR;
-                vec_base_pop_back_discard(&self->while_label_stack);
             }
 
             add_instruction("%s %s", op_code_to_str(OP_CODE_JMP), while_start_label_str_buf);
 
-            if (!str_base_append_fmt(&self->IR, self->alloc, "%s:\n", while_end_label_str_buf))
+            if (!str_base_append_fmt(&self->IR, self->alloc, "%s:\n", while_break_label_str_buf))
                 return OOM_ERROR;
             break;
         }
@@ -864,7 +887,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
             add_instruction(
                 "%s ." LABEL_SYMBOL USIZE_PFMT,
                 op_code_to_str(OP_CODE_JMP),
-                (ast_node->m_token->m_type == TOKEN_TYPE_BREAK) ? while_label_info.end_label : while_label_info.start_label
+                (ast_node->m_token->m_type == TOKEN_TYPE_BREAK) ? while_label_info.break_label : while_label_info.continue_label
             );
             while (type_info_stack_temp.m_size > 0)
                 (void)vec_base_push_back(&self->type_info_stack, self->alloc, vec_base_pop_back_to(&type_info_stack_temp, &(Type_info){0}));

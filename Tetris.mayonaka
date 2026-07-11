@@ -127,7 +127,7 @@ while (not stop_game){
 
     let tetris_tick: int = 0;
     let tetris_is_running: bool = true;
-    while (tetris_is_running){
+    while (tetris_is_running) : (tetris_tick = tetris_tick + 1){
         {
             let keypress: char = poll_keypress();
             if (keypress != '\0'){
@@ -153,7 +153,7 @@ while (not stop_game){
 
                         {
                             let y: int = 0;
-                            while (y < moved_tetromino_shape_info_table_side_length){
+                            while (y < moved_tetromino_shape_info_table_side_length) : (y = y + 1){
                                 for (0..moved_tetromino_shape_info_table_side_length) |x|{
                                     let rotated_idx: int = 0;
                                     if (moved_tetromino_rotation_idx == TETROMINO_ROTATION_IDX_0)
@@ -165,8 +165,7 @@ while (not stop_game){
                                         rotated_idx = (moved_tetromino_shape_info_table_side_length * moved_tetromino_shape_info_table_side_length - 1) - y *
                                             moved_tetromino_shape_info_table_side_length - x;
                                     else if (moved_tetromino_rotation_idx == TETROMINO_ROTATION_IDX_270)
-                                        rotated_idx = (moved_tetromino_shape_info_table_side_length - 1) - y + x *
-                                            moved_tetromino_shape_info_table_side_length;
+                                        rotated_idx = (moved_tetromino_shape_info_table_side_length - 1) - y + x * moved_tetromino_shape_info_table_side_length;
 
                                     if (moved_tetromino_shape_info_table[rotated_idx] == 'X'){
                                         let pos_x: int = x + moved_tetromino_pos_x;
@@ -182,7 +181,6 @@ while (not stop_game){
                                         }
                                     }
                                 }
-                                y = y + 1;
                             }
                         }
                     }
@@ -208,7 +206,7 @@ while (not stop_game){
 
                 {
                     let y: int = 0;
-                    while (y < moved_tetromino_shape_info_table_side_length){
+                    while (y < moved_tetromino_shape_info_table_side_length) : (y = y + 1){
                         for (0..moved_tetromino_shape_info_table_side_length) |x|{
                             let rotated_idx: int = 0;
                             if (moved_tetromino_rotation_idx == TETROMINO_ROTATION_IDX_0)
@@ -236,7 +234,6 @@ while (not stop_game){
                                 }
                             }
                         }
-                        y = y + 1;
                     }
                 }
                 if (fits){
@@ -263,7 +260,7 @@ while (not stop_game){
 
             {
                 let y: int = 0;
-                while (y < moved_tetromino_shape_info_table_side_length){
+                while (y < moved_tetromino_shape_info_table_side_length) : (y = y + 1){
                     for (0..moved_tetromino_shape_info_table_side_length) |x|{
                         let rotated_idx: int = 0;
                         if (moved_tetromino_rotation_idx == TETROMINO_ROTATION_IDX_0)
@@ -291,7 +288,6 @@ while (not stop_game){
                             }
                         }
                     }
-                    y = y + 1;
                 }
             }
             if (fits){
@@ -338,7 +334,7 @@ while (not stop_game){
                 row_is_full = false;
 
                 let y_start: int = 0;
-                while (not row_is_full and y_start < TETRIS_HEIGHT){
+                while (not row_is_full and y_start < TETRIS_HEIGHT) : (y_start = y_start + 1){
                     let found_none: bool = false;
                     for (0..TETRIS_WIDTH) |x|{
                         if (found_none)
@@ -346,19 +342,17 @@ while (not stop_game){
                         found_none = (tetris_field[y_start * TETRIS_WIDTH + x] == TETROMINO_SHAPE_IDX_NONE);
                     }
                     row_is_full = not found_none;
-                    y_start = y_start + 1;
                 }
 
                 if (row_is_full){
                     let y_end: int = (y_start = y_start - 1) + 1;
                     let found_none: bool = false;
-                    while (not found_none and y_end < TETRIS_HEIGHT){
+                    while (not found_none and y_end < TETRIS_HEIGHT) : (y_end = y_end + not found_none){
                         for (0..TETRIS_WIDTH) |x|{
                             if (found_none)
                                 break;
                             found_none = (tetris_field[y_end * TETRIS_WIDTH + x] == TETROMINO_SHAPE_IDX_NONE);
                         }
-                        y_end = y_end + not found_none;
                     }
 
                     let diff: int = (y_end - y_start) * TETRIS_WIDTH;
@@ -406,7 +400,7 @@ while (not stop_game){
 
             {
                 let y: int = 0;
-                while (y < current_tetromino_shape_info_table_side_length){
+                while (y < current_tetromino_shape_info_table_side_length) : (y = y + 1){
                     for (0..current_tetromino_shape_info_table_side_length) |x|{
                         let rotated_idx: int = 0;
                         if (current_tetromino_rotation_idx == TETROMINO_ROTATION_IDX_0)
@@ -434,7 +428,6 @@ while (not stop_game){
                             }
                         }
                     }
-                    y = y + 1;
                 }
             }
             tetris_is_running = fits;
@@ -489,8 +482,6 @@ while (not stop_game){
         }
 
         for (0..50000) |sleep|;
-
-        tetris_tick = tetris_tick + 1;
     }
 
     print("\x1b[?25h\x1b[0m");

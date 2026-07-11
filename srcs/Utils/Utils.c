@@ -44,18 +44,14 @@ void reverse_elements(void *data, usize data_size, usize count){
     assert((data || (!data && count == 0)) && "<data> must have valid <count> (null's valid count is 0)");
     assert(data_size > 0 && "Data must have size greater than 0");
 
-    if (count > 0){
-        usize count_half = count / 2;
-        for (u8 *it = data, *itr = it + data_size * count; count_half-- > 0; it += data_size){
-            itr -= data_size;
+    if (count > 1)
+        for (u8 *it = data, *itr = it + data_size * count; it < (itr -= data_size); it += data_size)
             swap_bytes(it, itr, data_size);
-        }
-    }
 }
 void sort_elements(void *data, usize data_size, usize count, int (*cmp_fn)(const void*, const void*)){
     assert((data || (!data && count == 0)) && "<data> must have valid <count> (null's valid count is 0)");
     assert(data_size > 0 && "Data must have size greater than 0");
 
-    if (count > 0)
+    if (count > 1)
         qsort(data, count, data_size, cmp_fn);
 }

@@ -540,10 +540,13 @@ void str_base_clear(Str_base *self){
 void str_base_reverse(Str_base *self){
     assert(self && "<self> is never null");
 
-    for (char *it = str_base_data(self), *itr = &it[str_base_size(self)]; it < --itr; ++it){
-        char temp = *it;
-        *it = *itr;
-        *itr = temp;
+    usize size = str_base_size(self);
+    if (size > 1){
+        for (char *it = str_base_data(self), *itr = &it[size]; it < --itr; ++it){
+            char temp = *it;
+            *it = *itr;
+            *itr = temp;
+        }
     }
 }
 void str_base_sort(Str_base *self){
