@@ -11,6 +11,7 @@
 static const char *BUILTIN_FN_TAG_SYMBOLS[] = {
     [BUILTIN_FN_TAG_NONE]          = NULL,
     [BUILTIN_FN_TAG_EXIT]          = "exit",
+    [BUILTIN_FN_TAG_NSLEEP]        = "nsleep",
     [BUILTIN_FN_TAG_PRINT]         = "print",
     [BUILTIN_FN_TAG_SCAN]          = "scan",
     [BUILTIN_FN_TAG_POLL_KEYPRESS] = "poll_keypress",
@@ -27,6 +28,8 @@ enum Builtin_fn_tag builtin_fn_tag_init(const char *str){
 
     if (strcmp(str, builtin_fn_tag_to_str(BUILTIN_FN_TAG_EXIT)) == 0)
         return BUILTIN_FN_TAG_EXIT;
+    if (strcmp(str, builtin_fn_tag_to_str(BUILTIN_FN_TAG_NSLEEP)) == 0)
+        return BUILTIN_FN_TAG_NSLEEP;
     if (strcmp(str, builtin_fn_tag_to_str(BUILTIN_FN_TAG_PRINT)) == 0)
         return BUILTIN_FN_TAG_PRINT;
     if (strcmp(str, builtin_fn_tag_to_str(BUILTIN_FN_TAG_SCAN)) == 0)
@@ -52,6 +55,7 @@ const char* builtin_fn_tag_to_str(enum Builtin_fn_tag tag){
 Type_info builtin_fn_tag_return_type_info(enum Builtin_fn_tag tag){
     switch (tag){
         case BUILTIN_FN_TAG_EXIT:
+        case BUILTIN_FN_TAG_NSLEEP:
         case BUILTIN_FN_TAG_PRINT:
         case BUILTIN_FN_TAG_PUSH_BACK:
         case BUILTIN_FN_TAG_POP_BACK:
@@ -73,6 +77,8 @@ bool builtin_fn_tag_is_callable(enum Builtin_fn_tag tag, Type_info_slice args){
         case BUILTIN_FN_TAG_PRINT:
         case BUILTIN_FN_TAG_SCAN:
             return args.m_size == 1;
+        case BUILTIN_FN_TAG_NSLEEP:
+            return args.m_size == 1 && args.m_data[0].m_tag != TYPE_INFO_TAG_STR && args.m_data[0].m_dimensions == 0;
         case BUILTIN_FN_TAG_LEN:
             return args.m_size == 1 && (args.m_data[0].m_tag == TYPE_INFO_TAG_STR || args.m_data[0].m_dimensions > 0);
         case BUILTIN_FN_TAG_POLL_KEYPRESS:

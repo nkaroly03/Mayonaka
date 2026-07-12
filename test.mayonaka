@@ -1,27 +1,3 @@
-/*/
-
-for (start..end) |id|
-    expr
-
-current:
-{
-    let id: int = start;
-    let $id: int = end;
-    while (id < $id){
-        expr
-        id = id + 1;
-    }
-}
-
-new:
-{
-    let $id1: int = start;
-    let $id2: int = end;
-    while ($id1 < $id2){
-        let id: int = $id1;
-        $id1 = $id + 1;
-        expr
-    }
-}
-
-/*/
+print("start\n");
+nsleep(2000000000);
+print("end\n");

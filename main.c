@@ -114,7 +114,7 @@ int main(const int argc, const char *const *const argv){
     for (usize i = 0; i < bytecode_compile_result.bytecode.m_size; ++i){
         if (i % 10 == 0)
             putchar('\n');
-        printf("%hhu, ", bytecode_compile_result.bytecode.m_data[i]);
+        printf(U8_PFMT ", ", bytecode_compile_result.bytecode.m_data[i]);
     }
 
     printf("\n------------------------------------------------------------------------------------------------\n");

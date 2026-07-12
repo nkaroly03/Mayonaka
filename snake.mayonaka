@@ -194,7 +194,7 @@ while (not stop){
             }
         }
 
-        for (0..100000) |_|;
+        nsleep(50000000);
     }
 
     print("\x1b[0m\x1b[?25h\x1b[2JDo you wish to restart? (y/n): ");
