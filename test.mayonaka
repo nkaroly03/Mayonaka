@@ -1,0 +1,5 @@
+let s: str = "Hello";
+
+s[0];
+
+print(s);

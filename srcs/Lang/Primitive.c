@@ -400,14 +400,13 @@ Primitive_op_result primitive_to_bool(Primitive *self, Allocator alloc){
             Str_view match;
             bool val;
             if (
-                (val = false, match = str_view_init("false"), cmp_eq_Str_view(&sv, &match)) ||
-                (val = true,  match = str_view_init("true" ), cmp_eq_Str_view(&sv, &match))
-            ){
-                primitive_deinit(self, alloc);
-                *self = (Primitive){.m_tag = PRIMITIVE_TAG_BOOL, .m_bool_data = val};
-            }
-            else
+                !(val = false, match = str_view_init("false"), cmp_eq_Str_view(&sv, &match)) &&
+                !(val = true,  match = str_view_init("true" ), cmp_eq_Str_view(&sv, &match))
+            )
                 return runtime_error("Trying to convert <str> not containing \"false\" or \"true\" to <bool>");
+
+            primitive_deinit(self, alloc);
+            *self = (Primitive){.m_tag = PRIMITIVE_TAG_BOOL, .m_bool_data = val};
             break;
         }
         case PRIMITIVE_TAG_LIST:
@@ -431,15 +430,14 @@ Primitive_op_result primitive_to_char(Primitive *self, Allocator alloc){
         case PRIMITIVE_TAG_FLOAT:
             *self = (Primitive){.m_tag = PRIMITIVE_TAG_CHAR, .m_char_data = (u8)self->m_float_data};
             break;
-        case PRIMITIVE_TAG_STR:
-            if (str_base_size(&self->m_str_data_ptr->m_data) == 1){
-                u8 c = (u8)str_base_data(&self->m_str_data_ptr->m_data)[0];
-                primitive_deinit(self, alloc);
-                *self = (Primitive){.m_tag = PRIMITIVE_TAG_CHAR, .m_char_data = c};
-            }
-            else
+        case PRIMITIVE_TAG_STR:{
+            if (str_base_size(&self->m_str_data_ptr->m_data) != 1)
                 return runtime_error("Trying to convert <str> with size != 1 to <char>");
+            u8 c = (u8)str_base_data(&self->m_str_data_ptr->m_data)[0];
+            primitive_deinit(self, alloc);
+            *self = (Primitive){.m_tag = PRIMITIVE_TAG_CHAR, .m_char_data = c};
             break;
+        }
         case PRIMITIVE_TAG_LIST:
             return runtime_error("Trying to convert <list> to <char>");
     }
@@ -624,12 +622,11 @@ Primitive_op_result primitive_mov(Primitive *self, Allocator alloc, const Primit
                     Str_view match;
                     bool val;
                     if (
-                        (val = false, match = str_view_init("false"), cmp_eq_Str_view(&sv, &match)) ||
-                        (val = true,  match = str_view_init("true" ), cmp_eq_Str_view(&sv, &match))
+                        !(val = false, match = str_view_init("false"), cmp_eq_Str_view(&sv, &match)) &&
+                        !(val = true,  match = str_view_init("true" ), cmp_eq_Str_view(&sv, &match))
                     )
-                        self->m_bool_data = val;
-                    else
                         return runtime_error("Trying to move <str> not containing \"false\" or \"true\" to <bool>");
+                    self->m_bool_data = val;
                     break;
                 }
                 case PRIMITIVE_TAG_LIST:
@@ -750,16 +747,13 @@ Primitive_op_result primitive_mov_deref(Primitive *self, Allocator alloc, const 
     assert(idx && "<idx> is not nullable");
     assert(other && "<other> is not nullable");
 
-    i64 i = 0;
+    usize i;
 
     switch (idx->m_tag){
-        case PRIMITIVE_TAG_BOOL:  i = idx->m_bool_data; break;
-        case PRIMITIVE_TAG_CHAR:  i = idx->m_char_data; break;
-        case PRIMITIVE_TAG_INT:   i = idx->m_int_data;  break;
-        case PRIMITIVE_TAG_FLOAT:
-        case PRIMITIVE_TAG_STR:
-        case PRIMITIVE_TAG_LIST:
-            return runtime_error("Trying to index with non-int type");
+        case PRIMITIVE_TAG_BOOL: i = idx->m_bool_data;       break;
+        case PRIMITIVE_TAG_CHAR: i = idx->m_char_data;       break;
+        case PRIMITIVE_TAG_INT:  i = (usize)idx->m_int_data; break;
+        default:                 return runtime_error("Trying to index with non-int type");
     }
 
     switch (self->m_tag){
@@ -768,7 +762,7 @@ Primitive_op_result primitive_mov_deref(Primitive *self, Allocator alloc, const 
         case PRIMITIVE_TAG_INT:   return runtime_error("Trying to index an <int>");
         case PRIMITIVE_TAG_FLOAT: return runtime_error("Trying to index a <float>");
         case PRIMITIVE_TAG_STR:
-            if (i >= (i64)str_base_size(&self->m_str_data_ptr->m_data))
+            if (i >= str_base_size(&self->m_str_data_ptr->m_data))
                 return runtime_error("Idx out of range");
             switch (other->m_tag){
                 case PRIMITIVE_TAG_BOOL:
@@ -777,7 +771,7 @@ Primitive_op_result primitive_mov_deref(Primitive *self, Allocator alloc, const 
                     str_base_data(&self->m_str_data_ptr->m_data)[i] = other->m_bool_data;
                     break;
                 case PRIMITIVE_TAG_CHAR:
-                    if (!other->m_char_data)
+                    if (!(char)other->m_char_data)
                         goto truncate_str;
                     str_base_data(&self->m_str_data_ptr->m_data)[i] = (char)other->m_char_data;
                     break;
@@ -791,26 +785,22 @@ Primitive_op_result primitive_mov_deref(Primitive *self, Allocator alloc, const 
                         goto truncate_str;
                     str_base_data(&self->m_str_data_ptr->m_data)[i] = (char)other->m_float_data;
                     break;
-                case PRIMITIVE_TAG_STR:{
-                    usize other_size = str_base_size(&other->m_str_data_ptr->m_data);
-                    if (other_size == 0)
-                        return runtime_error("Trying to set <str>'s <char> to empty <str>");
-                    if (other_size > 1)
-                        return runtime_error("Trying to set <str>'s <char> to <str> with size > 0");
+                case PRIMITIVE_TAG_STR:
+                    if (str_base_size(&other->m_str_data_ptr->m_data) != 1)
+                        return runtime_error("Trying to set <str>'s <char> to <str> with size != 1");
                     str_base_data(&self->m_str_data_ptr->m_data)[i] = str_base_data_const(&other->m_str_data_ptr->m_data)[0];
                     break;
-                }
                 case PRIMITIVE_TAG_LIST:
                     return runtime_error("Trying to to set <str>'s <char> to <list>");
                 truncate_str:
-                    if (!str_base_assign_str_base_partial(&self->m_str_data_ptr->m_data, alloc, &self->m_str_data_ptr->m_data, (usize)i))
+                    if (!str_base_assign_str_base_partial(&self->m_str_data_ptr->m_data, alloc, &self->m_str_data_ptr->m_data, i))
                         return OOM_ERROR;
             }
             break;
         case PRIMITIVE_TAG_LIST:
-            return (i >= (i64)self->m_list_data_ptr->m_data.m_size)
+            return (i >= self->m_list_data_ptr->m_data.m_size)
                 ? runtime_error("Idx out of range")
-                : primitive_mov(vec_base_at(&self->m_list_data_ptr->m_data, (usize)i), alloc, other)
+                : primitive_mov(vec_base_at(&self->m_list_data_ptr->m_data, i), alloc, other)
             ;
     }
 
@@ -821,15 +811,12 @@ Primitive_op_result primitive_deref(Primitive *self, Allocator alloc, const Prim
     assert(self && "<self> is never null");
     assert(other && "<other> is not nullable");
 
-    i64 idx = 0;
+    usize i;
     switch (other->m_tag){
-        case PRIMITIVE_TAG_BOOL:  idx = other->m_bool_data; break;
-        case PRIMITIVE_TAG_CHAR:  idx = other->m_char_data; break;
-        case PRIMITIVE_TAG_INT:   idx = other->m_int_data;  break;
-        case PRIMITIVE_TAG_FLOAT:
-        case PRIMITIVE_TAG_STR:
-        case PRIMITIVE_TAG_LIST:
-            return runtime_error("Trying to index with non-int type");
+        case PRIMITIVE_TAG_BOOL: i = other->m_bool_data;       break;
+        case PRIMITIVE_TAG_CHAR: i = other->m_char_data;       break;
+        case PRIMITIVE_TAG_INT:  i = (usize)other->m_int_data; break;
+        default:                 return runtime_error("Trying to index with non-int type");
     }
 
     switch (self->m_tag){
@@ -838,17 +825,17 @@ Primitive_op_result primitive_deref(Primitive *self, Allocator alloc, const Prim
         case PRIMITIVE_TAG_INT:   return runtime_error("Trying to index an <int>");
         case PRIMITIVE_TAG_FLOAT: return runtime_error("Trying to index a <float>");
         case PRIMITIVE_TAG_STR:{
-            if (idx >= (i64)str_base_size(&self->m_str_data_ptr->m_data))
+            if (i >= str_base_size(&self->m_str_data_ptr->m_data))
                 return runtime_error("Idx out of range");
-            u8 c = (u8)str_base_data(&self->m_str_data_ptr->m_data)[idx];
+            u8 c = (u8)str_base_data(&self->m_str_data_ptr->m_data)[i];
             primitive_deinit(self, alloc);
             *self = (Primitive){.m_tag = PRIMITIVE_TAG_CHAR, .m_char_data = c};
             break;
         }
         case PRIMITIVE_TAG_LIST:{
-            if (idx >= (i64)self->m_list_data_ptr->m_data.m_size)
+            if (i >= self->m_list_data_ptr->m_data.m_size)
                 return runtime_error("Idx out of range");
-            Primitive *val = vec_base_at(&self->m_list_data_ptr->m_data, (usize)idx);
+            Primitive *val = vec_base_at(&self->m_list_data_ptr->m_data, i);
             Primitive new_val = {.m_tag = val->m_tag};
             switch (val->m_tag){
                 case PRIMITIVE_TAG_BOOL:  new_val.m_bool_data  = val->m_bool_data;  break;
@@ -873,42 +860,19 @@ Primitive_op_result primitive_deref(Primitive *self, Allocator alloc, const Prim
     return (Primitive_op_result){0};
 }
 
-Primitive_op_result primitive_cmp_eq(Primitive *self, Allocator alloc, const Primitive *other){
-    assert(self && "<self> is never null");
-    assert(other && "<other> is not nullable");
+#define primitive_cmp_bin_op_generate(cmp_bin_op_type, cmp_bin_op) \
+    Primitive_op_result primitive_cmp_##cmp_bin_op_type(Primitive *self, Allocator alloc, const Primitive *other){ \
+        assert(self && "<self> is never null"); \
+        assert(other && "<other> is not nullable"); \
+        return primitive_cmp(self, alloc, other, (cmp_bin_op)); \
+    }
 
-    return primitive_cmp(self, alloc, other, CMP_BIN_OP_EQ);
-}
-Primitive_op_result primitive_cmp_neq(Primitive *self, Allocator alloc, const Primitive *other){
-    assert(self && "<self> is never null");
-    assert(other && "<other> is not nullable");
-
-    return primitive_cmp(self, alloc, other, CMP_BIN_OP_NEQ);
-}
-Primitive_op_result primitive_cmp_le(Primitive *self, Allocator alloc, const Primitive *other){
-    assert(self && "<self> is never null");
-    assert(other && "<other> is not nullable");
-
-    return primitive_cmp(self, alloc, other, CMP_BIN_OP_LE);
-}
-Primitive_op_result primitive_cmp_leq(Primitive *self, Allocator alloc, const Primitive *other){
-    assert(self && "<self> is never null");
-    assert(other && "<other> is not nullable");
-
-    return primitive_cmp(self, alloc, other, CMP_BIN_OP_LEQ);
-}
-Primitive_op_result primitive_cmp_ge(Primitive *self, Allocator alloc, const Primitive *other){
-    assert(self && "<self> is never null");
-    assert(other && "<other> is not nullable");
-
-    return primitive_cmp(self, alloc, other, CMP_BIN_OP_GE);
-}
-Primitive_op_result primitive_cmp_geq(Primitive *self, Allocator alloc, const Primitive *other){
-    assert(self && "<self> is never null");
-    assert(other && "<other> is not nullable");
-
-    return primitive_cmp(self, alloc, other, CMP_BIN_OP_GEQ);
-}
+primitive_cmp_bin_op_generate(eq,  CMP_BIN_OP_EQ)
+primitive_cmp_bin_op_generate(neq, CMP_BIN_OP_NEQ)
+primitive_cmp_bin_op_generate(le,  CMP_BIN_OP_LE)
+primitive_cmp_bin_op_generate(leq, CMP_BIN_OP_LEQ)
+primitive_cmp_bin_op_generate(ge,  CMP_BIN_OP_GE)
+primitive_cmp_bin_op_generate(geq, CMP_BIN_OP_GEQ)
 
 Primitive_op_result primitive_add(Primitive *self, Allocator alloc, const Primitive *other){
     assert(self && "<self> is never null");
@@ -1021,64 +985,22 @@ oom_error:
     primitive_deinit(&temp, alloc);
     return OOM_ERROR;
 }
-Primitive_op_result primitive_sub(Primitive *self, const Primitive *other){
-    assert(self && "<self> is never null");
-    assert(other && "<other> is not nullable");
 
-    return primitive_bin_op(self, other, BIN_OP_SUB);
-}
-Primitive_op_result primitive_mul(Primitive *self, const Primitive *other){
-    assert(self && "<self> is never null");
-    assert(other && "<other> is not nullable");
+#define primitive_bin_op_generate(bin_op_type, bin_op) \
+    Primitive_op_result primitive_##bin_op_type(Primitive *self, const Primitive *other){ \
+        assert(self && "<self> is never null"); \
+        assert(other && "<other> is not nullable"); \
+        return primitive_bin_op(self, other, (bin_op)); \
+    }
 
-    return primitive_bin_op(self, other, BIN_OP_MUL);
-}
-Primitive_op_result primitive_div(Primitive *self, const Primitive *other){
-    assert(self && "<self> is never null");
-    assert(other && "<other> is not nullable");
+primitive_bin_op_generate(sub, BIN_OP_SUB)
+primitive_bin_op_generate(mul, BIN_OP_MUL)
+primitive_bin_op_generate(div, BIN_OP_DIV)
+primitive_bin_op_generate(mod, BIN_OP_MOD)
+primitive_bin_op_generate(pow, BIN_OP_POW)
 
-    return primitive_bin_op(self, other, BIN_OP_DIV);
-}
-Primitive_op_result primitive_mod(Primitive *self, const Primitive *other){
-    assert(self && "<self> is never null");
-    assert(other && "<other> is not nullable");
-
-    return primitive_bin_op(self, other, BIN_OP_MOD);
-}
-Primitive_op_result primitive_pow(Primitive *self, const Primitive *other){
-    assert(self && "<self> is never null");
-    assert(other && "<other> is not nullable");
-
-    return primitive_bin_op(self, other, BIN_OP_POW);
-}
-
-Primitive_op_result primitive_shl(Primitive *self, const Primitive *other){
-    assert(self && "<self> is never null");
-    assert(other && "<other> is not nullable");
-
-    return primitive_bin_op(self, other, BIN_OP_SHL);
-}
-Primitive_op_result primitive_shr(Primitive *self, const Primitive *other){
-    assert(self && "<self> is never null");
-    assert(other && "<other> is not nullable");
-
-    return primitive_bin_op(self, other, BIN_OP_SHR);
-}
-Primitive_op_result primitive_band(Primitive *self, const Primitive *other){
-    assert(self && "<self> is never null");
-    assert(other && "<other> is not nullable");
-
-    return primitive_bin_op(self, other, BIN_OP_BAND);
-}
-Primitive_op_result primitive_bor(Primitive *self, const Primitive *other){
-    assert(self && "<self> is never null");
-    assert(other && "<other> is not nullable");
-
-    return primitive_bin_op(self, other, BIN_OP_BOR);
-}
-Primitive_op_result primitive_xor(Primitive *self, const Primitive *other){
-    assert(self && "<self> is never null");
-    assert(other && "<other> is not nullable");
-
-    return primitive_bin_op(self, other, BIN_OP_XOR);
-}
+primitive_bin_op_generate(shl,  BIN_OP_SHL)
+primitive_bin_op_generate(shr,  BIN_OP_SHR)
+primitive_bin_op_generate(band, BIN_OP_BAND)
+primitive_bin_op_generate(bor,  BIN_OP_BOR)
+primitive_bin_op_generate(xor,  BIN_OP_XOR)
