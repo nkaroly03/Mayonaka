@@ -227,8 +227,8 @@ static Primitive_op_result primitive_bin_op(Primitive *self, const Primitive *ot
             switch (lhs_temp.m_tag){
                 case PRIMITIVE_TAG_BOOL:  lhs_temp.m_bool_data  = (lhs_temp.m_bool_data != rhs_temp.m_bool_data);    break;
                 case PRIMITIVE_TAG_CHAR:  lhs_temp.m_char_data  = (u8)(lhs_temp.m_char_data - rhs_temp.m_char_data); break;
-                case PRIMITIVE_TAG_INT:   lhs_temp.m_int_data   = (lhs_temp.m_int_data - rhs_temp.m_int_data);       break;
-                case PRIMITIVE_TAG_FLOAT: lhs_temp.m_float_data = (lhs_temp.m_float_data - rhs_temp.m_float_data);   break;
+                case PRIMITIVE_TAG_INT:   lhs_temp.m_int_data   = lhs_temp.m_int_data - rhs_temp.m_int_data;         break;
+                case PRIMITIVE_TAG_FLOAT: lhs_temp.m_float_data = lhs_temp.m_float_data - rhs_temp.m_float_data;     break;
                 default:                  unreachable();
             }
             break;
@@ -236,8 +236,8 @@ static Primitive_op_result primitive_bin_op(Primitive *self, const Primitive *ot
             switch (lhs_temp.m_tag){
                 case PRIMITIVE_TAG_BOOL:  lhs_temp.m_bool_data  = (lhs_temp.m_bool_data && rhs_temp.m_bool_data);    break;
                 case PRIMITIVE_TAG_CHAR:  lhs_temp.m_char_data  = (u8)(lhs_temp.m_char_data * rhs_temp.m_char_data); break;
-                case PRIMITIVE_TAG_INT:   lhs_temp.m_int_data   = (lhs_temp.m_int_data * rhs_temp.m_int_data);       break;
-                case PRIMITIVE_TAG_FLOAT: lhs_temp.m_float_data = (lhs_temp.m_float_data * rhs_temp.m_float_data);   break;
+                case PRIMITIVE_TAG_INT:   lhs_temp.m_int_data   = lhs_temp.m_int_data * rhs_temp.m_int_data;         break;
+                case PRIMITIVE_TAG_FLOAT: lhs_temp.m_float_data = lhs_temp.m_float_data * rhs_temp.m_float_data;     break;
                 default:                  unreachable();
             }
             break;
@@ -245,8 +245,8 @@ static Primitive_op_result primitive_bin_op(Primitive *self, const Primitive *ot
             switch (lhs_temp.m_tag){
                 case PRIMITIVE_TAG_BOOL:  lhs_temp.m_bool_data  = (lhs_temp.m_bool_data == rhs_temp.m_bool_data);    break;
                 case PRIMITIVE_TAG_CHAR:  lhs_temp.m_char_data  = (u8)(lhs_temp.m_char_data / rhs_temp.m_char_data); break;
-                case PRIMITIVE_TAG_INT:   lhs_temp.m_int_data   = (lhs_temp.m_int_data / rhs_temp.m_int_data);       break;
-                case PRIMITIVE_TAG_FLOAT: lhs_temp.m_float_data = (lhs_temp.m_float_data / rhs_temp.m_float_data);   break;
+                case PRIMITIVE_TAG_INT:   lhs_temp.m_int_data   = lhs_temp.m_int_data / rhs_temp.m_int_data;         break;
+                case PRIMITIVE_TAG_FLOAT: lhs_temp.m_float_data = lhs_temp.m_float_data / rhs_temp.m_float_data;     break;
                 default:                  unreachable();
             }
             break;
@@ -254,7 +254,7 @@ static Primitive_op_result primitive_bin_op(Primitive *self, const Primitive *ot
             switch (lhs_temp.m_tag){
                 case PRIMITIVE_TAG_BOOL:  lhs_temp.m_bool_data  = false;                                              break;
                 case PRIMITIVE_TAG_CHAR:  lhs_temp.m_char_data  = (u8)(lhs_temp.m_char_data % rhs_temp.m_char_data);  break;
-                case PRIMITIVE_TAG_INT:   lhs_temp.m_int_data   = (lhs_temp.m_int_data % rhs_temp.m_int_data);        break;
+                case PRIMITIVE_TAG_INT:   lhs_temp.m_int_data   = lhs_temp.m_int_data % rhs_temp.m_int_data;          break;
                 case PRIMITIVE_TAG_FLOAT: lhs_temp.m_float_data = fmod(lhs_temp.m_float_data, rhs_temp.m_float_data); break;
                 default:                  unreachable();
             }
@@ -297,7 +297,7 @@ static Primitive_op_result primitive_bin_op(Primitive *self, const Primitive *ot
             break;
         case BIN_OP_BAND:
             switch (lhs_temp.m_tag){
-                case PRIMITIVE_TAG_BOOL:  lhs_temp.m_bool_data = (lhs_temp.m_bool_data & rhs_temp.m_bool_data);     break;
+                case PRIMITIVE_TAG_BOOL:  lhs_temp.m_bool_data = (lhs_temp.m_bool_data && rhs_temp.m_bool_data);    break;
                 case PRIMITIVE_TAG_CHAR:  lhs_temp.m_char_data = (u8)(lhs_temp.m_char_data & rhs_temp.m_char_data); break;
                 case PRIMITIVE_TAG_INT:   lhs_temp.m_int_data  = lhs_temp.m_int_data & rhs_temp.m_int_data;         break;
                 case PRIMITIVE_TAG_FLOAT: return runtime_error("Trying to use bitwise and between non-int types");
@@ -306,7 +306,7 @@ static Primitive_op_result primitive_bin_op(Primitive *self, const Primitive *ot
             break;
         case BIN_OP_BOR:
             switch (lhs_temp.m_tag){
-                case PRIMITIVE_TAG_BOOL:  lhs_temp.m_bool_data = (lhs_temp.m_bool_data | rhs_temp.m_bool_data);     break;
+                case PRIMITIVE_TAG_BOOL:  lhs_temp.m_bool_data = (lhs_temp.m_bool_data || rhs_temp.m_bool_data);    break;
                 case PRIMITIVE_TAG_CHAR:  lhs_temp.m_char_data = (u8)(lhs_temp.m_char_data | rhs_temp.m_char_data); break;
                 case PRIMITIVE_TAG_INT:   lhs_temp.m_int_data  = lhs_temp.m_int_data | rhs_temp.m_int_data;         break;
                 case PRIMITIVE_TAG_FLOAT: return runtime_error("Trying to use bitwise or between non-int types");
@@ -315,7 +315,7 @@ static Primitive_op_result primitive_bin_op(Primitive *self, const Primitive *ot
             break;
         case BIN_OP_XOR:
             switch (lhs_temp.m_tag){
-                case PRIMITIVE_TAG_BOOL:  lhs_temp.m_bool_data = (lhs_temp.m_bool_data ^ rhs_temp.m_bool_data);     break;
+                case PRIMITIVE_TAG_BOOL:  lhs_temp.m_bool_data = (lhs_temp.m_bool_data != rhs_temp.m_bool_data);    break;
                 case PRIMITIVE_TAG_CHAR:  lhs_temp.m_char_data = (u8)(lhs_temp.m_char_data ^ rhs_temp.m_char_data); break;
                 case PRIMITIVE_TAG_INT:   lhs_temp.m_int_data  = lhs_temp.m_int_data ^ rhs_temp.m_int_data;         break;
                 case PRIMITIVE_TAG_FLOAT: return runtime_error("Trying to use xor between non-int types");
@@ -504,7 +504,7 @@ Primitive_op_result primitive_to_float(Primitive *self, Allocator alloc){
             char *end;
             f64 val = (errno = 0, (f64)strtod(sv.m_str, &end));
 
-            if (end == sv.m_str || end != &sv.m_str[sv.m_size])
+            if (end == sv.m_str || end != &sv.m_str[sv.m_size] || sv.m_str[sv.m_size - 1] == '.')
                 return runtime_error("Failed to convert <str> to <float>");
 
             if (errno != 0)
@@ -678,17 +678,17 @@ Primitive_op_result primitive_mov(Primitive *self, Allocator alloc, const Primit
             break;
         case PRIMITIVE_TAG_FLOAT:
             switch (other->m_tag){
-                case PRIMITIVE_TAG_BOOL:  self->m_int_data = other->m_bool_data;       break;
-                case PRIMITIVE_TAG_CHAR:  self->m_int_data = other->m_char_data;       break;
-                case PRIMITIVE_TAG_INT:   self->m_int_data = other->m_int_data;        break;
-                case PRIMITIVE_TAG_FLOAT: self->m_int_data = (i64)other->m_float_data; break;
+                case PRIMITIVE_TAG_BOOL:  self->m_float_data = (f64)other->m_bool_data; break;
+                case PRIMITIVE_TAG_CHAR:  self->m_float_data = (f64)other->m_char_data; break;
+                case PRIMITIVE_TAG_INT:   self->m_float_data = (f64)other->m_int_data;  break;
+                case PRIMITIVE_TAG_FLOAT: self->m_float_data = other->m_float_data;     break;
                 case PRIMITIVE_TAG_STR:{
                     Str_view sv = str_view_trim_right_while(str_view_trim_left_while(str_base_to_str_view(&other->m_str_data_ptr->m_data), isspace), isspace);
 
                     char *end;
                     f64 val = (errno = 0, (f64)strtod(sv.m_str, &end));
 
-                    if (end == sv.m_str || end != &sv.m_str[sv.m_size])
+                    if (end == sv.m_str || end != &sv.m_str[sv.m_size] || sv.m_str[sv.m_size - 1] == '.')
                         return runtime_error("Failed to convert <str> to <float> during move");
 
                     if (errno != 0)
@@ -772,28 +772,24 @@ Primitive_op_result primitive_mov_deref(Primitive *self, Allocator alloc, const 
                 return runtime_error("Idx out of range");
             switch (other->m_tag){
                 case PRIMITIVE_TAG_BOOL:
-                    if (other->m_bool_data)
-                        str_base_data(&self->m_str_data_ptr->m_data)[i] = other->m_bool_data;
-                    else
+                    if (!other->m_bool_data)
                         goto truncate_str;
+                    str_base_data(&self->m_str_data_ptr->m_data)[i] = other->m_bool_data;
                     break;
                 case PRIMITIVE_TAG_CHAR:
-                    if (other->m_char_data)
-                        str_base_data(&self->m_str_data_ptr->m_data)[i] = (char)other->m_char_data;
-                    else
+                    if (!other->m_char_data)
                         goto truncate_str;
+                    str_base_data(&self->m_str_data_ptr->m_data)[i] = (char)other->m_char_data;
                     break;
                 case PRIMITIVE_TAG_INT:
-                    if ((char)other->m_int_data)
-                        str_base_data(&self->m_str_data_ptr->m_data)[i] = (char)other->m_int_data;
-                    else
+                    if (!(char)other->m_int_data)
                         goto truncate_str;
+                    str_base_data(&self->m_str_data_ptr->m_data)[i] = (char)other->m_int_data;
                     break;
                 case PRIMITIVE_TAG_FLOAT:
-                    if ((char)other->m_float_data)
-                        str_base_data(&self->m_str_data_ptr->m_data)[i] = (char)other->m_float_data;
-                    else
+                    if (!(char)other->m_float_data)
                         goto truncate_str;
+                    str_base_data(&self->m_str_data_ptr->m_data)[i] = (char)other->m_float_data;
                     break;
                 case PRIMITIVE_TAG_STR:{
                     usize other_size = str_base_size(&other->m_str_data_ptr->m_data);
@@ -926,20 +922,20 @@ Primitive_op_result primitive_add(Primitive *self, Allocator alloc, const Primit
     switch (self->m_tag){
         case PRIMITIVE_TAG_BOOL:
             switch (other->m_tag){
-                case PRIMITIVE_TAG_BOOL:  temp = (Primitive){.m_tag = PRIMITIVE_TAG_BOOL,  .m_bool_data  = (bool)(self->m_bool_data != other->m_bool_data)};  break;
-                case PRIMITIVE_TAG_CHAR:  temp = (Primitive){.m_tag = PRIMITIVE_TAG_CHAR,  .m_char_data  = (u8)((u8)self->m_bool_data + other->m_char_data)}; break;
-                case PRIMITIVE_TAG_INT:   temp = (Primitive){.m_tag = PRIMITIVE_TAG_INT,   .m_int_data   = (i64)self->m_bool_data + other->m_int_data};       break;
-                case PRIMITIVE_TAG_FLOAT: temp = (Primitive){.m_tag = PRIMITIVE_TAG_FLOAT, .m_float_data = (f64)self->m_bool_data + other->m_float_data};     break;
+                case PRIMITIVE_TAG_BOOL:  temp = (Primitive){.m_tag = PRIMITIVE_TAG_BOOL,  .m_bool_data  = (self->m_bool_data != other->m_bool_data)};    break;
+                case PRIMITIVE_TAG_CHAR:  temp = (Primitive){.m_tag = PRIMITIVE_TAG_CHAR,  .m_char_data  = (u8)(self->m_bool_data + other->m_char_data)}; break;
+                case PRIMITIVE_TAG_INT:   temp = (Primitive){.m_tag = PRIMITIVE_TAG_INT,   .m_int_data   = self->m_bool_data + other->m_int_data};        break;
+                case PRIMITIVE_TAG_FLOAT: temp = (Primitive){.m_tag = PRIMITIVE_TAG_FLOAT, .m_float_data = (f64)self->m_bool_data + other->m_float_data}; break;
                 case PRIMITIVE_TAG_STR:   return runtime_error("Trying to use addition between <bool> and <str>");
                 default:                  unreachable();
             }
             break;
         case PRIMITIVE_TAG_CHAR:
             switch (other->m_tag){
-                case PRIMITIVE_TAG_BOOL:  temp = (Primitive){.m_tag = PRIMITIVE_TAG_CHAR,  .m_char_data  = (u8)(self->m_char_data + (u8)other->m_bool_data)}; break;
-                case PRIMITIVE_TAG_CHAR:  temp = (Primitive){.m_tag = PRIMITIVE_TAG_CHAR,  .m_char_data  = (u8)(self->m_char_data + other->m_char_data)};     break;
-                case PRIMITIVE_TAG_INT:   temp = (Primitive){.m_tag = PRIMITIVE_TAG_INT,   .m_int_data   = (i64)self->m_char_data + other->m_int_data};       break;
-                case PRIMITIVE_TAG_FLOAT: temp = (Primitive){.m_tag = PRIMITIVE_TAG_FLOAT, .m_float_data = (f64)self->m_char_data + other->m_float_data};     break;
+                case PRIMITIVE_TAG_BOOL:  temp = (Primitive){.m_tag = PRIMITIVE_TAG_CHAR,  .m_char_data  = (u8)(self->m_char_data + other->m_bool_data)}; break;
+                case PRIMITIVE_TAG_CHAR:  temp = (Primitive){.m_tag = PRIMITIVE_TAG_CHAR,  .m_char_data  = (u8)(self->m_char_data + other->m_char_data)}; break;
+                case PRIMITIVE_TAG_INT:   temp = (Primitive){.m_tag = PRIMITIVE_TAG_INT,   .m_int_data   = self->m_char_data + other->m_int_data};        break;
+                case PRIMITIVE_TAG_FLOAT: temp = (Primitive){.m_tag = PRIMITIVE_TAG_FLOAT, .m_float_data = (f64)self->m_char_data + other->m_float_data}; break;
                 case PRIMITIVE_TAG_STR:
                     temp = (Primitive){.m_tag = PRIMITIVE_TAG_STR, .m_str_data_ptr = allocator_alloc(alloc, Primitive_str_data, 1)};
                     if (!temp.m_str_data_ptr)
@@ -959,8 +955,8 @@ Primitive_op_result primitive_add(Primitive *self, Allocator alloc, const Primit
             break;
         case PRIMITIVE_TAG_INT:
             switch (other->m_tag){
-                case PRIMITIVE_TAG_BOOL:  temp = (Primitive){.m_tag = PRIMITIVE_TAG_INT,   .m_int_data   = self->m_int_data + (i64)other->m_bool_data};  break;
-                case PRIMITIVE_TAG_CHAR:  temp = (Primitive){.m_tag = PRIMITIVE_TAG_INT,   .m_int_data   = self->m_int_data + (i64)other->m_char_data};  break;
+                case PRIMITIVE_TAG_BOOL:  temp = (Primitive){.m_tag = PRIMITIVE_TAG_INT,   .m_int_data   = self->m_int_data + other->m_bool_data};       break;
+                case PRIMITIVE_TAG_CHAR:  temp = (Primitive){.m_tag = PRIMITIVE_TAG_INT,   .m_int_data   = self->m_int_data + other->m_char_data};       break;
                 case PRIMITIVE_TAG_INT:   temp = (Primitive){.m_tag = PRIMITIVE_TAG_INT,   .m_int_data   = self->m_int_data + other->m_int_data};        break;
                 case PRIMITIVE_TAG_FLOAT: temp = (Primitive){.m_tag = PRIMITIVE_TAG_FLOAT, .m_float_data = (f64)self->m_int_data + other->m_float_data}; break;
                 case PRIMITIVE_TAG_STR:   return runtime_error("Trying to use addition between <int> and <str>");

@@ -221,18 +221,16 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                         return (Interpreter_run_result){.result = exit_val, .error = INTERPRETER_RUN_ERROR_NONE};
                     }
                     case BUILTIN_FN_TAG_NSLEEP:{
-                        Primitive *sleep_val = vec_base_at(&self->stack, self->stack.m_size - 1);
+                        Primitive *sleep_for = vec_base_at(&self->stack, self->stack.m_size - 1);
                         i64 temp;
-                        switch (sleep_val->m_tag){
-                            case PRIMITIVE_TAG_BOOL:  temp = sleep_val->m_bool_data;       break;
-                            case PRIMITIVE_TAG_CHAR:  temp = sleep_val->m_char_data;       break;
-                            case PRIMITIVE_TAG_INT:   temp = sleep_val->m_int_data;        break;
-                            case PRIMITIVE_TAG_FLOAT: temp = (i64)sleep_val->m_float_data; break;
-                            case PRIMITIVE_TAG_STR:
-                            case PRIMITIVE_TAG_LIST:
-                                return runtime_error("<nsleep> called on non-numeric type");
+                        switch (sleep_for->m_tag){
+                            case PRIMITIVE_TAG_BOOL:  temp = sleep_for->m_bool_data;       break;
+                            case PRIMITIVE_TAG_CHAR:  temp = sleep_for->m_char_data;       break;
+                            case PRIMITIVE_TAG_INT:   temp = sleep_for->m_int_data;        break;
+                            case PRIMITIVE_TAG_FLOAT: temp = (i64)sleep_for->m_float_data; break;
+                            default:                  return runtime_error("<nsleep> called on non-numeric type");
                         }
-                        primitive_deinit(sleep_val, self->alloc);
+                        primitive_deinit(sleep_for, self->alloc);
                         vec_base_pop_back_discard(&self->stack);
                         if ((errno = 0, nanosleep(&(struct timespec){.tv_sec = (time_t)(temp / 1000000000), .tv_nsec = (i32)(temp % 1000000000)}, NULL)) != 0)
                             return runtime_error(strerror(errno));
@@ -312,17 +310,9 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
 
                         Primitive *list_like = vec_base_at(&self->stack, self->stack.m_size - 1);
                         switch (list_like->m_tag){
-                            case PRIMITIVE_TAG_BOOL:
-                            case PRIMITIVE_TAG_CHAR:
-                            case PRIMITIVE_TAG_INT:
-                            case PRIMITIVE_TAG_FLOAT:
-                                return runtime_error("<len> called on a numeric type");
-                            case PRIMITIVE_TAG_STR:
-                                len.m_int_data = (i64)str_base_size(&list_like->m_str_data_ptr->m_data);
-                                break;
-                            case PRIMITIVE_TAG_LIST:
-                                len.m_int_data = (i64)list_like->m_list_data_ptr->m_data.m_size;
-                                break;
+                            case PRIMITIVE_TAG_STR:  len.m_int_data = (i64)str_base_size(&list_like->m_str_data_ptr->m_data); break;
+                            case PRIMITIVE_TAG_LIST: len.m_int_data = (i64)list_like->m_list_data_ptr->m_data.m_size;         break;
+                            default:                 return runtime_error("<len> called on a numeric type");
                         }
                         primitive_deinit(list_like, self->alloc);
 

@@ -97,18 +97,18 @@ typedef struct Id_info{
 
 typedef struct While_label_info{
     const char *break_label_str, *continue_label_str;
-    usize let_decl_count_stack_idx;
+    usize id_count_stack_idx;
 } While_label_info;
 
 typedef struct IR_compiler_state{
     Allocator alloc;
     Vec_base fn_return_type_stack;
-    Vec_base let_decl_count_stack;
+    Vec_base id_count_stack;
     Vec_base id_stack;
     Umap_base id_info_map;
     Vec_base type_info_stack;
     usize label_counter;
-    Vec_base while_label_stack;
+    Vec_base while_label_info_stack;
     Str_base IR;
 } IR_compiler_state;
 
@@ -223,17 +223,22 @@ static bool IR_compiler_state_pop_on_discarded_expression(IR_compiler_state *sel
     } while (0)
 
 static bool IR_compiler_state_pop_ids_in_current_scope(IR_compiler_state *self){
-    usize last_let_decl_count = *(usize*)vec_base_at(&self->let_decl_count_stack, self->let_decl_count_stack.m_size - 1);
-    while (last_let_decl_count-- > 0){
+    usize id_count = *(usize*)vec_base_at(&self->id_count_stack, self->id_count_stack.m_size - 1);
+    while (id_count-- > 0){
         umap_base_erase_discard(&self->id_info_map, self->alloc, vec_base_at(&self->id_stack, self->id_stack.m_size - 1));
         vec_base_pop_back_discard(&self->id_stack);
         vec_base_pop_back_discard(&self->type_info_stack);
         if (!IR_compiler_state_add_instruction(self, "%s", op_code_to_str(OP_CODE_POP)))
             return false;
     }
-    vec_base_pop_back_discard(&self->let_decl_count_stack);
+    vec_base_pop_back_discard(&self->id_count_stack);
     return true;
 }
+#define pop_ids_in_current_scope() \
+    do{ \
+        if (!IR_compiler_state_pop_ids_in_current_scope(self)) \
+            return OOM_ERROR; \
+    } while (0)
 
 #define LABEL_SYMBOL "L"
 #define LABEL_BUFSIZE array_size("." LABEL_SYMBOL "18446744073709551615")
@@ -290,7 +295,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                 fprintf(stderr, "Initilizer list with elements is not implemented");
                 abort();
             }
-            pop_on_discarded_expression(ast_node);
+            // pop_on_discarded_expression(ast_node);
             break;
 
         case TOKEN_TYPE_LPAREN:{
@@ -369,15 +374,14 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
         }
 
         case TOKEN_TYPE_LBRACE:
-            if (!vec_base_push_back(&self->let_decl_count_stack, self->alloc, &(usize){0}))
+            if (!vec_base_push_back(&self->id_count_stack, self->alloc, &(usize){0}))
                 return OOM_ERROR;
             for (usize i = 0; i < ast_node->m_sub_nodes.m_size; ++i){
                 IR_compiler_state_compile_result compile_result = IR_compiler_state_compile(self, ast_node->m_sub_nodes.m_data[i]);
                 if (compile_result.error != COMPILE_ERROR_NONE)
                     return compile_result;
             }
-            if (!IR_compiler_state_pop_ids_in_current_scope(self))
-                return OOM_ERROR;
+            pop_ids_in_current_scope();
             break;
 
         case TOKEN_TYPE_TILDE:
@@ -514,11 +518,8 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                 vec_base_pop_back_discard(&self->type_info_stack);
                 add_instruction("%s " SP_SYMBOL "[-" USIZE_PFMT "]", op_code_to_str(OP_CODE_MOV), self->type_info_stack.m_size - id_info->stack_idx + 1);
 
-                if (push_back_after_assignment){
-                    compile_result = IR_compiler_state_compile(self, lhs_node);
-                    if (compile_result.error != COMPILE_ERROR_NONE)
-                        return compile_result;
-                }
+                if (push_back_after_assignment && (compile_result = IR_compiler_state_compile(self, lhs_node)).error != COMPILE_ERROR_NONE)
+                    return compile_result;
             }
             else{
                 for (
@@ -628,11 +629,11 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
 
         case TOKEN_TYPE_AND:
         case TOKEN_TYPE_OR:{
-            char and_or_label_str_buf[LABEL_BUFSIZE];
-            sprintf(and_or_label_str_buf, "." LABEL_SYMBOL USIZE_PFMT, self->label_counter++);
-
             const AST_node *lhs_node = ast_node->m_sub_nodes.m_data[0];
             const AST_node *rhs_node = ast_node->m_sub_nodes.m_data[1];
+
+            char and_or_label_str_buf[LABEL_BUFSIZE];
+            sprintf(and_or_label_str_buf, "." LABEL_SYMBOL USIZE_PFMT, self->label_counter++);
 
             IR_compiler_state_compile_result compile_result = IR_compiler_state_compile(self, lhs_node);
             if (compile_result.error != COMPILE_ERROR_NONE)
@@ -683,14 +684,14 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
             const AST_node *type_node = ast_node->m_sub_nodes.m_data[1];
             const AST_node *expr_node = ast_node->m_sub_nodes.m_data[2];
 
-            Type_info let_decl_type_info = {0};
+            Type_info id_type_info = {0};
 
             while (type_node->m_token->m_type == TOKEN_TYPE_LBRACKET){
                 type_node = type_node->m_sub_nodes.m_data[0];
-                ++let_decl_type_info.m_dimensions;
+                ++id_type_info.m_dimensions;
             }
 
-            let_decl_type_info.m_tag = (enum Type_info_tag)(TYPE_INFO_TAG_BOOL + (type_node->m_token->m_type - TOKEN_TYPE_BOOL));
+            id_type_info.m_tag = (enum Type_info_tag)(TYPE_INFO_TAG_BOOL + (type_node->m_token->m_type - TOKEN_TYPE_BOOL));
 
             IR_compiler_state_compile_result compile_result = IR_compiler_state_compile(self, expr_node);
             if (compile_result.error != COMPILE_ERROR_NONE)
@@ -700,7 +701,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                 &self->id_info_map,
                 self->alloc,
                 &id_node->m_token->m_id,
-                &(Id_info){.stack_idx = self->id_stack.m_size, .type_info = let_decl_type_info}
+                &(Id_info){.stack_idx = self->id_stack.m_size, .type_info = id_type_info}
             );
 
             switch (ires.error){
@@ -716,11 +717,11 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                 return OOM_ERROR;
 
             Type_info *last_type_info_ptr = vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1), last_type_info = *last_type_info_ptr;
-            if (binary_op_type_info_result(BINARY_OP_ASSIGNMENT, let_decl_type_info, last_type_info).m_tag == TYPE_INFO_TAG_NONE){
+            if (binary_op_type_info_result(BINARY_OP_ASSIGNMENT, id_type_info, last_type_info).m_tag == TYPE_INFO_TAG_NONE){
                 Str_base_result type_str;
                 Str_base_result expr_type_str;
                 if (
-                    !(type_str = type_info_to_str_base(let_decl_type_info, self->alloc)).success ||
+                    !(type_str = type_info_to_str_base(id_type_info, self->alloc)).success ||
                     !(expr_type_str = type_info_to_str_base(last_type_info, self->alloc)).success
                 )
                     return OOM_ERROR;
@@ -732,11 +733,11 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                 );
             }
 
-            *last_type_info_ptr = let_decl_type_info;
-            ++*(usize*)vec_base_at(&self->let_decl_count_stack, self->let_decl_count_stack.m_size - 1);
+            *last_type_info_ptr = id_type_info;
+            ++*(usize*)vec_base_at(&self->id_count_stack, self->id_count_stack.m_size - 1);
 
             if (last_type_info.m_dimensions == 0)
-                add_instruction("%s", op_code_to_str((enum Op_code)(OP_CODE_TO_BOOL + (let_decl_type_info.m_tag - TYPE_INFO_TAG_BOOL))));
+                add_instruction("%s", op_code_to_str((enum Op_code)(OP_CODE_TO_BOOL + (id_type_info.m_tag - TYPE_INFO_TAG_BOOL))));
             break;
         }
 
@@ -762,12 +763,13 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                 bool has_else = (ast_node->m_sub_nodes.m_data[ast_node->m_sub_nodes.m_size - 1]->m_token->m_type == TOKEN_TYPE_ELSE);
                 
                 if (has_body){
-                    if (!vec_base_push_back(&self->let_decl_count_stack, self->alloc, &(usize){0}))
+                    if (!vec_base_push_back(&self->id_count_stack, self->alloc, &(usize){0}))
                         return OOM_ERROR;
                     compile_result = IR_compiler_state_compile(self, ast_node->m_sub_nodes.m_data[1]);
                     if (compile_result.error != COMPILE_ERROR_NONE)
                         return compile_result;
-                    if (!IR_compiler_state_pop_ids_in_current_scope(self) || (!has_else && !str_base_append_fmt(&self->IR, self->alloc, "%s:\n", if_label_str_buf)))
+                    pop_ids_in_current_scope();
+                    if (!has_else && !str_base_append_fmt(&self->IR, self->alloc, "%s:\n", if_label_str_buf))
                         return OOM_ERROR;
                 }
 
@@ -782,13 +784,12 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
 
                     AST_node_ptr_slice else_node_sub_nodes = ast_node->m_sub_nodes.m_data[ast_node->m_sub_nodes.m_size - 1]->m_sub_nodes;
                     if (else_node_sub_nodes.m_size > 0){
-                        if (!vec_base_push_back(&self->let_decl_count_stack, self->alloc, &(usize){0}))
+                        if (!vec_base_push_back(&self->id_count_stack, self->alloc, &(usize){0}))
                             return OOM_ERROR;
                         compile_result = IR_compiler_state_compile(self, else_node_sub_nodes.m_data[0]);
                         if (compile_result.error != COMPILE_ERROR_NONE)
                             return compile_result;
-                        if (!IR_compiler_state_pop_ids_in_current_scope(self))
-                            return OOM_ERROR;
+                        pop_ids_in_current_scope();
                     }
 
                     if (!str_base_append_fmt(&self->IR, self->alloc, "%s:\n", else_label_str_buf))
@@ -833,23 +834,22 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                 if (has_body){
                     if (
                         !vec_base_push_back(
-                            &self->while_label_stack,
+                            &self->while_label_info_stack,
                             self->alloc,
                             &(While_label_info){
-                                .break_label_str          = break_label_str_buf,
-                                .continue_label_str       = continue_label_str_buf,
-                                .let_decl_count_stack_idx = self->let_decl_count_stack.m_size
+                                .break_label_str    = break_label_str_buf,
+                                .continue_label_str = continue_label_str_buf,
+                                .id_count_stack_idx = self->id_count_stack.m_size
                             }
                         ) ||
-                        !vec_base_push_back(&self->let_decl_count_stack, self->alloc, &(usize){0})
+                        !vec_base_push_back(&self->id_count_stack, self->alloc, &(usize){0})
                     )
                         return OOM_ERROR;
                     compile_result = IR_compiler_state_compile(self, ast_node->m_sub_nodes.m_data[ast_node->m_sub_nodes.m_size - 1]);
                     if (compile_result.error != COMPILE_ERROR_NONE)
                         return compile_result;
-                    if (!IR_compiler_state_pop_ids_in_current_scope(self))
-                        return OOM_ERROR;
-                    vec_base_pop_back_discard(&self->while_label_stack);
+                    pop_ids_in_current_scope();
+                    vec_base_pop_back_discard(&self->while_label_info_stack);
                 }
             }
 
@@ -867,12 +867,12 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
 
         case TOKEN_TYPE_BREAK:
         case TOKEN_TYPE_CONTINUE:{
-            if (self->while_label_stack.m_size == 0)
+            if (self->while_label_info_stack.m_size == 0)
                 return syntax_error("<%s> must be used inside a loop", ast_node->m_token->m_line_number, str_base_data_const(&ast_node->m_token->m_id));
-            While_label_info while_label_info = *(While_label_info*)vec_base_at(&self->while_label_stack, self->while_label_stack.m_size - 1);
+            While_label_info while_label_info = *(While_label_info*)vec_base_at(&self->while_label_info_stack, self->while_label_info_stack.m_size - 1);
             Vec_base type_info_stack_temp = vec_base_init(Type_info);
-            for (usize i = self->let_decl_count_stack.m_size; i-- > while_label_info.let_decl_count_stack_idx;){
-                for (usize let_decl_count = *(usize*)vec_base_at(&self->let_decl_count_stack, i); let_decl_count-- > 0;){
+            for (usize i = self->id_count_stack.m_size; i-- > while_label_info.id_count_stack_idx;){
+                for (usize id_count = *(usize*)vec_base_at(&self->id_count_stack, i); id_count-- > 0;){
                     if (!vec_base_push_back(&type_info_stack_temp, self->alloc, vec_base_pop_back_to(&self->type_info_stack, &(Type_info){0})))
                         return OOM_ERROR;
                     add_instruction("%s", op_code_to_str(OP_CODE_POP));
@@ -921,17 +921,17 @@ IR_compile_result IR_compile(Arena *arena, AST_node_ptr_slice ast_nodes){
     assert(arena && "<arena> is not nullable");
 
     IR_compiler_state state = {
-        .alloc                = arena_allocator(arena),
-        .let_decl_count_stack = vec_base_init(usize),
-        .id_stack             = vec_base_init(Str_base),
-        .id_info_map          = umap_base_init(Str_base, Id_info),
-        .type_info_stack      = vec_base_init(Type_info),
-        .label_counter        = 0,
-        .while_label_stack    = vec_base_init(While_label_info),
-        .IR                   = {0}
+        .alloc                  = arena_allocator(arena),
+        .id_count_stack         = vec_base_init(usize),
+        .id_stack               = vec_base_init(Str_base),
+        .id_info_map            = umap_base_init(Str_base, Id_info),
+        .type_info_stack        = vec_base_init(Type_info),
+        .label_counter          = 0,
+        .while_label_info_stack = vec_base_init(While_label_info),
+        .IR                     = {0}
     };
 
-    if (!vec_base_push_back(&state.let_decl_count_stack, state.alloc, &(usize){0}))
+    if (!vec_base_push_back(&state.id_count_stack, state.alloc, &(usize){0}))
         goto oom_error;
 
     for (usize i = 0; i < ast_nodes.m_size; ++i){

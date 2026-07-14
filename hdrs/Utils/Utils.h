@@ -9,7 +9,10 @@ extern "C"{
 
 #include "Num.h"
 
-#if __STDC_VERSION__ >= 202311l
+#if !defined(NDEBUG)
+#include <assert.h>
+#define unreachable() (assert(false && "unreachable"))
+#elif __STDC_VERSION__ >= 202311l
 #include <stddef.h>
 #elif defined(__GNUC__)
 #define unreachable() (__builtin_unreachable())
@@ -18,7 +21,7 @@ extern "C"{
 #else
 _Noreturn inline void unreachable_(void){}
 #define unreachable() (unreachable_())
-#endif // __STDC_VERSION__ >= 202311l
+#endif // !defined(NDEBUG)
 
 #if __STDC_VERSION__ >= 202311l
 #define FALLTHROUGH [[fallthrough]]

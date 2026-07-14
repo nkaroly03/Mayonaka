@@ -1,0 +1,34 @@
+let PI: float = 3.14159265;
+
+let WIDTH:  int = 128;
+let HEIGHT: int = 32;
+let FREQUENCY: float = 4.0;
+
+for (0..HEIGHT + 1) |y|{
+    for (0..WIDTH + 1) |x|{
+        let sin: float = 2 * PI * FREQUENCY * x / WIDTH;
+
+        let n: int = sin / (2 * PI / 4);
+
+        sin = sin - n * PI / 2;
+
+        let q: int = n % 4;
+
+        if (q % 2 == 1)
+            sin = PI / 2 - sin;
+
+        sin = sin - sin ** 3 / 6 + sin ** 5 / 120;
+
+        if (q > 1)
+            sin = -sin;
+
+        sin = 0.99 ** x * sin;
+
+        let int_cast: int = sin * (HEIGHT / 2);
+        if ((HEIGHT / 2 - y) == int_cast)
+            print('*');
+        else
+            print(' ');
+    }
+    print('\n');
+}

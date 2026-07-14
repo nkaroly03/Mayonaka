@@ -1,3 +1,0 @@
-print("start\n");
-nsleep(2000000000);
-print("end\n");

@@ -5,9 +5,9 @@
 #include "../../hdrs/Utils/Num.h"
 #include "../../hdrs/Utils/Utils.h"
 
-#if __STDC_VERSION__ < 202311l && !defined(__GNUC__) && !defined(_MSC_VER)
+#if defined(NDEBUG) && __STDC_VERSION__ < 202311l && !defined(__GNUC__) && !defined(_MSC_VER)
 _Noreturn extern void unreachable_(void);
-#endif // __STDC_VERSION__ < 202311l && !defined(__GNUC__) && !defined(_MSC_VER)
+#endif // defined(NDEBUG) && __STDC_VERSION__ < 202311l && !defined(__GNUC__) && !defined(_MSC_VER)
 
 bool is_little_endian(void){
     return *(u8*)&(i32){1} == 1;

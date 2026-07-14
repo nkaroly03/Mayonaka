@@ -26,24 +26,21 @@ static const char *BUILTIN_FN_TAG_SYMBOLS[] = {
 enum Builtin_fn_tag builtin_fn_tag_init(const char *str){
     assert(str && "<str> is not nullable");
 
-    if (strcmp(str, builtin_fn_tag_to_str(BUILTIN_FN_TAG_EXIT)) == 0)
-        return BUILTIN_FN_TAG_EXIT;
-    if (strcmp(str, builtin_fn_tag_to_str(BUILTIN_FN_TAG_NSLEEP)) == 0)
-        return BUILTIN_FN_TAG_NSLEEP;
-    if (strcmp(str, builtin_fn_tag_to_str(BUILTIN_FN_TAG_PRINT)) == 0)
-        return BUILTIN_FN_TAG_PRINT;
-    if (strcmp(str, builtin_fn_tag_to_str(BUILTIN_FN_TAG_SCAN)) == 0)
-        return BUILTIN_FN_TAG_SCAN;
-    if (strcmp(str, builtin_fn_tag_to_str(BUILTIN_FN_TAG_POLL_KEYPRESS)) == 0)
-        return BUILTIN_FN_TAG_POLL_KEYPRESS;
-    if (strcmp(str, builtin_fn_tag_to_str(BUILTIN_FN_TAG_LEN)) == 0)
-        return BUILTIN_FN_TAG_LEN;
-    if (strcmp(str, builtin_fn_tag_to_str(BUILTIN_FN_TAG_RAND)) == 0)
-        return BUILTIN_FN_TAG_RAND;
-    if (strcmp(str, builtin_fn_tag_to_str(BUILTIN_FN_TAG_PUSH_BACK)) == 0)
-        return BUILTIN_FN_TAG_PUSH_BACK;
-    if (strcmp(str, builtin_fn_tag_to_str(BUILTIN_FN_TAG_POP_BACK)) == 0)
-        return BUILTIN_FN_TAG_POP_BACK;
+    #define cmp_ret(bfn_tag) \
+        do{ \
+            if (strcmp(str, builtin_fn_tag_to_str((bfn_tag))) == 0) \
+                return (bfn_tag); \
+        } while (0)
+
+    cmp_ret(BUILTIN_FN_TAG_EXIT);
+    cmp_ret(BUILTIN_FN_TAG_NSLEEP);
+    cmp_ret(BUILTIN_FN_TAG_PRINT);
+    cmp_ret(BUILTIN_FN_TAG_SCAN);
+    cmp_ret(BUILTIN_FN_TAG_POLL_KEYPRESS);
+    cmp_ret(BUILTIN_FN_TAG_LEN);
+    cmp_ret(BUILTIN_FN_TAG_RAND);
+    cmp_ret(BUILTIN_FN_TAG_PUSH_BACK);
+    cmp_ret(BUILTIN_FN_TAG_POP_BACK);
 
     return BUILTIN_FN_TAG_NONE;
 }
