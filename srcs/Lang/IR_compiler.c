@@ -304,6 +304,8 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
 
             enum Builtin_fn_tag bfn_tag = builtin_fn_tag_init(fn_id);
             if (bfn_tag != BUILTIN_FN_TAG_NONE){
+                Builtin_fn_tag_call_result bfn_call_result;
+
                 if (fn_args.m_size > 0){
                     for (usize i = 0; i < fn_args.m_size; ++i){
                         IR_compiler_state_compile_result compile_result = IR_compiler_state_compile(self, fn_args.m_data[i]);
@@ -315,7 +317,8 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                     }
 
                     Type_info_slice arg_type_infos = {.m_size = fn_args.m_size, vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - fn_args.m_size)};
-                    if (!builtin_fn_tag_is_callable(bfn_tag, arg_type_infos)){
+                    bfn_call_result = builtin_fn_tag_call(bfn_tag, arg_type_infos);
+                    if (!bfn_call_result.m_is_callable){
                         Str_base type_info_list_str = {0};
                         for (usize i = 0; i < arg_type_infos.m_size; ++i){
                             Str_base_result type_info_str = type_info_to_str_base(arg_type_infos.m_data[i], self->alloc);
@@ -336,12 +339,11 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                     for (usize i = 0; i < fn_args.m_size; ++i)
                         vec_base_pop_back_discard(&self->type_info_stack);
                 }
-                else if (!builtin_fn_tag_is_callable(bfn_tag, (Type_info_slice){0}))
+                else if (!(bfn_call_result = builtin_fn_tag_call(bfn_tag, (Type_info_slice){0})).m_is_callable)
                     return syntax_error("Builtin function <%s> is not callable without arguments", ast_node->m_token->m_line_number, fn_id);
 
-                Type_info bfn_return_type_info = builtin_fn_tag_return_type_info(bfn_tag);
-                if (bfn_return_type_info.m_tag != TYPE_INFO_TAG_VOID){
-                    if (!vec_base_push_back(&self->type_info_stack, self->alloc, &bfn_return_type_info))
+                if (bfn_call_result.m_return_type.m_tag != TYPE_INFO_TAG_VOID){
+                    if (!vec_base_push_back(&self->type_info_stack, self->alloc, &bfn_call_result.m_return_type))
                         return OOM_ERROR;
                 }
                 else if (ast_node->m_parent){
@@ -363,7 +365,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
 
                 add_instruction("%s %s", op_code_to_str(OP_CODE_CALL), fn_id);
 
-                if (bfn_return_type_info.m_tag != TYPE_INFO_TAG_VOID)
+                if (bfn_call_result.m_return_type.m_tag != TYPE_INFO_TAG_VOID)
                     pop_on_discarded_expression(ast_node);
             }
             else{

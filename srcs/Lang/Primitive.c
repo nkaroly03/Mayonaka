@@ -747,12 +747,12 @@ Primitive_op_result primitive_mov_deref(Primitive *self, Allocator alloc, const 
     assert(idx && "<idx> is not nullable");
     assert(other && "<other> is not nullable");
 
-    usize i;
+    u64 i;
 
     switch (idx->m_tag){
-        case PRIMITIVE_TAG_BOOL: i = idx->m_bool_data;       break;
-        case PRIMITIVE_TAG_CHAR: i = idx->m_char_data;       break;
-        case PRIMITIVE_TAG_INT:  i = (usize)idx->m_int_data; break;
+        case PRIMITIVE_TAG_BOOL: i = idx->m_bool_data;     break;
+        case PRIMITIVE_TAG_CHAR: i = idx->m_char_data;     break;
+        case PRIMITIVE_TAG_INT:  i = (u64)idx->m_int_data; break;
         default:                 return runtime_error("Trying to index with non-int type");
     }
 
@@ -793,14 +793,14 @@ Primitive_op_result primitive_mov_deref(Primitive *self, Allocator alloc, const 
                 case PRIMITIVE_TAG_LIST:
                     return runtime_error("Trying to to set <str>'s <char> to <list>");
                 truncate_str:
-                    if (!str_base_assign_str_base_partial(&self->m_str_data_ptr->m_data, alloc, &self->m_str_data_ptr->m_data, i))
+                    if (!str_base_assign_str_base_partial(&self->m_str_data_ptr->m_data, alloc, &self->m_str_data_ptr->m_data, (usize)i))
                         return OOM_ERROR;
             }
             break;
         case PRIMITIVE_TAG_LIST:
             return (i >= self->m_list_data_ptr->m_data.m_size)
                 ? runtime_error("Idx out of range")
-                : primitive_mov(vec_base_at(&self->m_list_data_ptr->m_data, i), alloc, other)
+                : primitive_mov(vec_base_at(&self->m_list_data_ptr->m_data, (usize)i), alloc, other)
             ;
     }
 
@@ -811,11 +811,11 @@ Primitive_op_result primitive_deref(Primitive *self, Allocator alloc, const Prim
     assert(self && "<self> is never null");
     assert(other && "<other> is not nullable");
 
-    usize i;
+    u64 i;
     switch (other->m_tag){
-        case PRIMITIVE_TAG_BOOL: i = other->m_bool_data;       break;
-        case PRIMITIVE_TAG_CHAR: i = other->m_char_data;       break;
-        case PRIMITIVE_TAG_INT:  i = (usize)other->m_int_data; break;
+        case PRIMITIVE_TAG_BOOL: i = other->m_bool_data;     break;
+        case PRIMITIVE_TAG_CHAR: i = other->m_char_data;     break;
+        case PRIMITIVE_TAG_INT:  i = (u64)other->m_int_data; break;
         default:                 return runtime_error("Trying to index with non-int type");
     }
 
@@ -835,7 +835,7 @@ Primitive_op_result primitive_deref(Primitive *self, Allocator alloc, const Prim
         case PRIMITIVE_TAG_LIST:{
             if (i >= self->m_list_data_ptr->m_data.m_size)
                 return runtime_error("Idx out of range");
-            Primitive *val = vec_base_at(&self->m_list_data_ptr->m_data, i);
+            Primitive *val = vec_base_at(&self->m_list_data_ptr->m_data, (usize)i);
             Primitive new_val = {.m_tag = val->m_tag};
             switch (val->m_tag){
                 case PRIMITIVE_TAG_BOOL:  new_val.m_bool_data  = val->m_bool_data;  break;
