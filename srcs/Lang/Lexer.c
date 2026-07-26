@@ -81,10 +81,12 @@ static bool lexer_state_token_push_back(Lexer_state *self, enum Token_type type,
 
 // ------------------------------------------------------------------------------------------------
 
-void token_slice_print(Token_slice tokens_slice){
+void token_slice_print(Token_slice tokens_slice, FILE *file){
+    assert(file && "<file> is not nullable");
+
     for (usize i = 0; i < tokens_slice.m_size; ++i){
         const Token *t = &tokens_slice.m_data[i];
-        printf("{.type = %2d, .id = %s, .line_number = " USIZE_PFMT "}\n", t->m_type, str_base_data_const(&t->m_id), t->m_line_number);
+        fprintf(file, "{.type = %2d, .id = %s, .line_number = " USIZE_PFMT "}\n", t->m_type, str_base_data_const(&t->m_id), t->m_line_number);
     }
 }
 

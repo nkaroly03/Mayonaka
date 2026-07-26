@@ -708,23 +708,25 @@ static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
     return (Parser_state_parse_result){.ast_node_ptr = node, .error = PARSE_ERROR_NONE};
 }
 
-static void ast_node_print(const AST_node *self, usize indent){
+static void ast_node_print(const AST_node *self, usize indent, FILE *file){
     for (usize i = 0; i < indent; ++i)
-        putchar(' ');
+        fputc(' ', file);
 #ifndef NDEBUG
-    printf("%s parent: %s\n", str_base_data_const(&self->m_token->m_id), (self->m_parent) ? str_base_data_const(&self->m_parent->m_token->m_id) : "null");
+    fprintf(file, "%s parent: %s\n", str_base_data_const(&self->m_token->m_id), (self->m_parent) ? str_base_data_const(&self->m_parent->m_token->m_id) : "null");
 #else
-    printf("%s\n", str_base_data_const(&self->m_token->m_id));
+    fprintf(file, "%s\n", str_base_data_const(&self->m_token->m_id));
 #endif // NDEBUG
     for (usize i = 0; i < self->m_sub_nodes.m_size; ++i)
-        ast_node_print(self->m_sub_nodes.m_data[i], indent + 4);
+        ast_node_print(self->m_sub_nodes.m_data[i], indent + 4, file);
 }
 
 // ------------------------------------------------------------------------------------------------
 
-void ast_node_ptr_slice_print(AST_node_ptr_slice ast_node_ptr_slice){
+void ast_node_ptr_slice_print(AST_node_ptr_slice ast_node_ptr_slice, FILE *file){
+    assert(file && "<file> is not nullable");
+
     for (usize i = 0; i < ast_node_ptr_slice.m_size; ++i)
-        ast_node_print(ast_node_ptr_slice.m_data[i], 0);
+        ast_node_print(ast_node_ptr_slice.m_data[i], 0, file);
 }
 
 Parse_result parse(Arena *arena, Token_slice tokens){

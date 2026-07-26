@@ -744,8 +744,8 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
         }
 
         case TOKEN_TYPE_IF:{
-            char if_label_str_buf[LABEL_BUFSIZE];
-            sprintf(if_label_str_buf, "." LABEL_SYMBOL USIZE_PFMT, self->label_counter++);
+            char if_end_label_str_buf[LABEL_BUFSIZE];
+            sprintf(if_end_label_str_buf, "." LABEL_SYMBOL USIZE_PFMT, self->label_counter++);
 
             IR_compiler_state_compile_result compile_result = IR_compiler_state_compile(self, ast_node->m_sub_nodes.m_data[0]);
             if (compile_result.error != COMPILE_ERROR_NONE)
@@ -758,7 +758,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
             if (binary_op_type_info_result(BINARY_OP_ASSIGNMENT, bool_type_info, last_type_info).m_tag == TYPE_INFO_TAG_NONE)
                 return IR_compiler_state_type_conversion_error(self, ast_node, (Type_info){.m_tag = TYPE_INFO_TAG_BOOL, .m_dimensions = 0}, last_type_info);
 
-            add_instruction("%s %s", op_code_to_str(OP_CODE_JMPZ), if_label_str_buf);
+            add_instruction("%s %s", op_code_to_str(OP_CODE_JMPZ), if_end_label_str_buf);
 
             if (ast_node->m_sub_nodes.m_size > 1){
                 bool has_body = (ast_node->m_sub_nodes.m_data[1]->m_token->m_type != TOKEN_TYPE_ELSE);
@@ -771,17 +771,17 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                     if (compile_result.error != COMPILE_ERROR_NONE)
                         return compile_result;
                     pop_ids_in_current_scope();
-                    if (!has_else && !str_base_append_fmt(&self->IR, self->alloc, "%s:\n", if_label_str_buf))
+                    if (!has_else && !str_base_append_fmt(&self->IR, self->alloc, "%s:\n", if_end_label_str_buf))
                         return OOM_ERROR;
                 }
 
                 if (has_else){
-                    char else_label_str_buf[LABEL_BUFSIZE];
-                    sprintf(else_label_str_buf, "." LABEL_SYMBOL USIZE_PFMT, self->label_counter++);
+                    char else_end_label_str_buf[LABEL_BUFSIZE];
+                    sprintf(else_end_label_str_buf, "." LABEL_SYMBOL USIZE_PFMT, self->label_counter++);
 
-                    add_instruction("%s %s", op_code_to_str(OP_CODE_JMP), else_label_str_buf);
+                    add_instruction("%s %s", op_code_to_str(OP_CODE_JMP), else_end_label_str_buf);
 
-                    if (!str_base_append_fmt(&self->IR, self->alloc, "%s:\n", if_label_str_buf))
+                    if (!str_base_append_fmt(&self->IR, self->alloc, "%s:\n", if_end_label_str_buf))
                         return OOM_ERROR;
 
                     AST_node_ptr_slice else_node_sub_nodes = ast_node->m_sub_nodes.m_data[ast_node->m_sub_nodes.m_size - 1]->m_sub_nodes;
@@ -794,11 +794,11 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                         pop_ids_in_current_scope();
                     }
 
-                    if (!str_base_append_fmt(&self->IR, self->alloc, "%s:\n", else_label_str_buf))
+                    if (!str_base_append_fmt(&self->IR, self->alloc, "%s:\n", else_end_label_str_buf))
                         return OOM_ERROR;
                 }
             }
-            else if (!str_base_append_fmt(&self->IR, self->alloc, "%s:\n", if_label_str_buf))
+            else if (!str_base_append_fmt(&self->IR, self->alloc, "%s:\n", if_end_label_str_buf))
                 return OOM_ERROR;
             break;
         }

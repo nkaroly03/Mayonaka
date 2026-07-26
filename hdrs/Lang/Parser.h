@@ -5,6 +5,8 @@
 extern "C"{
 #endif
 
+#include <stdio.h>
+
 #include "../Allocator/Arena.h"
 #include "../Utils/Num.h"
 
@@ -17,7 +19,7 @@ typedef struct AST_node_ptr_slice{
     const AST_node *const *m_data;
 } AST_node_ptr_slice;
 
-void ast_node_ptr_slice_print(AST_node_ptr_slice ast_node_ptr_slice);
+void ast_node_ptr_slice_print(AST_node_ptr_slice ast_node_ptr_slice, FILE *file);
 
 struct AST_node{
     const AST_node *m_parent;

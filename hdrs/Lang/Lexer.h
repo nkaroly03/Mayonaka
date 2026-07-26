@@ -5,6 +5,8 @@
 extern "C"{
 #endif
 
+#include <stdio.h>
+
 #include "../Allocator/Arena.h"
 #include "../Data_structure/Str_base.h"
 #include "../Utils/Num.h"
@@ -87,7 +89,7 @@ typedef struct Token_slice{
     const Token *m_data;
 } Token_slice;
 
-void token_slice_print(Token_slice tokens_slice);
+void token_slice_print(Token_slice tokens_slice, FILE *file);
 
 enum Lex_error{
     LEX_ERROR_NONE,
