@@ -1,0 +1,83 @@
+; fn return addresses have a separate stack that cannot be referred to by the compiler, only the interpreter can use it
+; this way the return address cannot be overwritten and the calling convention is way simpler
+; 2 separate ret opcodes <ret>, <retv>, both take an int literal as an argument, which must be the amount of arguments passed to the fn + the number of unpopped local variables
+; this way the callee cleans the stack
+; <ret> first pops the stack, then pops the stack as many times as its argument, then pushes back the element popped first
+; <retv> pops the stack as many times as its argument
+; after the use of <ret> or <retv> control flow returns to the call-site
+; builtin fns use this calling convention currently
+
+    push 10 ; 1
+    push 20 ; 2
+    call add_int2 ; 1
+    push sp[-1] ; 2
+    call print_int ; 1
+    pop ; 0
+    push 0 ; 1
+    call exit ; 0
+add_int2:
+    push sp[-2] ; 3
+    push sp[-2] ; 4
+    add ; 3
+    ret 3 ; 0
+print_int:
+    push sp[-1] ; 2
+    call print ; 1
+    retv 1 ; 0
+
+; previous examble if the return address goes on the same stack
+; (with callee cleanup, which avoids code duplication if fn is called more than once, but disallows c-style variadic fns)
+; space must be reserved first if the fn return something
+; <ret> opcode takes an int literal as an argument, which must be the amount of arguments passed to the fn (local variables must be popped first, <ret> pops the arguments)
+; after the use of <ret> control flow returns to the call-site
+; builtin fns don't use this calling convention currently (if this convention is chosen going forward, builtin fns calling convention should also be changed for consistency)
+
+    push 0 ; 1 dummy value to overwrite
+    push 10 ; 2
+    push 20 ; 3
+    call add_int2 ; 1
+    push sp[-1] ; 2
+    call print_int ; 1
+    pop ; 0
+    push 0 ; 1
+    call exit ; 0
+add_int2:
+    push sp[-3] ; 4 sp[-1] refers to the return address, which must not be overwritten
+    push sp[-3] ; 5
+    add ; 4
+    mov sp[-5] ; 3 sp[-5] refers to the dummy value
+    ret 2 ; 0
+print_int:
+    push sp[-2] ; 3 sp[-1] refers to the return address, which must not be overwritten
+    call print ; 2
+    ret 1 ; 0
+
+; previous examble if the return address goes on the same stack
+; (with caller cleanup, which leads to code duplication if fn is called more than once, but allows c-style variadic fns)
+; space must be reserved first if the fn return something
+; <ret> opcode doesn't take an argument this way (local variables must be popped first)
+; after the use of <ret> control flow returns to the call-site
+; builtin fns don't use this calling convention currently (if this convention is chosen going forward, builtin fns calling convention should also be changed for consistency)
+
+    push 0 ; 1 dummy value to overwrite
+    push 10 ; 2
+    push 20 ; 3
+    call add_int2 ; 3
+    pop ; 2
+    pop ; 1
+    push sp[-1] ; 2
+    call print_int ; 2
+    pop ; 1
+    pop ; 0
+    push 0 ; 1
+    call exit ; 0
+add_int2:
+    push sp[-3] ; 4 sp[-1] refers to the return address, which must not be overwritten
+    push sp[-3] ; 5
+    add ; 4
+    mov sp[-5] ; 3 sp[-5] refers to the dummy value
+    ret ; 2
+print_int:
+    push sp[-2] ; 3 sp[-1] refers to the return address, which must not be overwritten
+    call print ; 2
+    ret ; 2

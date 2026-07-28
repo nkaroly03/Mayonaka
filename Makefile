@@ -9,6 +9,12 @@ else
 CFLAGS += -O3 -DNDEBUG
 endif
 
+ifeq ($(OS), Windows_NT)
+STACK_SIZE_FLAG = -Wl,--stack,0x800000
+else
+STACK_SIZE_FLAG =
+endif
+
 SRC_DIR = srcs
 OBJ_DIR = objs
 BIN_DIR = bin
@@ -49,7 +55,7 @@ all: $(BIN_DIR)/$(BIN)
 remake: clean all
 
 $(BIN_DIR)/$(BIN): $(OBJ_DIR)/$(OBJ) $(ALLOCATOR_OBJS) $(DATA_STRUCTURE_OBJS) $(LANG_OBJS) $(RANDOM_OBJS) $(UTILS_OBJS) | $(BIN_DIR)
-	$(CC) $(CFLAGS) $^ -lm -o $@
+	$(CC) $(CFLAGS) $(STACK_SIZE_FLAG) $^ -lm -o $@
 
 $(OBJ_DIR)/$(OBJ): $(SRC) | $(OBJ_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@

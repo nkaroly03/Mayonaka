@@ -1,1 +1,24 @@
-rand();
+/*/
+
+fn int_list_fill(list_size: int, fill_val: int) []int {
+    let l: []int = [];
+    for (0..list_size) |_|
+        push_back(l, fill_val);
+    return l;
+}
+fn float_list_add(l: []float, val: float) void {
+    for (0..len(l)) |i|
+        l[i] = l[i] + val;
+}
+
+fn fib_recursive(n: int) int {
+    if (n < 2)
+        return n;
+    return fib_recursive(n - 1) + fib_recursive(n - 2);
+}
+
+/*/
+
+fn foo() void {
+    fn bar(i: int) int { return i; }
+}

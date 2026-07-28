@@ -287,7 +287,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
             break;
         case TOKEN_TYPE_INIT_LIST:
             if (!ast_node->m_parent || ast_node->m_parent->m_token->m_type != TOKEN_TYPE_LET)
-                return syntax_error("Initilizer list is only allowed in <let> expression", ast_node->m_token->m_line_number);
+                return syntax_error("Initilizer list is only allowed in <let> statement", ast_node->m_token->m_line_number);
             if (!vec_base_push_back(&self->type_info_stack, self->alloc, &(Type_info){.m_tag = TYPE_INFO_TAG_VOID, .m_dimensions = 1}))
                 return OOM_ERROR;
             add_instruction("%s []", op_code_to_str(OP_CODE_PUSH));

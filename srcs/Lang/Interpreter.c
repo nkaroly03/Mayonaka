@@ -120,32 +120,30 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
         enum Op_code op_code = (enum Op_code)self->bytecode.m_data[self->pc++];
         switch (op_code){
             case OP_CODE_PUSH:{
-                usize sp_offset;
-                Primitive sp_data;
-
                 Primitive temp;
-
                 switch ((enum Op_code_push_tag)self->bytecode.m_data[self->pc++]){
-                    case OP_CODE_PUSH_TAG_SP:
+                    case OP_CODE_PUSH_TAG_SP:{
+                        usize sp_offset;
                         memcpy(&sp_offset, &self->bytecode.m_data[self->pc], sizeof(sp_offset));
                         self->pc += sizeof(sp_offset);
-                        sp_data = *(Primitive*)vec_base_at(&self->stack, self->stack.m_size - sp_offset);
-                        if (!vec_base_push_back(&self->stack, self->alloc, &sp_data))
+                        temp = *(Primitive*)vec_base_at(&self->stack, self->stack.m_size - sp_offset);
+                        if (!vec_base_push_back(&self->stack, self->alloc, &temp))
                             return oom_error();
-                        switch (sp_data.m_tag){
+                        switch (temp.m_tag){
                             case PRIMITIVE_TAG_BOOL:
                             case PRIMITIVE_TAG_CHAR:
                             case PRIMITIVE_TAG_INT:
                             case PRIMITIVE_TAG_FLOAT:
                                 break;
                             case PRIMITIVE_TAG_STR:
-                                ++sp_data.m_str_data_ptr->m_ref_count;
+                                ++temp.m_str_data_ptr->m_ref_count;
                                 break;
                             case PRIMITIVE_TAG_LIST:
-                                ++sp_data.m_list_data_ptr->m_ref_count;
+                                ++temp.m_list_data_ptr->m_ref_count;
                                 break;
                         }
                         break;
+                    }
                     case OP_CODE_PUSH_TAG_ARGV:
                         if (!vec_base_push_back(&self->stack, self->alloc, &self->argv))
                             return oom_error();
