@@ -27,10 +27,10 @@ print_int:
 
 ; previous examble if the return address goes on the same stack
 ; (with callee cleanup, which avoids code duplication if fn is called more than once, but disallows c-style variadic fns)
-; space must be reserved first if the fn return something
+; space must be reserved first if the fn returns something
 ; <ret> opcode takes an int literal as an argument, which must be the amount of arguments passed to the fn (local variables must be popped first, <ret> pops the arguments)
 ; after the use of <ret> control flow returns to the call-site
-; builtin fns don't use this calling convention currently (if this convention is chosen going forward, builtin fns calling convention should also be changed for consistency)
+; builtin fns don't use this calling convention currently (if this convention is chosen going forward, builtin fn calling convention should also be changed for consistency)
 
     push 0 ; 1 dummy value to overwrite
     push 10 ; 2
@@ -54,10 +54,10 @@ print_int:
 
 ; previous examble if the return address goes on the same stack
 ; (with caller cleanup, which leads to code duplication if fn is called more than once, but allows c-style variadic fns)
-; space must be reserved first if the fn return something
+; space must be reserved first if the fn returns something
 ; <ret> opcode doesn't take an argument this way (local variables must be popped first)
 ; after the use of <ret> control flow returns to the call-site
-; builtin fns don't use this calling convention currently (if this convention is chosen going forward, builtin fns calling convention should also be changed for consistency)
+; builtin fns don't use this calling convention currently (if this convention is chosen going forward, builtin fn calling convention should also be changed for consistency)
 
     push 0 ; 1 dummy value to overwrite
     push 10 ; 2

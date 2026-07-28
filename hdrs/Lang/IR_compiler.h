@@ -18,6 +18,7 @@ enum Op_code{
 
     OP_CODE_CALL,
     OP_CODE_RET,
+    OP_CODE_RETV,
 
     OP_CODE_JMP,
     OP_CODE_JMPZ,

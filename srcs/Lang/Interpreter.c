@@ -356,6 +356,7 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                 }
                 break;
             case OP_CODE_RET:
+            case OP_CODE_RETV:
                 fprintf(stderr, "Not implemented\n");
                 abort();
 

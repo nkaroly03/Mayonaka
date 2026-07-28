@@ -409,7 +409,8 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
 
                 else if (
                     op_code_match(OP_CODE_POP      ) ||
-                    op_code_match(OP_CODE_RET      ) ||
+                    op_code_match(OP_CODE_RET      ) || // TODO: change to take 1 argument
+                    op_code_match(OP_CODE_RETV     ) || // TODO: change to take 1 argument
                     op_code_match(OP_CODE_TO_BOOL  ) ||
                     op_code_match(OP_CODE_TO_CHAR  ) ||
                     op_code_match(OP_CODE_TO_INT   ) ||
