@@ -1,5 +1,5 @@
-let WIDTH:  int = 30;
-let HEIGHT: int = 30;
+let WIDTH:  int = 45;
+let HEIGHT: int = 40;
 
 let WIDTH_HALF:  int = WIDTH  / 2;
 let HEIGHT_HALF: int = HEIGHT / 2;

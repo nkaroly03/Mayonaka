@@ -481,7 +481,7 @@ while (not stop_game){
             }
         }
 
-        nsleep(50000000);
+        nsleep(25000000);
     }
 
     print("\x1b[?25h\x1b[0m");

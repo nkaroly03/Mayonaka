@@ -53,31 +53,31 @@ Builtin_fn_tag_call_result builtin_fn_tag_call(enum Builtin_fn_tag tag, Type_inf
     switch (tag){
         case BUILTIN_FN_TAG_EXIT:
         case BUILTIN_FN_TAG_PRINT:
-            return (Builtin_fn_tag_call_result){.m_return_type = {.m_tag = TYPE_INFO_TAG_VOID, .m_dimensions = 0}, .m_is_callable = (args.m_size == 1)};
+            return (Builtin_fn_tag_call_result){.m_return_type_info = {.m_tag = TYPE_INFO_TAG_VOID, .m_dimensions = 0}, .m_is_callable = (args.m_size == 1)};
         case BUILTIN_FN_TAG_NSLEEP:
             return (Builtin_fn_tag_call_result){
-                .m_return_type = {.m_tag = TYPE_INFO_TAG_VOID, .m_dimensions = 0},
+                .m_return_type_info = {.m_tag = TYPE_INFO_TAG_VOID, .m_dimensions = 0},
                 .m_is_callable = (args.m_size == 1 && args.m_data[0].m_tag != TYPE_INFO_TAG_STR && args.m_data[0].m_dimensions == 0)
             };
         case BUILTIN_FN_TAG_SCAN:
-            return (Builtin_fn_tag_call_result){.m_return_type = {.m_tag = TYPE_INFO_TAG_STR, .m_dimensions = 0}, .m_is_callable = (args.m_size == 1)};
+            return (Builtin_fn_tag_call_result){.m_return_type_info = {.m_tag = TYPE_INFO_TAG_STR, .m_dimensions = 0}, .m_is_callable = (args.m_size == 1)};
         case BUILTIN_FN_TAG_POLL_KEYPRESS:
-            return (Builtin_fn_tag_call_result){.m_return_type = {.m_tag = TYPE_INFO_TAG_CHAR, .m_dimensions = 0}, .m_is_callable = (args.m_size == 0)};
+            return (Builtin_fn_tag_call_result){.m_return_type_info = {.m_tag = TYPE_INFO_TAG_CHAR, .m_dimensions = 0}, .m_is_callable = (args.m_size == 0)};
         case BUILTIN_FN_TAG_LEN:
             return (Builtin_fn_tag_call_result){
-                .m_return_type = {.m_tag = TYPE_INFO_TAG_INT, .m_dimensions = 0},
+                .m_return_type_info = {.m_tag = TYPE_INFO_TAG_INT, .m_dimensions = 0},
                 .m_is_callable = (args.m_size == 1 && (args.m_data[0].m_tag == TYPE_INFO_TAG_STR || args.m_data[0].m_dimensions > 0))
             };
         case BUILTIN_FN_TAG_RAND:
-            return (Builtin_fn_tag_call_result){.m_return_type = {.m_tag = TYPE_INFO_TAG_INT, .m_dimensions = 0}, .m_is_callable = (args.m_size == 0)};
+            return (Builtin_fn_tag_call_result){.m_return_type_info = {.m_tag = TYPE_INFO_TAG_INT, .m_dimensions = 0}, .m_is_callable = (args.m_size == 0)};
         case BUILTIN_FN_TAG_PUSH_BACK:
             return (Builtin_fn_tag_call_result){
-                .m_return_type = {.m_tag = TYPE_INFO_TAG_VOID, .m_dimensions = 0},
+                .m_return_type_info = {.m_tag = TYPE_INFO_TAG_VOID, .m_dimensions = 0},
                 .m_is_callable = (args.m_size == 2 && args.m_data[0].m_tag == args.m_data[1].m_tag && args.m_data[0].m_dimensions - 1 == args.m_data[1].m_dimensions)
             };
         case BUILTIN_FN_TAG_POP_BACK:
             return (Builtin_fn_tag_call_result){
-                .m_return_type = {.m_tag = TYPE_INFO_TAG_VOID, .m_dimensions = 0},
+                .m_return_type_info = {.m_tag = TYPE_INFO_TAG_VOID, .m_dimensions = 0},
                 .m_is_callable = (args.m_size == 1 && args.m_data[0].m_dimensions > 0)
             };
         default:

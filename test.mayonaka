@@ -26,3 +26,5 @@ fn float_list_add(l: []float, val: float) void {
 
     print(fib_recursive(10));
 }
+
+fn print() void{}

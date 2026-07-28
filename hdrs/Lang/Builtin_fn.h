@@ -27,7 +27,7 @@ enum Builtin_fn_tag builtin_fn_tag_init(const char *str);
 const char* builtin_fn_tag_to_str(enum Builtin_fn_tag tag);
 
 typedef struct Builtin_fn_tag_call_result{
-    Type_info m_return_type;
+    Type_info m_return_type_info;
     bool m_is_callable;
 } Builtin_fn_tag_call_result;
 
