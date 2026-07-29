@@ -801,7 +801,9 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
 
             if (
                 !vec_base_push_back(&self->fn_id_stack, self->alloc, &fn_id_node->m_token->m_id) ||
-                !str_base_assign_fmt(&fn_id_info.id_mangled, self->alloc, "%s" USIZE_PFMT, fn_id, self->label_counter++)
+                !str_base_assign_fmt(&fn_id_info.id_mangled, self->alloc, "%s", fn_id) || (
+                    ast_node->m_parent && !str_base_append_fmt(&fn_id_info.id_mangled, self->alloc, USIZE_PFMT, self->label_counter++)
+                )
             )
                 return OOM_ERROR;
 

@@ -1,30 +1,32 @@
-fn int_list_fill(n: int, fill_val: int) []int {
-    let l: []int = [];
-    for (0..n) |_|
-        push_back(l, fill_val);
-    return l;
-}
-fn float_list_add(l: []float, val: float) void {
-    for (0..len(l)) |i|
-        l[i] = l[i] + val;
-}
-{
-    fn fib_recursive(n: int) int {
-        if (n < 2)
-            return n;
-        return fib_recursive(n - 1) + fib_recursive(n - 2);
+/*/
+    fn int_list_fill(n: int, fill_val: int) []int {
+        let l: []int = [];
+        for (0..n) |_|
+            push_back(l, fill_val);
+        return l;
     }
-
-    print(fib_recursive(10));
-}
-{
-    fn fib_recursive(n: int) int {
-        if (n < 2)
-            return n;
-        return fib_recursive(n - 1) + fib_recursive(n - 2);
+    fn float_list_add(l: []float, val: float) void {
+        for (0..len(l)) |i|
+            l[i] = l[i] + val;
     }
+    fn fib(n: int) int {
+        fn _fib(n: int) int {
+            if (n < 2) return n;
+            return _fib(n - 1) + _fib(n - 2);
+        }
+        return _fib(n);
+    }
+/*/
 
-    print(fib_recursive(10));
+fn main() int {
+    let i0: int = 0;
+    let i1: int = 1;
+    while (i0 >= 0) : ({ print(i0); print('\n'); }){
+        let temp: int = i0 + i1;
+        i0 = i1;
+        i1 = temp;
+    }
+    return 0;
 }
 
-fn print() void{}
+return main();
