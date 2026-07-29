@@ -785,10 +785,23 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
 
             const char *fn_id = str_base_data_const(&fn_id_node->m_token->m_id);
 
-            Fn_id_info fn_id_info = {0};
+            Str_base id_mangled = {0};
+            Vec_base fn_arg_type_infos = vec_base_init(Type_info);
+            if (
+                !str_base_assign_raw(&id_mangled, self->alloc, fn_id) || (
+                    ast_node->m_parent && !str_base_append_fmt(&id_mangled, self->alloc, USIZE_PFMT, self->label_counter++)
+                ) ||
+                !vec_base_reserve(&fn_arg_type_infos, self->alloc, fn_arg_nodes.m_size)
+            )
+                return OOM_ERROR;
 
-            Umap_insert_result ires = umap_base_insert(&self->fn_id_info_map, self->alloc, &fn_id_node->m_token->m_id, &fn_id_info);
-            switch (ires.error){
+            Fn_id_info fn_id_info = {
+                .id_mangled       = id_mangled,
+                .arg_type_infos   = {.m_size = fn_arg_nodes.m_size, .m_data = fn_arg_type_infos.m_data},
+                .return_type_info = ast_node_to_type_info(fn_return_type_node)
+            };
+
+            switch (umap_base_insert(&self->fn_id_info_map, self->alloc, &fn_id_node->m_token->m_id, &fn_id_info).error){
                 case UMAP_INSERT_ERROR_NONE:
                     if (builtin_fn_tag_init(fn_id) != BUILTIN_FN_TAG_NONE){
                 case UMAP_INSERT_ERROR_ALREADY_INSERTED:
@@ -799,12 +812,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                     return OOM_ERROR;
             }
 
-            if (
-                !vec_base_push_back(&self->fn_id_stack, self->alloc, &fn_id_node->m_token->m_id) ||
-                !str_base_assign_fmt(&fn_id_info.id_mangled, self->alloc, "%s", fn_id) || (
-                    ast_node->m_parent && !str_base_append_fmt(&fn_id_info.id_mangled, self->alloc, USIZE_PFMT, self->label_counter++)
-                )
-            )
+            if (!vec_base_push_back(&self->fn_id_stack, self->alloc, &fn_id_node->m_token->m_id))
                 return OOM_ERROR;
 
             ++((Id_count*)vec_base_at(&self->id_count_stack, self->id_count_stack.m_size - 1))->fn_id_count;
@@ -823,23 +831,15 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                 .fn_IRs                 = {0}
             };
 
-            Umap_insert_result fn_IR_compiler_state_ires;
-
             if (
-                !vec_base_push_back(&fn_IR_compiler_state.id_count_stack, fn_IR_compiler_state.alloc, &(Id_count){.fn_id_count = 1, .var_id_count = 0}) || (
-                    fn_IR_compiler_state_ires = umap_base_insert(
-                        &fn_IR_compiler_state.fn_id_info_map,
-                        fn_IR_compiler_state.alloc,
-                        &fn_id_node->m_token->m_id,
-                        &fn_id_info
-                    )
-                ).error != UMAP_INSERT_ERROR_NONE ||
+                !vec_base_push_back(&fn_IR_compiler_state.id_count_stack, fn_IR_compiler_state.alloc, &(Id_count){.fn_id_count = 1, .var_id_count = 0}) ||
+                umap_base_insert(&fn_IR_compiler_state.fn_id_info_map, fn_IR_compiler_state.alloc, &fn_id_node->m_token->m_id, &fn_id_info).error != UMAP_INSERT_ERROR_NONE ||
                 !vec_base_push_back(&fn_IR_compiler_state.fn_id_stack, fn_IR_compiler_state.alloc, &fn_id_node->m_token->m_id) ||
+                !vec_base_reserve(&fn_IR_compiler_state.type_info_stack, fn_IR_compiler_state.alloc, fn_arg_nodes.m_size) ||
                 !str_base_append_fmt(&fn_IR_compiler_state.IR, fn_IR_compiler_state.alloc, "%s:\n", str_base_data_const(&fn_id_info.id_mangled))
             )
                 return OOM_ERROR;
 
-            Vec_base fn_arg_type_infos = vec_base_init(Type_info);
             for (usize i = 0; i < fn_arg_nodes.m_size; ++i){
                 const AST_node *arg_id_node = fn_arg_nodes.m_data[i];
                 Type_info arg_type_info = ast_node_to_type_info(arg_id_node->m_sub_nodes.m_data[0]);
@@ -848,17 +848,12 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                 if (insert_var_id_result.error != COMPILE_ERROR_NONE)
                     return insert_var_id_result;
 
-                if (
-                    !vec_base_push_back(&fn_IR_compiler_state.type_info_stack, fn_IR_compiler_state.alloc, &arg_type_info) ||
-                    !vec_base_push_back(&fn_arg_type_infos, self->alloc, &arg_type_info)
-                )
-                    return OOM_ERROR;
+                (void)vec_base_push_back(&fn_IR_compiler_state.type_info_stack, fn_IR_compiler_state.alloc, &arg_type_info);
+                (void)vec_base_push_back(&fn_arg_type_infos, self->alloc, &arg_type_info);
             }
 
-            fn_id_info.arg_type_infos = (Type_info_slice){.m_size = fn_arg_type_infos.m_size, .m_data = fn_arg_type_infos.m_data};
-            fn_id_info.return_type_info = ast_node_to_type_info(fn_return_type_node);
-
-            *(Fn_id_info*)ires.result.m_value = *(Fn_id_info*)fn_IR_compiler_state_ires.result.m_value = fn_id_info;
+            assert(fn_arg_type_infos.m_size == fn_id_info.arg_type_infos.m_size);
+            assert(fn_arg_type_infos.m_size == fn_arg_type_infos.m_capacity);
 
             const AST_node *fn_body_last_node = fn_body_node;
             if (fn_id_info.return_type_info.m_tag != TYPE_INFO_TAG_VOID){
