@@ -279,7 +279,7 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                             for (char *it = str_base_data(&unescaped.result); *it; ++it)
                                 if (!vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)*it}))
                                     return OOM_ERROR;
-                            if (!vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)'\0'}))
+                            if (!vec_base_push_back(&self->bytecode, self->alloc, &(u8){'\0'}))
                                 return OOM_ERROR;
                         }
                     }
@@ -377,6 +377,10 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                         abort();
                     }
                 }
+                else if (op_code_match(OP_CODE_RET) || op_code_match(OP_CODE_RETV)){
+                    fprintf(stderr, "op_code_match(OP_CODE_RET) || op_code_match(OP_CODE_RETV) is not implemented");
+                    abort();
+                }
                 else if (op_code_match(OP_CODE_JMP) || op_code_match(OP_CODE_JMPZ)){
                     if (rhs.m_size == 0)
                         return syntax_error("Op code <%s> takes in a label", op_code_str);
@@ -406,11 +410,8 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                         if (!vec_base_push_back(&self->bytecode, self->alloc, &label_bytecode_offset.as_u8s[i]))
                             return OOM_ERROR;
                 }
-
                 else if (
                     op_code_match(OP_CODE_POP      ) ||
-                    op_code_match(OP_CODE_RET      ) || // TODO: change to take 1 argument
-                    op_code_match(OP_CODE_RETV     ) || // TODO: change to take 1 argument
                     op_code_match(OP_CODE_TO_BOOL  ) ||
                     op_code_match(OP_CODE_TO_CHAR  ) ||
                     op_code_match(OP_CODE_TO_INT   ) ||
@@ -445,7 +446,6 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                     if (!vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)op_code}))
                         return OOM_ERROR;
                 }
-
                 else
                     return syntax_error("Unknown op code <%.*s>", (int)lhs.m_size, lhs.m_str);
             }
@@ -454,8 +454,9 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
 
     vec_base_for_each(self->jmp_infos, it){
         Jmp_info *jmp_info = it;
-        Umap_pair pair = umap_base_get_pair(&self->label_offset_map, &jmp_info->label);
-        if (!pair.m_key){
+
+        usize *label_offset = umap_base_get_pair(&self->label_offset_map, &jmp_info->label).m_value;
+        if (!label_offset){
             self->instruction_idx = jmp_info->instruction_idx;
             return syntax_error("Use of undeclared label <%s>", str_base_data(&jmp_info->label));
         }
@@ -463,7 +464,7 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
         union{
             usize as_usize;
             u8 as_u8s[sizeof(usize)];
-        } label_bytecode_offset = {.as_usize = *(usize*)pair.m_value};
+        } label_bytecode_offset = {.as_usize = *label_offset};
 
         memcpy(vec_base_at(&self->bytecode, jmp_info->bytecode_offset), label_bytecode_offset.as_u8s, sizeof(label_bytecode_offset.as_u8s));
     }
