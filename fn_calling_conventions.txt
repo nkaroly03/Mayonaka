@@ -7,6 +7,8 @@
 ; after the use of <ret> or <retv> control flow returns to the call-site
 ; builtin fns use this calling convention currently
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; THIS WAS CHOSEN ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
     push 10 ; 1
     push 20 ; 2
     call add_int2 ; 1

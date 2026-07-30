@@ -483,7 +483,7 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
     vec_base_for_each(self->jmp_infos, it){
         Jmp_info *jmp_info = it;
 
-        usize *label_offset = umap_base_get_pair(&self->label_offset_map, &jmp_info->label).m_value;
+        usize *label_offset = umap_base_at_key(&self->label_offset_map, &jmp_info->label).m_value;
         if (!label_offset){
             self->instruction_idx = jmp_info->instruction_idx;
             return syntax_error("Use of undeclared label <%s>", str_base_data(&jmp_info->label));

@@ -59,10 +59,10 @@ typedef struct Umap_pair_const{
     const void *m_key, *m_value;
 } Umap_pair_const;
 
-Umap_pair umap_base_get_pair(Umap_base *self, const void *key);
-Umap_pair_const umap_base_get_pair_const(const Umap_base *self, const void *key);
-Umap_pair umap_base_node_get_pair(Umap_base *self, const struct Snode *node);
-Umap_pair_const umap_base_node_get_pair_const(const Umap_base *self, const struct Snode *node);
+Umap_pair umap_base_at_key(Umap_base *self, const void *key);
+Umap_pair_const umap_base_at_key_const(const Umap_base *self, const void *key);
+Umap_pair umap_base_at_node(Umap_base *self, const struct Snode *node);
+Umap_pair_const umap_base_at_node_const(const Umap_base *self, const struct Snode *node);
 
 enum Umap_insert_error{
     UMAP_INSERT_ERROR_NONE,
@@ -77,8 +77,8 @@ typedef struct Umap_insert_result{
 Umap_insert_result umap_base_insert(Umap_base *self, Allocator alloc, const void *key, const void *value);
 Umap_insert_result umap_base_insert_no_rehash(Umap_base *self, Allocator alloc, const void *key, const void *value);
 
-bool umap_base_erase_discard(Umap_base *self, Allocator alloc, const void *key);
-bool umap_base_erase_to(Umap_base *self, Allocator alloc, const void *key, void *key_dest, void *value_dest);
+bool umap_base_erase_key_discard(Umap_base *self, Allocator alloc, const void *key);
+bool umap_base_erase_key_to(Umap_base *self, Allocator alloc, const void *key, void *key_dest, void *value_dest);
 
 void umap_base_clear(Umap_base *self, Allocator alloc);
 

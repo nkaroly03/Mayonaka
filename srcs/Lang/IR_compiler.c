@@ -5,6 +5,7 @@
 #include <stdlib.h>
 
 #include "../../hdrs/Allocator/Arena.h"
+#include "../../hdrs/Data_structure/Ordered_umap_base.h"
 #include "../../hdrs/Data_structure/Str_base.h"
 #include "../../hdrs/Data_structure/Umap_base.h"
 #include "../../hdrs/Data_structure/Vec_base.h"
@@ -125,20 +126,28 @@ typedef struct While_label_info{
 typedef struct IR_compiler_state{
     Allocator alloc;
     Vec_base id_count_stack;
-    struct{
-        Vec_base fn_id_stack;
-        Umap_base fn_id_info_map;
-    };
-    struct{
-        Vec_base var_id_stack;
-        Umap_base var_id_info_map;
-    };
+    Ordered_umap_base fn_ids;
+    Ordered_umap_base var_ids;
     Vec_base type_info_stack;
     usize label_counter;
     Vec_base while_label_info_stack;
     Str_base IR;
     Str_base fn_IRs;
 } IR_compiler_state;
+
+static IR_compiler_state IR_compiler_state_init(Allocator arena_alloc, usize label_counter_start){
+    return (IR_compiler_state){
+        .alloc                  = arena_alloc,
+        .id_count_stack         = vec_base_init(Id_count),
+        .fn_ids                 = ordered_umap_base_init(Str_base, Fn_id_info),
+        .var_ids                = ordered_umap_base_init(Str_base, Var_id_info),
+        .type_info_stack        = vec_base_init(Type_info),
+        .label_counter          = label_counter_start,
+        .while_label_info_stack = vec_base_init(While_label_info),
+        .IR                     = {0},
+        .fn_IRs                 = {0}
+    };
+}
 
 typedef struct IR_compiler_state_compile_result{
     Str_base error_info;
@@ -268,11 +277,11 @@ static bool IR_compiler_state_pop_on_discarded_expression(IR_compiler_state *sel
     } while (0)
 
 static IR_compiler_state_compile_result IR_compiler_state_insert_var_id(IR_compiler_state *self, const AST_node *id_node, Type_info id_type_info){
-    enum Umap_insert_error insert_error = umap_base_insert(
-        &self->var_id_info_map,
+    enum Umap_insert_error insert_error = ordered_umap_base_push_back(
+        &self->var_ids,
         self->alloc,
         &id_node->m_token->m_id,
-        &(Var_id_info){.stack_idx = self->var_id_stack.m_size, .type_info = id_type_info}
+        &(Var_id_info){.stack_idx = self->var_ids.m_keys.m_size, .type_info = id_type_info}
     ).error;
 
     switch (insert_error){
@@ -284,9 +293,6 @@ static IR_compiler_state_compile_result IR_compiler_state_insert_var_id(IR_compi
             return syntax_error("Identifier <%s> is already in use", id_node->m_token->m_line_number, str_base_data_const(&id_node->m_token->m_id));
     }
 
-    if (!vec_base_push_back(&self->var_id_stack, self->alloc, &id_node->m_token->m_id))
-        return OOM_ERROR;
-
     ++((Id_count*)vec_base_at(&self->id_count_stack, self->id_count_stack.m_size - 1))->var_id_count;
 
     return (IR_compiler_state_compile_result){0};
@@ -294,13 +300,10 @@ static IR_compiler_state_compile_result IR_compiler_state_insert_var_id(IR_compi
 static bool IR_compiler_state_pop_ids_in_current_scope(IR_compiler_state *self){
     Id_count id_count;
     vec_base_pop_back_to(&self->id_count_stack, &id_count);
-    while (id_count.fn_id_count-- > 0){
-        umap_base_erase_discard(&self->fn_id_info_map, self->alloc, vec_base_at(&self->fn_id_stack, self->fn_id_stack.m_size - 1));
-        vec_base_pop_back_discard(&self->fn_id_stack);
-    }
+    while (id_count.fn_id_count-- > 0)
+        ordered_umap_base_pop_back_discard(&self->fn_ids, self->alloc);
     while (id_count.var_id_count-- > 0){
-        umap_base_erase_discard(&self->var_id_info_map, self->alloc, vec_base_at(&self->var_id_stack, self->var_id_stack.m_size - 1));
-        vec_base_pop_back_discard(&self->var_id_stack);
+        ordered_umap_base_pop_back_discard(&self->var_ids, self->alloc);
         vec_base_pop_back_discard(&self->type_info_stack);
         if (!IR_compiler_state_add_instruction(self, "%s", op_code_to_str(OP_CODE_POP)))
             return false;
@@ -314,6 +317,7 @@ static bool IR_compiler_state_pop_ids_in_current_scope(IR_compiler_state *self){
     } while (0)
 
 #define JMP_LABEL_SYMBOL "L"
+#define JMP_LABEL_FMT LOCAL_LABEL_PREFIX_SYMBOL JMP_LABEL_SYMBOL USIZE_PFMT
 #define JMP_LABEL_BUFSIZE array_size(LOCAL_LABEL_PREFIX_SYMBOL JMP_LABEL_SYMBOL "18446744073709551615")
 
 static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_state *self, const AST_node *ast_node){
@@ -322,7 +326,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
 
     switch (ast_node->m_token->m_type){
         case TOKEN_TYPE_ID:{
-            Var_id_info *var_id_info_ptr = umap_base_get_pair(&self->var_id_info_map, &ast_node->m_token->m_id).m_value;
+            Var_id_info *var_id_info_ptr = ordered_umap_base_at_key(&self->var_ids, &ast_node->m_token->m_id).m_value;
             if (!var_id_info_ptr)
                 return syntax_error("Use of undeclared identifier <%s>", ast_node->m_token->m_line_number, str_base_data_const(&ast_node->m_token->m_id));
             if (!vec_base_push_back(&self->type_info_stack, self->alloc, &var_id_info_ptr->type_info))
@@ -420,7 +424,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                 return_type_info = bfn_call_result.m_return_type_info;
             }
             else{
-                Fn_id_info *fn_id_info_ptr = umap_base_get_pair(&self->fn_id_info_map, &ast_node->m_sub_nodes.m_data[0]->m_token->m_id).m_value;
+                Fn_id_info *fn_id_info_ptr = ordered_umap_base_at_key(&self->fn_ids, &ast_node->m_sub_nodes.m_data[0]->m_token->m_id).m_value;
                 if (!fn_id_info_ptr)
                     return syntax_error("Use of undeclared function <%s>", ast_node->m_token->m_line_number, fn_id);
 
@@ -601,7 +605,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                 if (lhs_node->m_token->m_type != TOKEN_TYPE_ID)
                     return syntax_error("Trying to assign to rvalue", lhs_node->m_token->m_line_number);
 
-                Var_id_info *var_id_info_ptr = umap_base_get_pair(&self->var_id_info_map, &lhs_node->m_token->m_id).m_value;
+                Var_id_info *var_id_info_ptr = ordered_umap_base_at_key(&self->var_ids, &lhs_node->m_token->m_id).m_value;
                 if (!var_id_info_ptr)
                     return syntax_error("Use of undeclared identifier <%s>", lhs_node->m_token->m_line_number, str_base_data_const(&lhs_node->m_token->m_id));
 
@@ -734,7 +738,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
             const AST_node *rhs_node = ast_node->m_sub_nodes.m_data[1];
 
             char and_or_label_str_buf[JMP_LABEL_BUFSIZE];
-            sprintf(and_or_label_str_buf, LOCAL_LABEL_PREFIX_SYMBOL JMP_LABEL_SYMBOL USIZE_PFMT, self->label_counter++);
+            sprintf(and_or_label_str_buf, JMP_LABEL_FMT, self->label_counter++);
 
             IR_compiler_state_compile_result compile_result = IR_compiler_state_compile(self, lhs_node);
             if (compile_result.error != COMPILE_ERROR_NONE)
@@ -803,7 +807,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                 .return_type_info = ast_node_to_type_info(fn_return_type_node)
             };
 
-            switch (umap_base_insert(&self->fn_id_info_map, self->alloc, &fn_id_node->m_token->m_id, &fn_id_info).error){
+            switch (ordered_umap_base_push_back(&self->fn_ids, self->alloc, &fn_id_node->m_token->m_id, &fn_id_info).error){
                 case UMAP_INSERT_ERROR_NONE:
                     if (builtin_fn_tag_init(fn_id) != BUILTIN_FN_TAG_NONE){
                 case UMAP_INSERT_ERROR_ALREADY_INSERTED:
@@ -814,29 +818,13 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                     return OOM_ERROR;
             }
 
-            if (!vec_base_push_back(&self->fn_id_stack, self->alloc, &fn_id_node->m_token->m_id))
-                return OOM_ERROR;
-
             ++((Id_count*)vec_base_at(&self->id_count_stack, self->id_count_stack.m_size - 1))->fn_id_count;
 
-            IR_compiler_state fn_IR_compiler_state = {
-                .alloc                  = self->alloc,
-                .id_count_stack         = vec_base_init(Id_count),
-                .fn_id_stack            = vec_base_init(Str_base),
-                .fn_id_info_map         = umap_base_init(Str_base, Fn_id_info),
-                .var_id_stack           = vec_base_init(Str_base),
-                .var_id_info_map        = umap_base_init(Str_base, Var_id_info),
-                .type_info_stack        = vec_base_init(Type_info),
-                .label_counter          = self->label_counter,
-                .while_label_info_stack = vec_base_init(While_label_info),
-                .IR                     = {0},
-                .fn_IRs                 = {0}
-            };
+            IR_compiler_state fn_IR_compiler_state = IR_compiler_state_init(self->alloc, self->label_counter);
 
             if (
                 !vec_base_push_back(&fn_IR_compiler_state.id_count_stack, fn_IR_compiler_state.alloc, &(Id_count){.fn_id_count = 1, .var_id_count = 0}) ||
-                umap_base_insert(&fn_IR_compiler_state.fn_id_info_map, fn_IR_compiler_state.alloc, &fn_id_node->m_token->m_id, &fn_id_info).error != UMAP_INSERT_ERROR_NONE ||
-                !vec_base_push_back(&fn_IR_compiler_state.fn_id_stack, fn_IR_compiler_state.alloc, &fn_id_node->m_token->m_id) ||
+                ordered_umap_base_push_back(&fn_IR_compiler_state.fn_ids, fn_IR_compiler_state.alloc, &fn_id_node->m_token->m_id, &fn_id_info).error != UMAP_INSERT_ERROR_NONE ||
                 !str_base_append_fmt(&fn_IR_compiler_state.IR, fn_IR_compiler_state.alloc, "%s:\n", str_base_data_const(&fn_id_info.id_mangled))
             )
                 return OOM_ERROR;
@@ -939,7 +927,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
 
         case TOKEN_TYPE_IF:{
             char if_end_label_str_buf[JMP_LABEL_BUFSIZE];
-            sprintf(if_end_label_str_buf, LOCAL_LABEL_PREFIX_SYMBOL JMP_LABEL_SYMBOL USIZE_PFMT, self->label_counter++);
+            sprintf(if_end_label_str_buf, JMP_LABEL_FMT, self->label_counter++);
 
             IR_compiler_state_compile_result compile_result = IR_compiler_state_compile(self, ast_node->m_sub_nodes.m_data[0]);
             if (compile_result.error != COMPILE_ERROR_NONE)
@@ -971,7 +959,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
 
                 if (has_else){
                     char else_end_label_str_buf[JMP_LABEL_BUFSIZE];
-                    sprintf(else_end_label_str_buf, LOCAL_LABEL_PREFIX_SYMBOL JMP_LABEL_SYMBOL USIZE_PFMT, self->label_counter++);
+                    sprintf(else_end_label_str_buf, JMP_LABEL_FMT, self->label_counter++);
 
                     add_instruction("%s %s", op_code_to_str(OP_CODE_JMP), else_end_label_str_buf);
 
@@ -1002,9 +990,9 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
             char    break_label_str_buf[JMP_LABEL_BUFSIZE];
             char continue_label_str_buf[JMP_LABEL_BUFSIZE];
 
-            sprintf(   start_label_str_buf, LOCAL_LABEL_PREFIX_SYMBOL JMP_LABEL_SYMBOL USIZE_PFMT, self->label_counter++);
-            sprintf(   break_label_str_buf, LOCAL_LABEL_PREFIX_SYMBOL JMP_LABEL_SYMBOL USIZE_PFMT, self->label_counter++);
-            sprintf(continue_label_str_buf, LOCAL_LABEL_PREFIX_SYMBOL JMP_LABEL_SYMBOL USIZE_PFMT, self->label_counter++);
+            sprintf(   start_label_str_buf, JMP_LABEL_FMT, self->label_counter++);
+            sprintf(   break_label_str_buf, JMP_LABEL_FMT, self->label_counter++);
+            sprintf(continue_label_str_buf, JMP_LABEL_FMT, self->label_counter++);
 
             if (!str_base_append_fmt(&self->IR, self->alloc, "%s:\n", start_label_str_buf))
                 return OOM_ERROR;
@@ -1100,7 +1088,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
             else{
                 enum Op_code ret_op_code = OP_CODE_RETV;
 
-                Fn_id_info *fn_id_info_ptr = umap_base_get_pair(&self->fn_id_info_map, &fn_node->m_sub_nodes.m_data[0]->m_token->m_id).m_value;
+                Fn_id_info *fn_id_info_ptr = ordered_umap_base_at_key(&self->fn_ids, &fn_node->m_sub_nodes.m_data[0]->m_token->m_id).m_value;
                 if (fn_id_info_ptr->return_type_info.m_tag != TYPE_INFO_TAG_VOID){
                     if (ast_node->m_sub_nodes.m_size != 1)
                         return syntax_error("Function returning non-void must end with a <return> statement that contains an expression", ast_node->m_token->m_line_number);
@@ -1148,19 +1136,7 @@ const char* op_code_to_str(enum Op_code op_code){
 IR_compile_result IR_compile(Arena *arena, AST_node_ptr_slice ast_nodes){
     assert(arena && "<arena> is not nullable");
 
-    IR_compiler_state state = {
-        .alloc                  = arena_allocator(arena),
-        .id_count_stack         = vec_base_init(Id_count),
-        .fn_id_stack            = vec_base_init(Str_base),
-        .fn_id_info_map         = umap_base_init(Str_base, Fn_id_info),
-        .var_id_stack           = vec_base_init(Str_base),
-        .var_id_info_map        = umap_base_init(Str_base, Var_id_info),
-        .type_info_stack        = vec_base_init(Type_info),
-        .label_counter          = 0,
-        .while_label_info_stack = vec_base_init(While_label_info),
-        .IR                     = {0},
-        .fn_IRs                 = {0}
-    };
+    IR_compiler_state state = IR_compiler_state_init(arena_allocator(arena), 0);
 
     if (!vec_base_push_back(&state.id_count_stack, state.alloc, &(Id_count){0}))
         goto oom_error;

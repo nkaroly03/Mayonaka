@@ -46,29 +46,29 @@ usize umap_bucket_count(const Umap *self){
     return umap_base_bucket_count(&self->m_base);
 }
 
-Umap_pair umap_get_pair(Umap *self, const void *key){
+Umap_pair umap_at_key(Umap *self, const void *key){
     assert(self && "<self> is never null");
     assert(key && "<key> is not nullable");
 
-    return umap_base_get_pair(&self->m_base, key);
+    return umap_base_at_key(&self->m_base, key);
 }
-Umap_pair_const umap_get_pair_const(const Umap *self, const void *key){
+Umap_pair_const umap_at_key_const(const Umap *self, const void *key){
     assert(self && "<self> is never null");
     assert(key && "<key> is not nullable");
 
-    return umap_base_get_pair_const(&self->m_base, key);
+    return umap_base_at_key_const(&self->m_base, key);
 }
-Umap_pair umap_node_get_pair(Umap *self, const struct Snode *node){
+Umap_pair umap_at_node(Umap *self, const struct Snode *node){
     assert(self && "<self> is never null");
     assert(node && "<node> is not nullable");
 
-    return umap_base_node_get_pair(&self->m_base, node);
+    return umap_base_at_node(&self->m_base, node);
 }
-Umap_pair_const umap_node_get_pair_const(const Umap *self, const struct Snode *node){
+Umap_pair_const umap_at_node_const(const Umap *self, const struct Snode *node){
     assert(self && "<self> is never null");
     assert(node && "<node> is not nullable");
 
-    return umap_base_node_get_pair_const(&self->m_base, node);
+    return umap_base_at_node_const(&self->m_base, node);
 }
 
 Umap_insert_result umap_insert(Umap *self, const void *key, const void *value){
@@ -86,19 +86,19 @@ Umap_insert_result umap_insert_no_rehash(Umap *self, const void *key, const void
     return umap_base_insert_no_rehash(&self->m_base, self->m_alloc, key, value);
 }
 
-bool umap_erase_discard(Umap *self, const void *key){
+bool umap_erase_key_discard(Umap *self, const void *key){
     assert(self && "<self> is never null");
     assert(key && "<key> is not nullable");
 
-    return umap_base_erase_discard(&self->m_base, self->m_alloc, key);
+    return umap_base_erase_key_discard(&self->m_base, self->m_alloc, key);
 }
-bool umap_erase_to(Umap *self, const void *key, void *key_dest, void *value_dest){
+bool umap_erase_key_to(Umap *self, const void *key, void *key_dest, void *value_dest){
     assert(self && "<self> is never null");
     assert(key && "<key> is not nullable");
     assert(key_dest && "<key_dest> is not nullable");
     assert(value_dest && "<value_dest> is not nullable");
 
-    return umap_base_erase_to(&self->m_base, self->m_alloc, key, key_dest, value_dest);
+    return umap_base_erase_key_to(&self->m_base, self->m_alloc, key, key_dest, value_dest);
 }
 
 void umap_clear(Umap *self){

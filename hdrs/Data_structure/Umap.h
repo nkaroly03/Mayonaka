@@ -45,16 +45,16 @@ bool umap_empty(const Umap *self);
 usize umap_size(const Umap *self);
 usize umap_bucket_count(const Umap *self);
 
-Umap_pair umap_get_pair(Umap *self, const void *key);
-Umap_pair_const umap_get_pair_const(const Umap *self, const void *key);
-Umap_pair umap_node_get_pair(Umap *self, const struct Snode *node);
-Umap_pair_const umap_node_get_pair_const(const Umap *self, const struct Snode *node);
+Umap_pair umap_at_key(Umap *self, const void *key);
+Umap_pair_const umap_at_key_const(const Umap *self, const void *key);
+Umap_pair umap_at_node(Umap *self, const struct Snode *node);
+Umap_pair_const umap_at_node_const(const Umap *self, const struct Snode *node);
 
 Umap_insert_result umap_insert(Umap *self, const void *key, const void *value);
 Umap_insert_result umap_insert_no_rehash(Umap *self, const void *key, const void *value);
 
-bool umap_erase_discard(Umap *self, const void *key);
-bool umap_erase_to(Umap *self, const void *key, void *key_dest, void *value_dest);
+bool umap_erase_key_discard(Umap *self, const void *key);
+bool umap_erase_key_to(Umap *self, const void *key, void *key_dest, void *value_dest);
 
 void umap_clear(Umap *self);
 
