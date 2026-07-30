@@ -313,8 +313,8 @@ static bool IR_compiler_state_pop_ids_in_current_scope(IR_compiler_state *self){
             return OOM_ERROR; \
     } while (0)
 
-#define LABEL_SYMBOL "L"
-#define LABEL_BUFSIZE array_size("." LABEL_SYMBOL "18446744073709551615")
+#define JMP_LABEL_SYMBOL "L"
+#define JMP_LABEL_BUFSIZE array_size(LOCAL_LABEL_PREFIX_SYMBOL JMP_LABEL_SYMBOL "18446744073709551615")
 
 static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_state *self, const AST_node *ast_node){
     enum Binary_op bin_op;
@@ -733,8 +733,8 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
             const AST_node *lhs_node = ast_node->m_sub_nodes.m_data[0];
             const AST_node *rhs_node = ast_node->m_sub_nodes.m_data[1];
 
-            char and_or_label_str_buf[LABEL_BUFSIZE];
-            sprintf(and_or_label_str_buf, "." LABEL_SYMBOL USIZE_PFMT, self->label_counter++);
+            char and_or_label_str_buf[JMP_LABEL_BUFSIZE];
+            sprintf(and_or_label_str_buf, LOCAL_LABEL_PREFIX_SYMBOL JMP_LABEL_SYMBOL USIZE_PFMT, self->label_counter++);
 
             IR_compiler_state_compile_result compile_result = IR_compiler_state_compile(self, lhs_node);
             if (compile_result.error != COMPILE_ERROR_NONE)
@@ -786,13 +786,15 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
             const char *fn_id = str_base_data_const(&fn_id_node->m_token->m_id);
 
             Str_base id_mangled = {0};
+            if (ast_node->m_parent){
+                if (!str_base_assign_fmt(&id_mangled, self->alloc, LOCAL_LABEL_PREFIX_SYMBOL "_%s" USIZE_PFMT, fn_id, self->label_counter++))
+                    return OOM_ERROR;
+            }
+            else if (!str_base_assign_raw(&id_mangled, self->alloc, fn_id))
+                return OOM_ERROR;
+
             Vec_base fn_arg_type_infos = vec_base_init(Type_info);
-            if (
-                !str_base_assign_raw(&id_mangled, self->alloc, fn_id) || (
-                    ast_node->m_parent && !str_base_append_fmt(&id_mangled, self->alloc, USIZE_PFMT, self->label_counter++)
-                ) ||
-                !vec_base_reserve(&fn_arg_type_infos, self->alloc, fn_arg_nodes.m_size)
-            )
+            if (!vec_base_reserve(&fn_arg_type_infos, self->alloc, fn_arg_nodes.m_size))
                 return OOM_ERROR;
 
             Fn_id_info fn_id_info = {
@@ -835,7 +837,6 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                 !vec_base_push_back(&fn_IR_compiler_state.id_count_stack, fn_IR_compiler_state.alloc, &(Id_count){.fn_id_count = 1, .var_id_count = 0}) ||
                 umap_base_insert(&fn_IR_compiler_state.fn_id_info_map, fn_IR_compiler_state.alloc, &fn_id_node->m_token->m_id, &fn_id_info).error != UMAP_INSERT_ERROR_NONE ||
                 !vec_base_push_back(&fn_IR_compiler_state.fn_id_stack, fn_IR_compiler_state.alloc, &fn_id_node->m_token->m_id) ||
-                !vec_base_reserve(&fn_IR_compiler_state.type_info_stack, fn_IR_compiler_state.alloc, fn_arg_nodes.m_size) ||
                 !str_base_append_fmt(&fn_IR_compiler_state.IR, fn_IR_compiler_state.alloc, "%s:\n", str_base_data_const(&fn_id_info.id_mangled))
             )
                 return OOM_ERROR;
@@ -848,7 +849,8 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                 if (insert_var_id_result.error != COMPILE_ERROR_NONE)
                     return insert_var_id_result;
 
-                (void)vec_base_push_back(&fn_IR_compiler_state.type_info_stack, fn_IR_compiler_state.alloc, &arg_type_info);
+                if (!vec_base_push_back(&fn_IR_compiler_state.type_info_stack, fn_IR_compiler_state.alloc, &arg_type_info))
+                    return OOM_ERROR;
                 (void)vec_base_push_back(&fn_arg_type_infos, self->alloc, &arg_type_info);
             }
 
@@ -936,8 +938,8 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
         }
 
         case TOKEN_TYPE_IF:{
-            char if_end_label_str_buf[LABEL_BUFSIZE];
-            sprintf(if_end_label_str_buf, "." LABEL_SYMBOL USIZE_PFMT, self->label_counter++);
+            char if_end_label_str_buf[JMP_LABEL_BUFSIZE];
+            sprintf(if_end_label_str_buf, LOCAL_LABEL_PREFIX_SYMBOL JMP_LABEL_SYMBOL USIZE_PFMT, self->label_counter++);
 
             IR_compiler_state_compile_result compile_result = IR_compiler_state_compile(self, ast_node->m_sub_nodes.m_data[0]);
             if (compile_result.error != COMPILE_ERROR_NONE)
@@ -968,8 +970,8 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                 }
 
                 if (has_else){
-                    char else_end_label_str_buf[LABEL_BUFSIZE];
-                    sprintf(else_end_label_str_buf, "." LABEL_SYMBOL USIZE_PFMT, self->label_counter++);
+                    char else_end_label_str_buf[JMP_LABEL_BUFSIZE];
+                    sprintf(else_end_label_str_buf, LOCAL_LABEL_PREFIX_SYMBOL JMP_LABEL_SYMBOL USIZE_PFMT, self->label_counter++);
 
                     add_instruction("%s %s", op_code_to_str(OP_CODE_JMP), else_end_label_str_buf);
 
@@ -996,13 +998,13 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
         }
 
         case TOKEN_TYPE_WHILE:{
-            char    start_label_str_buf[LABEL_BUFSIZE];
-            char    break_label_str_buf[LABEL_BUFSIZE];
-            char continue_label_str_buf[LABEL_BUFSIZE];
+            char    start_label_str_buf[JMP_LABEL_BUFSIZE];
+            char    break_label_str_buf[JMP_LABEL_BUFSIZE];
+            char continue_label_str_buf[JMP_LABEL_BUFSIZE];
 
-            sprintf(   start_label_str_buf, "." LABEL_SYMBOL USIZE_PFMT, self->label_counter++);
-            sprintf(   break_label_str_buf, "." LABEL_SYMBOL USIZE_PFMT, self->label_counter++);
-            sprintf(continue_label_str_buf, "." LABEL_SYMBOL USIZE_PFMT, self->label_counter++);
+            sprintf(   start_label_str_buf, LOCAL_LABEL_PREFIX_SYMBOL JMP_LABEL_SYMBOL USIZE_PFMT, self->label_counter++);
+            sprintf(   break_label_str_buf, LOCAL_LABEL_PREFIX_SYMBOL JMP_LABEL_SYMBOL USIZE_PFMT, self->label_counter++);
+            sprintf(continue_label_str_buf, LOCAL_LABEL_PREFIX_SYMBOL JMP_LABEL_SYMBOL USIZE_PFMT, self->label_counter++);
 
             if (!str_base_append_fmt(&self->IR, self->alloc, "%s:\n", start_label_str_buf))
                 return OOM_ERROR;

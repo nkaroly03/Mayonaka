@@ -24,15 +24,6 @@
 
 // ------------------------------------------------------------------------------------------------
 
-static int is_punct_not_underscore(int c){
-    return c != '_' && ispunct(c);
-}
-static int is_alpha_or_underscore(int c){
-    return c == '_' || isalpha(c);
-}
-static int is_alnum_or_underscore(int c){
-    return c == '_' || isalnum(c);
-}
 static int is_newline(int c){
     return c == '\n';
 }
@@ -45,6 +36,30 @@ static int is_semicolon(int c){
 static int is_rbracket(int c){
     return c == ']';
 }
+static int is_punct_not_underscore(int c){
+    return c != '_' && ispunct(c);
+}
+static int is_alpha_or_underscore(int c){
+    return c == '_' || isalpha(c);
+}
+static int is_alnum_or_underscore(int c){
+    return c == '_' || isalnum(c);
+}
+
+typedef union I64_u8s_union{
+    i64 as_i64;
+    u8 as_u8s[sizeof(i64)];
+} I64_u8s_union;
+
+typedef union F64_u8s_union{
+    f64 as_f64;
+    u8 as_u8s[sizeof(f64)];
+} F64_u8s_union;
+
+typedef union Usize_u8s_union{
+    usize as_usize;
+    u8 as_u8s[sizeof(usize)];
+} Usize_u8s_union;
 
 typedef struct Jmp_info{
     Str_base label;
@@ -79,10 +94,7 @@ static Bytecode_compile_result bytecode_compiler_syntax_error(Bytecode_compiler_
 #define syntax_error(...) bytecode_compiler_syntax_error(self, __VA_ARGS__)
 
 static Bytecode_compile_result bytecode_compiler_state_sp_case(Bytecode_compiler_state *self, Str_view rhs){
-    union{
-        usize as_usize;
-        u8 as_u8s[sizeof(usize)];
-    } sp_offset;
+    Usize_u8s_union sp_offset;
 
     if (errno = 0, sscanf(rhs.m_str, SP_SYMBOL " [ - " USIZE_SFMT " ]", &sp_offset.as_usize) != 1)
         return syntax_error("<" SP_SYMBOL "> must be followed by <[-<val>]>, where <val> is an integer");
@@ -100,50 +112,54 @@ static Bytecode_compile_result bytecode_compiler_state_sp_case(Bytecode_compiler
     return (Bytecode_compile_result){.error = COMPILE_ERROR_NONE};
 }
 
-static Bytecode_compile_result bytecode_compiler_state_label_to_str(Bytecode_compiler_state *self, Str_view label, Str_base *out_label_str, bool is_label_decl){
-    label = str_view_trim_right_while(
+static Bytecode_compile_result bytecode_compiler_state_label_to_str(Bytecode_compiler_state *self, bool is_label_decl, Str_view label_sv, Str_base *out_label_str){
+    label_sv = str_view_trim_right_while(
         str_view_trim_left_while(
-            str_view_trim_right(
-                label,
-                str_view_trim_left_while_not(label, is_semicolon).m_size
-            ),
+            str_view_trim_right(label_sv, str_view_trim_left_while_not(label_sv, is_semicolon).m_size),
             isspace
         ),
         isspace
     );
 
-    Str_view label_cpy = label;
+    Str_view label_sv_cpy = label_sv;
 
-    if (label.m_size == 0 || label.m_str[0] != '.')
-        return syntax_error("Labels must start with <.>");
+    label_sv = str_view_trim_left_while(str_view_trim_prefix(label_sv, LOCAL_LABEL_PREFIX_SYMBOL), isspace);
 
-    label = str_view_trim_left_while(str_view_trim_left(label, 1), isspace);
-
-    if (label.m_size == 0 || !is_alpha_or_underscore(label.m_str[0]))
+    if (label_sv.m_size == 0 || !is_alpha_or_underscore(label_sv.m_str[0]))
         return syntax_error("Labels must start with an ascii character or <_>");
 
-    label = str_view_trim_left_while(str_view_trim_left_while(label, is_alnum_or_underscore), isspace);
+    label_sv = str_view_trim_left_while(str_view_trim_left_while(label_sv, is_alnum_or_underscore), isspace);
 
     if (is_label_decl){
-        if (label.m_size == 0 || label.m_str[0] != ':')
+        if (label_sv.m_size == 0 || label_sv.m_str[0] != ':')
             return syntax_error("Label declaration must end with <:>");
 
-        label_cpy = str_view_trim_right(label_cpy, str_view_trim_left_while_not(label_cpy, is_colon).m_size);
+        label_sv_cpy = str_view_trim_right(label_sv_cpy, str_view_trim_left_while_not(label_sv_cpy, is_colon).m_size);
 
-        label = str_view_trim_left_while(str_view_trim_left(label, 1), isspace);
+        label_sv = str_view_trim_left_while(str_view_trim_left(label_sv, 1), isspace);
     }
 
-    if (label.m_size > 0)
+    if (label_sv.m_size > 0)
         return syntax_error("Labels can only be followed by comments");
 
     Str_base label_str = {0};
 
-    for (usize i = 0; i < label_cpy.m_size; ++i)
-        if (!isspace(label_cpy.m_str[i]) && !str_base_push_back(&label_str, self->alloc, label_cpy.m_str[i]))
+    for (usize i = 0; i < label_sv_cpy.m_size; ++i)
+        if (!isspace(label_sv_cpy.m_str[i]) && !str_base_push_back(&label_str, self->alloc, label_sv_cpy.m_str[i]))
             return OOM_ERROR;
 
     *out_label_str = label_str;
 
+    return (Bytecode_compile_result){.error = COMPILE_ERROR_NONE};
+}
+
+static Bytecode_compile_result bytecode_compiler_state_add_label(Bytecode_compiler_state *self, const Str_base *label_str){
+    Umap_insert_result ires = umap_base_insert(&self->label_offset_map, self->alloc, label_str, &(usize){self->bytecode.m_size});
+    switch (ires.error){
+        case UMAP_INSERT_ERROR_NONE:             break;
+        case UMAP_INSERT_ERROR_OOM:              return OOM_ERROR;
+        case UMAP_INSERT_ERROR_ALREADY_INSERTED: return syntax_error("Label <%s> is already in use", str_base_data_const(label_str));
+    }
     return (Bytecode_compile_result){.error = COMPILE_ERROR_NONE};
 }
 
@@ -154,39 +170,39 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
         Str_view sv = *(Str_view*)vec_base_at(&self->instruction_views, self->instruction_idx);
 
         if (sv.m_size > 0 && sv.m_str[0] != ';'){
-            if (str_view_starts_with(sv, ".")){
-                Str_base label_str;
-                Bytecode_compile_result label_to_str_result = bytecode_compiler_state_label_to_str(self, sv, &label_str, true);
-                if (label_to_str_result.error != COMPILE_ERROR_NONE)
-                    return label_to_str_result;
+            Str_view lhs = str_view_trim_right(sv, str_view_trim_left_while_not(sv, isspace).m_size);
 
-                Umap_insert_result ires = umap_base_insert(&self->label_offset_map, self->alloc, &label_str, &(usize){self->bytecode.m_size});
-                switch (ires.error){
-                    case UMAP_INSERT_ERROR_NONE:             break;
-                    case UMAP_INSERT_ERROR_OOM:              return OOM_ERROR;
-                    case UMAP_INSERT_ERROR_ALREADY_INSERTED: return syntax_error("Label <%s> is already in use", str_base_data(&label_str));
-                }
+            enum Op_code op_code;
+            const char *op_code_str;
+            Str_view op_code_sv;
+
+            #define op_code_match(op_code_val) \
+                ( \
+                    op_code = (op_code_val), \
+                    op_code_str = op_code_to_str(op_code), \
+                    op_code_sv = str_view_init(op_code_str), \
+                    cmp_eq_Str_view(&op_code_sv, &lhs) \
+                )
+
+            Str_view rhs = str_view_trim_left_while(str_view_trim_left(sv, lhs.m_size), isspace);
+
+            if (str_view_starts_with(sv, LOCAL_LABEL_PREFIX_SYMBOL) || str_view_any_of(lhs, is_colon)){
+                Str_base label_str;
+
+                Bytecode_compile_result temp = bytecode_compiler_state_label_to_str(self, true, sv, &label_str);
+                if (temp.error != COMPILE_ERROR_NONE || (temp = bytecode_compiler_state_add_label(self, &label_str)).error != COMPILE_ERROR_NONE)
+                    return temp;
+
+                const char *label_str_data = str_base_data(&label_str);
+
+                if (builtin_fn_tag_init(label_str_data) != BUILTIN_FN_TAG_NONE)
+                    return syntax_error("Label <%s> is reserved for a builtin function", label_str_data);
             }
             else{
-                enum Op_code op_code;
-                const char *op_code_str;
-                Str_view op_code_sv;
-
-                Str_view lhs = str_view_trim_right(sv, str_view_trim_left_while_not(sv, isspace).m_size);
-                #define op_code_match(op_code_val) \
-                    ( \
-                        op_code = (op_code_val), \
-                        op_code_str = op_code_to_str(op_code), \
-                        op_code_sv = str_view_init(op_code_str), \
-                        cmp_eq_Str_view(&op_code_sv, &lhs) \
-                    )
-
                 if (!is_alpha_or_underscore(lhs.m_str[0]))
                     return syntax_error("Op code starting with <%c>", lhs.m_str[0]);
-                else if (str_view_any_of(lhs, is_punct_not_underscore))
+                if (str_view_any_of(lhs, is_punct_not_underscore))
                     return syntax_error("Op code containing punctuation characters other than <_>");
-
-                Str_view rhs = str_view_trim_left_while(str_view_trim_left(sv, lhs.m_size), isspace);
 
                 if (op_code_match(OP_CODE_PUSH)){
                     if (rhs.m_size == 0 || rhs.m_str[0] == ';')
@@ -293,10 +309,8 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                             return syntax_error("Numeric literal must start with a digit or unary <+/->");
 
                         if (str_view_all_of(rhs_temp, isdigit)){
-                            union{
-                                i64 as_i64;
-                                u8 as_u8s[sizeof(i64)];
-                            } int_literal = {.as_i64 = (errno = 0, (i64)strtoll(rhs.m_str, NULL, 10))};
+                            I64_u8s_union int_literal = {.as_i64 = (errno = 0, (i64)strtoll(rhs.m_str, NULL, 10))};
+
                             if (errno != 0)
                                 return syntax_error("<int> literal out of range");
 
@@ -317,10 +331,8 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                                     return syntax_error("<float> literal containing more than 1 <.>");
                             }
 
-                            union{
-                                f64 as_f64;
-                                u8 as_u8s[sizeof(f64)];
-                            } float_literal = {.as_f64 = (errno = 0, (f64)strtod(rhs.m_str, NULL))};
+                            F64_u8s_union float_literal = {.as_f64 = (errno = 0, (f64)strtod(rhs.m_str, NULL))};
+
                             if (errno != 0)
                                 return syntax_error("<float> literal out of range");
 
@@ -348,38 +360,57 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                 }
                 else if (op_code_match(OP_CODE_CALL)){
                     if (rhs.m_size == 0)
-                        return syntax_error("Op code <%s> takes in a function label", op_code_str);
+                        return syntax_error("Op code <%s> takes in a label", op_code_str);
 
-                    if (!is_alpha_or_underscore(rhs.m_str[0]))
-                        return syntax_error("Function label's first character must be an ascii character or <_>");
+                    Str_base label_str;
 
-                    rhs = str_view_trim_right_while(str_view_trim_right(rhs, str_view_trim_left_while_not(rhs, is_semicolon).m_size), isspace);
-
-                    if (!str_view_all_of(rhs, is_alnum_or_underscore))
-                        return syntax_error("Function label must only contain alphanumeric or <_> characters");
+                    Bytecode_compile_result label_to_str_result = bytecode_compiler_state_label_to_str(self, false, rhs, &label_str);
+                    if (label_to_str_result.error != COMPILE_ERROR_NONE)
+                        return label_to_str_result;
 
                     if (!vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)op_code}))
                         return OOM_ERROR;
 
-                    Str_base_result fn_str = str_base_init_str_view(self->alloc, rhs);
-                    if (!fn_str.success)
+                    enum Builtin_fn_tag bfn_tag = builtin_fn_tag_init(str_base_data(&label_str));
+
+                    if (!vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)bfn_tag}))
                         return OOM_ERROR;
 
-                    const char *fn_id = str_base_data(&fn_str.result);
-
-                    enum Builtin_fn_tag bfn_tag = builtin_fn_tag_init(fn_id);
-                    if (bfn_tag != BUILTIN_FN_TAG_NONE){
-                        if (!vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)bfn_tag}))
+                    if (bfn_tag == BUILTIN_FN_TAG_NONE){
+                        if (!vec_base_push_back(
+                            &self->jmp_infos,
+                            self->alloc,
+                            &(Jmp_info){.label = label_str, .bytecode_offset = self->bytecode.m_size, .instruction_idx = self->instruction_idx}
+                        ))
                             return OOM_ERROR;
-                    }
-                    else{
-                        fprintf(stderr, "User defined functions are not implemented");
-                        abort();
+
+                        Usize_u8s_union label_bytecode_offset = {.as_usize = 0};
+
+                        for (usize i = 0; i < array_size(label_bytecode_offset.as_u8s); ++i)
+                            if (!vec_base_push_back(&self->bytecode, self->alloc, &label_bytecode_offset.as_u8s[i]))
+                                return OOM_ERROR;
                     }
                 }
                 else if (op_code_match(OP_CODE_RET) || op_code_match(OP_CODE_RETV)){
-                    fprintf(stderr, "op_code_match(OP_CODE_RET) || op_code_match(OP_CODE_RETV) is not implemented");
-                    abort();
+                    if (
+                        rhs.m_size == 0 || (
+                            rhs = str_view_trim_right_while(str_view_trim_right(rhs, str_view_trim_left_while_not(rhs, is_semicolon).m_size), isspace),
+                            !str_view_all_of(rhs, isdigit)
+                        )
+                    )
+                        return syntax_error("Op code <%s> takes in a positive integer literal", op_code_str);
+
+                    if (!vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)op_code}))
+                        return OOM_ERROR;
+
+                    Usize_u8s_union pop_count = {.as_usize = (errno = 0, (usize)strtoull(rhs.m_str, NULL, 10))};
+
+                    if (errno != 0)
+                        return syntax_error("<int> literal out of range");
+
+                    for (usize i = 0; i < array_size(pop_count.as_u8s); ++i)
+                        if (!vec_base_push_back(&self->bytecode, self->alloc, &pop_count.as_u8s[i]))
+                            return OOM_ERROR;
                 }
                 else if (op_code_match(OP_CODE_JMP) || op_code_match(OP_CODE_JMPZ)){
                     if (rhs.m_size == 0)
@@ -387,7 +418,7 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
 
                     Str_base label_str;
 
-                    Bytecode_compile_result label_to_str_result = bytecode_compiler_state_label_to_str(self, rhs, &label_str, false);
+                    Bytecode_compile_result label_to_str_result = bytecode_compiler_state_label_to_str(self, false, rhs, &label_str);
                     if (label_to_str_result.error != COMPILE_ERROR_NONE)
                         return label_to_str_result;
 
@@ -401,10 +432,7 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                     )
                         return OOM_ERROR;
                     
-                    union{
-                        usize as_usize;
-                        u8 as_u8s[sizeof(usize)];
-                    } label_bytecode_offset = {.as_usize = 0};
+                    Usize_u8s_union label_bytecode_offset = {.as_usize = 0};
 
                     for (usize i = 0; i < array_size(label_bytecode_offset.as_u8s); ++i)
                         if (!vec_base_push_back(&self->bytecode, self->alloc, &label_bytecode_offset.as_u8s[i]))
@@ -461,10 +489,7 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
             return syntax_error("Use of undeclared label <%s>", str_base_data(&jmp_info->label));
         }
 
-        union{
-            usize as_usize;
-            u8 as_u8s[sizeof(usize)];
-        } label_bytecode_offset = {.as_usize = *label_offset};
+        Usize_u8s_union label_bytecode_offset = {.as_usize = *label_offset};
 
         memcpy(vec_base_at(&self->bytecode, jmp_info->bytecode_offset), label_bytecode_offset.as_u8s, sizeof(label_bytecode_offset.as_u8s));
     }

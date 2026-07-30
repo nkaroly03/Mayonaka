@@ -18,6 +18,7 @@
 
 // ------------------------------------------------------------------------------------------------
 
+static const Primitive_op_result  NO_ERROR = {.error = PRIMITIVE_OP_ERROR_NONE};
 static const Primitive_op_result OOM_ERROR = {.error = PRIMITIVE_OP_ERROR_OOM, .error_info = "Out of memory"};
 
 #define runtime_error(error_info_) (Primitive_op_result){.error = PRIMITIVE_OP_ERROR_RUNTIME, .error_info = (error_info_)}
@@ -103,7 +104,7 @@ static Primitive_op_result primitive_cmp(Primitive *self, Allocator alloc, const
         *self = (Primitive){.m_tag = PRIMITIVE_TAG_BOOL, .m_bool_data = cmp};
     }
 
-    return (Primitive_op_result){0};
+    return NO_ERROR;
 }
 
 enum Bin_op{
@@ -326,7 +327,7 @@ static Primitive_op_result primitive_bin_op(Primitive *self, const Primitive *ot
 
     *self = lhs_temp;
 
-    return (Primitive_op_result){0};
+    return NO_ERROR;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -413,7 +414,7 @@ Primitive_op_result primitive_to_bool(Primitive *self, Allocator alloc){
             return runtime_error("Trying to convert <list> to <bool>");
     }
 
-    return (Primitive_op_result){0};
+    return NO_ERROR;
 }
 Primitive_op_result primitive_to_char(Primitive *self, Allocator alloc){
     assert(self && "<self> is never null");
@@ -442,7 +443,7 @@ Primitive_op_result primitive_to_char(Primitive *self, Allocator alloc){
             return runtime_error("Trying to convert <list> to <char>");
     }
 
-    return (Primitive_op_result){0};
+    return NO_ERROR;
 }
 Primitive_op_result primitive_to_int(Primitive *self, Allocator alloc){
     assert(self && "<self> is never null");
@@ -463,7 +464,7 @@ Primitive_op_result primitive_to_int(Primitive *self, Allocator alloc){
             Str_view sv = str_view_trim_right_while(str_view_trim_left_while(str_base_to_str_view(&self->m_str_data_ptr->m_data), isspace), isspace);
 
             char *end;
-            i64 val = (errno = 0, (i64)strtoll(sv.m_str, &end, 0));
+            i64 val = (errno = 0, (i64)strtoll(sv.m_str, &end, 10)); // TODO?: change str conversion to detect base 2 or 16
 
             if (end == sv.m_str || end != &sv.m_str[sv.m_size])
                 return runtime_error("Failed to convert <str> to <int>");
@@ -479,7 +480,7 @@ Primitive_op_result primitive_to_int(Primitive *self, Allocator alloc){
             return runtime_error("Trying to convert <list> to <int>");
     }
 
-    return (Primitive_op_result){0};
+    return NO_ERROR;
 }
 Primitive_op_result primitive_to_float(Primitive *self, Allocator alloc){
     assert(self && "<self> is never null");
@@ -516,7 +517,7 @@ Primitive_op_result primitive_to_float(Primitive *self, Allocator alloc){
             return runtime_error("Trying to convert <list> to <float>");
     }
 
-    return (Primitive_op_result){0};
+    return NO_ERROR;
 }
 Primitive_op_result primitive_to_str(Primitive *self, Allocator alloc){
     assert(self && "<self> is never null");
@@ -570,7 +571,7 @@ Primitive_op_result primitive_to_str(Primitive *self, Allocator alloc){
             return runtime_error("Trying to convert <list> to <float>");
     }
 
-    return (Primitive_op_result){0};
+    return NO_ERROR;
 
 oom_error:
     primitive_deinit(&temp, alloc);
@@ -589,7 +590,7 @@ Primitive_op_result primitive_neg(Primitive *self){
         case PRIMITIVE_TAG_LIST:  return runtime_error("Trying to use negation on <list>");
     }
 
-    return (Primitive_op_result){0};
+    return NO_ERROR;
 }
 Primitive_op_result primitive_bneg(Primitive *self){
     assert(self && "<self> is never null");
@@ -603,7 +604,7 @@ Primitive_op_result primitive_bneg(Primitive *self){
         case PRIMITIVE_TAG_LIST:  return runtime_error("Trying to use bitwise negation on <list>");
     }
 
-    return (Primitive_op_result){0};
+    return NO_ERROR;
 }
 
 Primitive_op_result primitive_mov(Primitive *self, Allocator alloc, const Primitive *other){
@@ -658,7 +659,7 @@ Primitive_op_result primitive_mov(Primitive *self, Allocator alloc, const Primit
                     Str_view sv = str_view_trim_right_while(str_view_trim_left_while(str_base_to_str_view(&other->m_str_data_ptr->m_data), isspace), isspace);
 
                     char *end;
-                    i64 val = (errno = 0, (i64)strtoll(sv.m_str, &end, 0));
+                    i64 val = (errno = 0, (i64)strtoll(sv.m_str, &end, 10)); // TODO?: change str conversion to detect base 2 or 16
 
                     if (end == sv.m_str || end != &sv.m_str[sv.m_size])
                         return runtime_error("Failed to convert <str> to <int> during move");
@@ -740,7 +741,7 @@ Primitive_op_result primitive_mov(Primitive *self, Allocator alloc, const Primit
             break;
     }
 
-    return (Primitive_op_result){0};
+    return NO_ERROR;
 }
 Primitive_op_result primitive_mov_deref(Primitive *self, Allocator alloc, const Primitive *idx, const Primitive *other){
     assert(self && "<self> is never null");
@@ -804,7 +805,7 @@ Primitive_op_result primitive_mov_deref(Primitive *self, Allocator alloc, const 
             ;
     }
 
-    return (Primitive_op_result){0};
+    return NO_ERROR;
 }
 
 Primitive_op_result primitive_deref(Primitive *self, Allocator alloc, const Primitive *other){
@@ -857,7 +858,7 @@ Primitive_op_result primitive_deref(Primitive *self, Allocator alloc, const Prim
         }
     }
 
-    return (Primitive_op_result){0};
+    return NO_ERROR;
 }
 
 #define primitive_cmp_bin_op_generate(cmp_bin_op_type, cmp_bin_op) \
@@ -979,7 +980,7 @@ Primitive_op_result primitive_add(Primitive *self, Allocator alloc, const Primit
 
     *self = temp;
 
-    return (Primitive_op_result){0};
+    return NO_ERROR;
 
 oom_error:
     primitive_deinit(&temp, alloc);

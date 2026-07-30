@@ -122,7 +122,6 @@ while (not stop_game){
             next_tetromino_table = next_tetromino_table + '\n';
     }
 
-
     print("\x1b[?25l\x1b[2J\x1b[H");
 
     let tetris_tick: int = 0;
