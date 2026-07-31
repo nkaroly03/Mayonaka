@@ -8,6 +8,7 @@ extern "C"{
 #include <stdio.h>
 
 #include "../Allocator/Arena.h"
+#include "../Data_structure/Str_base.h"
 #include "../Utils/Num.h"
 
 #include "Lexer.h"

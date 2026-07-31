@@ -170,7 +170,7 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
         Str_view sv = *(Str_view*)vec_base_at(&self->instruction_views, self->instruction_idx);
 
         if (sv.m_size > 0 && sv.m_str[0] != ';'){
-            Str_view lhs = str_view_trim_right(sv, str_view_trim_left_while(sv, is_alnum_or_underscore).m_size);
+            Str_view lhs = str_view_trim_right(sv, str_view_trim_left_while(sv, is_alpha_or_underscore).m_size);
             Str_view rhs = str_view_trim_left_while(str_view_trim_left(sv, lhs.m_size), isspace);
 
             enum Op_code op_code;

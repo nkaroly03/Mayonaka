@@ -7,7 +7,6 @@ extern "C"{
 
 #include "../Allocator/Arena.h"
 #include "../Data_structure/Str_base.h"
-#include "../Data_structure/Vec_base.h"
 #include "../Utils/Num.h"
 
 #include "IR_compiler.h"

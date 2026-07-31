@@ -1,4 +1,4 @@
-fn sin(val: float) float{
+fn sin(val: float) float {
     let PI: float = 3.14159265;
     let result: float = 2 * PI * val;
 
@@ -19,21 +19,26 @@ fn sin(val: float) float{
     return result;
 }
 
-let WIDTH:       int = 128;
-let HEIGHT:      int = 32;
-let FREQUENCY: float = 6.0;
+fn main() int {
+    let WIDTH:       int = 128;
+    let HEIGHT:      int = 32;
+    let FREQUENCY: float = 6.0;
 
-for (0..HEIGHT + 1) |y|{
-    for (0..WIDTH + 1) |x|{
-        let float_cast: float = x;
+    for (0..HEIGHT + 1) |y|{
+        for (0..WIDTH + 1) |x|{
+            let float_cast: float = x;
 
-        let sin: float = 0.99 ** x * sin(FREQUENCY * float_cast / WIDTH);
+            let sin: float = 0.99 ** x * sin(FREQUENCY * float_cast / WIDTH);
 
-        let int_cast: int = sin * (HEIGHT / 2);
-        if ((HEIGHT / 2 - y) == int_cast)
-            print('*');
-        else
-            print(' ');
+            let int_cast: int = sin * (HEIGHT / 2);
+            if ((HEIGHT / 2 - y) == int_cast)
+                print('*');
+            else
+                print(' ');
+        }
+        print('\n');
     }
-    print('\n');
+    return 0;
 }
+
+return main();

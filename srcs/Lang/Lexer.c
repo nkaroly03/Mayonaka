@@ -10,6 +10,7 @@
 #include "../../hdrs/Allocator/Allocator.h"
 #include "../../hdrs/Allocator/Arena.h"
 #include "../../hdrs/Data_structure/Str_base.h"
+#include "../../hdrs/Data_structure/Str_view.h"
 #include "../../hdrs/Data_structure/Vec_base.h"
 #include "../../hdrs/Utils/Cmp.h"
 #include "../../hdrs/Utils/Num.h"
@@ -72,11 +73,7 @@ static Lex_result lexer_state_syntax_error(Lexer_state *self, const char *fmt, .
 }
 static bool lexer_state_token_push_back(Lexer_state *self, enum Token_type type, const char *id){
     Str_base_result temp = str_base_init_raw(self->alloc, id);
-
-    if (temp.success)
-        temp.success = vec_base_push_back(&self->tokens, self->alloc, &(Token){.m_type = type, .m_id = temp.result, .m_line_number = self->line_number});
-
-    return temp.success;
+    return temp.success && vec_base_push_back(&self->tokens, self->alloc, &(Token){.m_type = type, .m_id = temp.result, .m_line_number = self->line_number});
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -200,7 +197,7 @@ Lex_result lex(Arena *arena, const char *path){
             if (quote == '\'' && (quoted_sv.m_size == 2 || str_base_size(&temp.result) > 1 + 2))
                 return syntax_error("<char> literal must represent 1 character");
 
-            if (quote == '"' && !vec_base_empty(&state.tokens) && ((Token*)vec_base_at(&state.tokens, state.tokens.m_size - 1))->m_type == TOKEN_TYPE_STR_LIT){
+            if (quote == '"' && state.tokens.m_size == 0 && ((Token*)vec_base_at(&state.tokens, state.tokens.m_size - 1))->m_type == TOKEN_TYPE_STR_LIT){
                 Token *last = vec_base_at(&state.tokens, state.tokens.m_size - 1);
                 str_base_pop_back(&last->m_id);
                 if (!str_base_append_str_view(&last->m_id, state.alloc, str_view_trim_left(quoted_sv, 1)))

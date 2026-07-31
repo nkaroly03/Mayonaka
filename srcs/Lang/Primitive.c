@@ -401,8 +401,8 @@ Primitive_op_result primitive_to_bool(Primitive *self, Allocator alloc){
             Str_view match;
             bool val;
             if (
-                !(val = false, match = str_view_init("false"), cmp_eq_Str_view(&sv, &match)) &&
-                !(val = true,  match = str_view_init("true" ), cmp_eq_Str_view(&sv, &match))
+                (val = false, match = str_view_init("false"), !cmp_eq_Str_view(&sv, &match)) &&
+                (val = true,  match = str_view_init("true" ), !cmp_eq_Str_view(&sv, &match))
             )
                 return runtime_error("Trying to convert <str> not containing \"false\" or \"true\" to <bool>");
 
@@ -623,8 +623,8 @@ Primitive_op_result primitive_mov(Primitive *self, Allocator alloc, const Primit
                     Str_view match;
                     bool val;
                     if (
-                        !(val = false, match = str_view_init("false"), cmp_eq_Str_view(&sv, &match)) &&
-                        !(val = true,  match = str_view_init("true" ), cmp_eq_Str_view(&sv, &match))
+                        (val = false, match = str_view_init("false"), !cmp_eq_Str_view(&sv, &match)) &&
+                        (val = true,  match = str_view_init("true" ), !cmp_eq_Str_view(&sv, &match))
                     )
                         return runtime_error("Trying to move <str> not containing \"false\" or \"true\" to <bool>");
                     self->m_bool_data = val;
