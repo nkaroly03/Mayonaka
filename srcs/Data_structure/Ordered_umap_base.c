@@ -14,6 +14,17 @@
 
 typedef struct Snode Snode;
 
+static void ordered_umap_base_erase_key_from_keys(Ordered_umap_base *self, const void *key){
+    usize i = 0;
+    vec_base_for_each(self->m_keys, it){
+        if (self->m_pairs.m_cmp_eq(key, it)){
+            vec_base_erase_discard(&self->m_keys, i);
+            return;
+        }
+        ++i;
+    }
+}
+
 #ifndef NDEBUG
 static bool ordered_umap_base_contains_node(const Ordered_umap_base *self, const struct Snode *node){
     for (usize i = 0; i < self->m_pairs.m_bucket_count; ++i)
@@ -176,17 +187,12 @@ bool ordered_umap_base_erase_key_discard(Ordered_umap_base *self, Allocator allo
     assert(self && "<self> is never null");
     assert(key && "<key> is not nullable");
 
-    usize i = 0;
+    bool result = umap_base_erase_key_discard(&self->m_pairs, alloc, key);
 
-    vec_base_for_each(self->m_keys, it){
-        if (self->m_pairs.m_cmp_eq(key, it)){
-            vec_base_erase_discard(&self->m_keys, i);
-            return umap_base_erase_key_discard(&self->m_pairs, alloc, key);
-        }
-        ++i;
-    }
+    if (result)
+        ordered_umap_base_erase_key_from_keys(self, key);
 
-    return false;
+    return result;
 }
 bool ordered_umap_base_erase_key_to(Ordered_umap_base *self, Allocator alloc, const void *key, void *key_dest, void *value_dest){
     assert(self && "<self> is never null");
@@ -194,17 +200,12 @@ bool ordered_umap_base_erase_key_to(Ordered_umap_base *self, Allocator alloc, co
     assert(key_dest && "<key_dest> is not nullable");
     assert(value_dest && "<value_dest> is not nullable");
 
-    usize i = 0;
+    bool result = umap_base_erase_key_to(&self->m_pairs, alloc, key, key_dest, value_dest);
 
-    vec_base_for_each(self->m_keys, it){
-        if (self->m_pairs.m_cmp_eq(key, it)){
-            vec_base_erase_discard(&self->m_keys, i);
-            return umap_base_erase_key_to(&self->m_pairs, alloc, key, key_dest, value_dest);
-        }
-        ++i;
-    }
+    if (result)
+        ordered_umap_base_erase_key_from_keys(self, key);
 
-    return false;
+    return result;
 }
 
 void ordered_umap_base_clear(Ordered_umap_base *self, Allocator alloc){

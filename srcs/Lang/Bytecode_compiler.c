@@ -36,7 +36,7 @@ static int is_semicolon(int c){
 static int is_rbracket(int c){
     return c == ']';
 }
-static int is_punct_not_underscore(int c){
+static int is_punct_and_not_underscore(int c){
     return c != '_' && ispunct(c);
 }
 static int is_alpha_or_underscore(int c){
@@ -170,7 +170,8 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
         Str_view sv = *(Str_view*)vec_base_at(&self->instruction_views, self->instruction_idx);
 
         if (sv.m_size > 0 && sv.m_str[0] != ';'){
-            Str_view lhs = str_view_trim_right(sv, str_view_trim_left_while_not(sv, isspace).m_size);
+            Str_view lhs = str_view_trim_right(sv, str_view_trim_left_while(sv, is_alnum_or_underscore).m_size);
+            Str_view rhs = str_view_trim_left_while(str_view_trim_left(sv, lhs.m_size), isspace);
 
             enum Op_code op_code;
             const char *op_code_str;
@@ -184,9 +185,7 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                     cmp_eq_Str_view(&op_code_sv, &lhs) \
                 )
 
-            Str_view rhs = str_view_trim_left_while(str_view_trim_left(sv, lhs.m_size), isspace);
-
-            if (str_view_starts_with(sv, LOCAL_LABEL_PREFIX_SYMBOL) || str_view_any_of(lhs, is_colon)){
+            if (str_view_starts_with(sv, LOCAL_LABEL_PREFIX_SYMBOL) || (rhs.m_size > 0 && rhs.m_str[0] == ':')){
                 Str_base label_str;
 
                 Bytecode_compile_result temp = bytecode_compiler_state_label_to_str(self, true, sv, &label_str);
@@ -201,7 +200,7 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
             else{
                 if (!is_alpha_or_underscore(lhs.m_str[0]))
                     return syntax_error("Op code starting with <%c>", lhs.m_str[0]);
-                if (str_view_any_of(lhs, is_punct_not_underscore))
+                if (str_view_any_of(lhs, is_punct_and_not_underscore))
                     return syntax_error("Op code containing punctuation characters other than <_>");
 
                 if (op_code_match(OP_CODE_PUSH)){
@@ -359,7 +358,7 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                         return sp_case_result;
                 }
                 else if (op_code_match(OP_CODE_CALL)){
-                    if (rhs.m_size == 0)
+                    if (rhs.m_size == 0 || rhs.m_str[0] == ';')
                         return syntax_error("Op code <%s> takes in a label", op_code_str);
 
                     Str_base label_str;
@@ -413,7 +412,7 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                             return OOM_ERROR;
                 }
                 else if (op_code_match(OP_CODE_JMP) || op_code_match(OP_CODE_JMPZ)){
-                    if (rhs.m_size == 0)
+                    if (rhs.m_size == 0 || rhs.m_str[0] == ';')
                         return syntax_error("Op code <%s> takes in a label", op_code_str);
 
                     Str_base label_str;
@@ -467,7 +466,6 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                     op_code_match(OP_CODE_BOR      ) ||
                     op_code_match(OP_CODE_XOR      )
                 ){
-                    rhs = str_view_trim_left_while(str_view_trim_left_while(rhs, isalpha), isspace);
                     if (rhs.m_size > 0 && rhs.m_str[0] != ';')
                         return syntax_error("Op code <%s> takes no arguments", op_code_str);
 
