@@ -30,52 +30,6 @@ static const char *TYPE_INFO_TAG_SYMBOLS[] = {
     [TYPE_INFO_TAG_STR]   = "str",
 };
 
-static const char *OP_CODE_SYMBOLS[] = {
-    [OP_CODE_PUSH]      = "push",
-    [OP_CODE_POP]       = "pop",
-
-    [OP_CODE_CALL]      = "call",
-    [OP_CODE_RET]       = "ret",
-    [OP_CODE_RETV]      = "retv",
-
-    [OP_CODE_JMP]       = "jmp",
-    [OP_CODE_JMPZ]      = "jmpz",
-
-    [OP_CODE_TO_BOOL]   = "to_bool",
-    [OP_CODE_TO_CHAR]   = "to_char",
-    [OP_CODE_TO_INT]    = "to_int",
-    [OP_CODE_TO_FLOAT]  = "to_float",
-    [OP_CODE_TO_STR]    = "to_str",
-
-    [OP_CODE_NEG]       = "neg",
-    [OP_CODE_BNEG]      = "bneg",
-
-    [OP_CODE_DEREF]     = "deref",
-
-    [OP_CODE_MOV]       = "mov",
-    [OP_CODE_MOV_DEREF] = "mov_deref",
-
-    [OP_CODE_CMP_EQ]    = "cmp_eq",
-    [OP_CODE_CMP_NEQ]   = "cmp_neq",
-    [OP_CODE_CMP_LE]    = "cmp_le",
-    [OP_CODE_CMP_LEQ]   = "cmp_leq",
-    [OP_CODE_CMP_GE]    = "cmp_ge",
-    [OP_CODE_CMP_GEQ]   = "cmp_geq",
-
-    [OP_CODE_ADD]       = "add",
-    [OP_CODE_SUB]       = "sub",
-    [OP_CODE_MUL]       = "mul",
-    [OP_CODE_DIV]       = "div",
-    [OP_CODE_MOD]       = "mod",
-    [OP_CODE_POW]       = "pow",
-
-    [OP_CODE_SHL]       = "shl",
-    [OP_CODE_SHR]       = "shr",
-    [OP_CODE_BAND]      = "band",
-    [OP_CODE_BOR]       = "bor",
-    [OP_CODE_XOR]       = "xor"
-};
-
 static Type_info ast_node_to_type_info(const AST_node *type_node){
     Type_info result = {0};
     while (type_node->m_token->m_type == TOKEN_TYPE_LBRACKET){
@@ -238,7 +192,7 @@ static bool IR_compiler_state_add_instruction(IR_compiler_state *self, const cha
             return OOM_ERROR; \
     } while (0)
 
-static bool IR_compiler_state_conversion_add_type_conversion_instruction(IR_compiler_state *self, Type_info dest_type_info){
+static bool IR_compiler_state_add_type_conversion_instruction(IR_compiler_state *self, Type_info dest_type_info){
     return (dest_type_info.m_dimensions == 0)
         ? IR_compiler_state_add_instruction(self, "%s", op_code_to_str((enum Op_code)(OP_CODE_TO_BOOL + (dest_type_info.m_tag - TYPE_INFO_TAG_BOOL))))
         : true
@@ -246,7 +200,7 @@ static bool IR_compiler_state_conversion_add_type_conversion_instruction(IR_comp
 }
 #define add_type_conversion_instruction(dest_type_info) \
     do{ \
-        if (!IR_compiler_state_conversion_add_type_conversion_instruction(self, (dest_type_info))) \
+        if (!IR_compiler_state_add_type_conversion_instruction(self, (dest_type_info))) \
             return OOM_ERROR; \
     } while (0)
 
@@ -1131,7 +1085,53 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
 // ------------------------------------------------------------------------------------------------
 
 const char* op_code_to_str(enum Op_code op_code){
-    return OP_CODE_SYMBOLS[op_code];
+    switch (op_code){
+        case OP_CODE_PUSH:      return "push";
+        case OP_CODE_POP:       return "pop";
+
+        case OP_CODE_CALL:      return "call";
+        case OP_CODE_RET:       return "ret";
+        case OP_CODE_RETV:      return "retv";
+
+        case OP_CODE_JMP:       return "jmp";
+        case OP_CODE_JMPZ:      return "jmpz";
+
+        case OP_CODE_TO_BOOL:   return "to_bool";
+        case OP_CODE_TO_CHAR:   return "to_char";
+        case OP_CODE_TO_INT:    return "to_int";
+        case OP_CODE_TO_FLOAT:  return "to_float";
+        case OP_CODE_TO_STR:    return "to_str";
+
+        case OP_CODE_NEG:       return "neg";
+        case OP_CODE_BNEG:      return "bneg";
+
+        case OP_CODE_DEREF:     return "deref";
+
+        case OP_CODE_MOV:       return "mov";
+        case OP_CODE_MOV_DEREF: return "mov_deref";
+
+        case OP_CODE_CMP_EQ:    return "cmp_eq";
+        case OP_CODE_CMP_NEQ:   return "cmp_neq";
+        case OP_CODE_CMP_LE:    return "cmp_le";
+        case OP_CODE_CMP_LEQ:   return "cmp_leq";
+        case OP_CODE_CMP_GE:    return "cmp_ge";
+        case OP_CODE_CMP_GEQ:   return "cmp_geq";
+
+        case OP_CODE_ADD:       return "add";
+        case OP_CODE_SUB:       return "sub";
+        case OP_CODE_MUL:       return "mul";
+        case OP_CODE_DIV:       return "div";
+        case OP_CODE_MOD:       return "mod";
+        case OP_CODE_POW:       return "pow";
+
+        case OP_CODE_SHL:       return "shl";
+        case OP_CODE_SHR:       return "shr";
+        case OP_CODE_BAND:      return "band";
+        case OP_CODE_BOR:       return "bor";
+        case OP_CODE_XOR:       return "xor";
+
+        default:                return NULL;
+    };
 }
 
 IR_compile_result IR_compile(Arena *arena, AST_node_ptr_slice ast_nodes){

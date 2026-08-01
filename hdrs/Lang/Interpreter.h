@@ -6,6 +6,7 @@ extern "C"{
 #endif
 
 #include "../Allocator/Allocator.h"
+#include "../Data_structure/Str_base.h"
 
 #include "Bytecode_compiler.h"
 #include "Primitive.h"
@@ -19,7 +20,7 @@ enum Interpreter_run_error{
 typedef struct Interpreter_run_result{
     union{
         Primitive result;
-        const char *error_info;
+        Str_base error_info;
     };
     enum Interpreter_run_error error;
 } Interpreter_run_result;

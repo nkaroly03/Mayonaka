@@ -6,23 +6,6 @@
 #include "../../hdrs/Lang/Builtin_fn.h"
 #include "../../hdrs/Lang/Type_info.h"
 
-// ------------------------------------------------------------------------------------------------
-
-static const char *BUILTIN_FN_TAG_SYMBOLS[] = {
-    [BUILTIN_FN_TAG_NONE]          = NULL,
-    [BUILTIN_FN_TAG_EXIT]          = "exit",
-    [BUILTIN_FN_TAG_NSLEEP]        = "nsleep",
-    [BUILTIN_FN_TAG_PRINT]         = "print",
-    [BUILTIN_FN_TAG_SCAN]          = "scan",
-    [BUILTIN_FN_TAG_POLL_KEYPRESS] = "poll_keypress",
-    [BUILTIN_FN_TAG_LEN]           = "len",
-    [BUILTIN_FN_TAG_RAND]          = "rand",
-    [BUILTIN_FN_TAG_PUSH_BACK]     = "push_back",
-    [BUILTIN_FN_TAG_POP_BACK]      = "pop_back",
-};
-
-// ------------------------------------------------------------------------------------------------
-
 enum Builtin_fn_tag builtin_fn_tag_init(const char *str){
     assert(str && "<str> is not nullable");
 
@@ -46,7 +29,18 @@ enum Builtin_fn_tag builtin_fn_tag_init(const char *str){
 }
 
 const char* builtin_fn_tag_to_str(enum Builtin_fn_tag tag){
-    return BUILTIN_FN_TAG_SYMBOLS[tag];
+    switch (tag){
+        case BUILTIN_FN_TAG_EXIT:          return "exit";
+        case BUILTIN_FN_TAG_NSLEEP:        return "nsleep";
+        case BUILTIN_FN_TAG_PRINT:         return "print";
+        case BUILTIN_FN_TAG_SCAN:          return "scan";
+        case BUILTIN_FN_TAG_POLL_KEYPRESS: return "poll_keypress";
+        case BUILTIN_FN_TAG_LEN:           return "len";
+        case BUILTIN_FN_TAG_RAND:          return "rand";
+        case BUILTIN_FN_TAG_PUSH_BACK:     return "push_back";
+        case BUILTIN_FN_TAG_POP_BACK:      return "pop_back";
+        default:                           return NULL;
+    };
 }
 
 Builtin_fn_tag_call_result builtin_fn_tag_call(enum Builtin_fn_tag tag, Type_info_slice args){
