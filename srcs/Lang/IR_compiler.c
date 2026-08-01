@@ -1141,10 +1141,8 @@ IR_compile_result IR_compile(Arena *arena, AST_node_ptr_slice ast_nodes){
     IR_compiler_state state;
     Ordered_umap_base *fn_ids_ptr = allocator_alloc(alloc, Ordered_umap_base, 1);
 
-    if (!fn_ids_ptr || !IR_compiler_state_init_in_place(&state, alloc, 0, fn_ids_ptr)){
-        fprintf(stderr, "\n---test---\n");
+    if (!fn_ids_ptr || !IR_compiler_state_init_in_place(&state, alloc, 0, fn_ids_ptr))
         goto oom_error;
-    }
 
     *fn_ids_ptr = ordered_umap_base_init(Str_base, Fn_id_info);
 

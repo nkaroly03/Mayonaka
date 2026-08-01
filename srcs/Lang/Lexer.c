@@ -197,7 +197,7 @@ Lex_result lex(Arena *arena, const char *path){
             if (quote == '\'' && (quoted_sv.m_size == 2 || str_base_size(&temp.result) > 1 + 2))
                 return syntax_error("<char> literal must represent 1 character");
 
-            if (quote == '"' && state.tokens.m_size == 0 && ((Token*)vec_base_at(&state.tokens, state.tokens.m_size - 1))->m_type == TOKEN_TYPE_STR_LIT){
+            if (quote == '"' && state.tokens.m_size != 0 && ((Token*)vec_base_at(&state.tokens, state.tokens.m_size - 1))->m_type == TOKEN_TYPE_STR_LIT){
                 Token *last = vec_base_at(&state.tokens, state.tokens.m_size - 1);
                 str_base_pop_back(&last->m_id);
                 if (!str_base_append_str_view(&last->m_id, state.alloc, str_view_trim_left(quoted_sv, 1)))

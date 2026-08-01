@@ -22,15 +22,15 @@ fn main() int {
     {
         fn fib(n: int) int {
             fn _fib(n: int) int {
-                fn fib(n: int) int {
-                    fn _fib(n: int) int {
+                fn __fib(n: int) int {
+                    fn ___fib(n: int) int {
                         if (n < 2)
                             return n;
-                        return _fib(n - 1) + _fib(n - 2);
+                        return ___fib(n - 1) + ___fib(n - 2);
                     }
-                    return _fib(n);
+                    return ___fib(n);
                 }
-                return fib(n);
+                return __fib(n);
             }
             return _fib(n);
         }

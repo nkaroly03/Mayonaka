@@ -159,24 +159,22 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                         if (!vec_base_push_back(&self->data_stack, self->alloc, &(Primitive){.m_tag = PRIMITIVE_TAG_CHAR, .m_char_data = self->bytecode.m_data[self->pc++]}))
                             return oom_error();
                         break;
-                    case OP_CODE_PUSH_TAG_INT:
-                        if (!vec_base_push_back(
-                            &self->data_stack,
-                            self->alloc,
-                            &(Primitive){.m_tag = PRIMITIVE_TAG_INT, .m_int_data = *(i64*)memcpy(&(i64){0}, &self->bytecode.m_data[self->pc], sizeof(i64))}
-                        ))
+                    case OP_CODE_PUSH_TAG_INT:{
+                        i64 i64_data;
+                        memcpy(&i64_data, &self->bytecode.m_data[self->pc], sizeof(i64_data));
+                        if (!vec_base_push_back(&self->data_stack, self->alloc, &(Primitive){.m_tag = PRIMITIVE_TAG_INT, .m_int_data = i64_data}))
                             return oom_error();
-                        self->pc += sizeof(i64);
+                        self->pc += sizeof(i64_data);
                         break;
-                    case OP_CODE_PUSH_TAG_FLOAT:
-                        if (!vec_base_push_back(
-                            &self->data_stack,
-                            self->alloc,
-                            &(Primitive){.m_tag = PRIMITIVE_TAG_FLOAT, .m_float_data = *(f64*)memcpy(&(f64){0}, &self->bytecode.m_data[self->pc], sizeof(f64))}
-                        ))
+                    }
+                    case OP_CODE_PUSH_TAG_FLOAT:{
+                        f64 f64_data;
+                        memcpy(&f64_data, &self->bytecode.m_data[self->pc], sizeof(f64_data));
+                        if (!vec_base_push_back(&self->data_stack, self->alloc, &(Primitive){.m_tag = PRIMITIVE_TAG_FLOAT, .m_float_data = f64_data}))
                             return oom_error();
-                        self->pc += sizeof(f64);
+                        self->pc += sizeof(f64_data);
                         break;
+                    }
                     case OP_CODE_PUSH_TAG_STR:
                         temp = (Primitive){.m_tag = PRIMITIVE_TAG_STR, .m_str_data_ptr = allocator_alloc(self->alloc, Primitive_str_data, 1)};
                         if (!temp.m_str_data_ptr)
@@ -212,12 +210,12 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
             case OP_CODE_CALL:
                 switch ((enum Builtin_fn_tag)self->bytecode.m_data[self->pc++]){
                     case BUILTIN_FN_TAG_NONE:{
-                        usize offset;
-                        memcpy(&offset, &self->bytecode.m_data[self->pc], sizeof(offset));
-                        self->pc += sizeof(offset);
+                        usize call_offset;
+                        memcpy(&call_offset, &self->bytecode.m_data[self->pc], sizeof(call_offset));
+                        self->pc += sizeof(call_offset);
                         if (!vec_base_push_back(&self->return_address_stack, self->alloc, &self->pc))
                             return oom_error();
-                        self->pc = offset;
+                        self->pc = call_offset;
                         break;
                     }
                     case BUILTIN_FN_TAG_EXIT:{
@@ -228,30 +226,30 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                     }
                     case BUILTIN_FN_TAG_NSLEEP:{
                         Primitive *sleep_for = vec_base_at(&self->data_stack, self->data_stack.m_size - 1);
-                        i64 temp;
+                        i64 sleep_for_val;
                         switch (sleep_for->m_tag){
-                            case PRIMITIVE_TAG_BOOL:  temp = sleep_for->m_bool_data;       break;
-                            case PRIMITIVE_TAG_CHAR:  temp = sleep_for->m_char_data;       break;
-                            case PRIMITIVE_TAG_INT:   temp = sleep_for->m_int_data;        break;
-                            case PRIMITIVE_TAG_FLOAT: temp = (i64)sleep_for->m_float_data; break;
+                            case PRIMITIVE_TAG_BOOL:  sleep_for_val = sleep_for->m_bool_data;       break;
+                            case PRIMITIVE_TAG_CHAR:  sleep_for_val = sleep_for->m_char_data;       break;
+                            case PRIMITIVE_TAG_INT:   sleep_for_val = sleep_for->m_int_data;        break;
+                            case PRIMITIVE_TAG_FLOAT: sleep_for_val = (i64)sleep_for->m_float_data; break;
                             default:                  return runtime_error("<nsleep> called on non-numeric type");
                         }
                         primitive_deinit(sleep_for, self->alloc);
                         vec_base_pop_back_discard(&self->data_stack);
-                        if ((errno = 0, nanosleep(&(struct timespec){.tv_sec = (time_t)(temp / 1000000000), .tv_nsec = (i32)(temp % 1000000000)}, NULL)) != 0)
+                        if ((errno = 0, nanosleep(&(struct timespec){.tv_sec = (time_t)(sleep_for_val / 1000000000), .tv_nsec = (i32)(sleep_for_val % 1000000000)}, NULL)) != 0)
                             return runtime_error(strerror(errno));
                         break;
                     }
                     case BUILTIN_FN_TAG_PRINT:{
-                        Primitive val_to_print;
-                        vec_base_pop_back_to(&self->data_stack, &val_to_print);
-                        primitive_print(&val_to_print);
-                        primitive_deinit(&val_to_print, self->alloc);
+                        Primitive to_print;
+                        vec_base_pop_back_to(&self->data_stack, &to_print);
+                        primitive_print(&to_print);
+                        primitive_deinit(&to_print, self->alloc);
                         break;
                     }
                     case BUILTIN_FN_TAG_SCAN:{
-                        Primitive *val_to_print = vec_base_at(&self->data_stack, self->data_stack.m_size - 1);
-                        primitive_print(val_to_print);
+                        Primitive *to_print = vec_base_at(&self->data_stack, self->data_stack.m_size - 1);
+                        primitive_print(to_print);
 
                         Str_base str_result = {0};
 #ifdef _WIN32
@@ -285,8 +283,8 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                         }
                         *scanned.m_str_data_ptr = (Primitive_str_data){.m_ref_count = 1, .m_data = str_result};
 
-                        primitive_deinit(val_to_print, self->alloc);
-                        *val_to_print = scanned;
+                        primitive_deinit(to_print, self->alloc);
+                        *to_print = scanned;
                         break;
                     }
                     case BUILTIN_FN_TAG_POLL_KEYPRESS:{
@@ -364,11 +362,13 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                 }
                 break;
             case OP_CODE_RET:{
+            case OP_CODE_RETV:
                 if (self->return_address_stack.m_size == 0)
                     goto end;
 
-                Primitive to_push;
-                vec_base_pop_back_to(&self->data_stack, &to_push);
+                Primitive ret_val;
+                if (op_code == OP_CODE_RET)
+                    vec_base_pop_back_to(&self->data_stack, &ret_val);
 
                 usize pop_count;
                 memcpy(&pop_count, &self->bytecode.m_data[self->pc], sizeof(pop_count));
@@ -377,23 +377,8 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                     vec_base_pop_back_discard(&self->data_stack);
                 }
 
-                (void)vec_base_push_back(&self->data_stack, self->alloc, &to_push);
-
-                usize return_address;
-                vec_base_pop_back_to(&self->return_address_stack, &return_address);
-                self->pc = return_address;
-                break;
-            }
-            case OP_CODE_RETV:{
-                if (self->return_address_stack.m_size == 0)
-                    goto end;
-
-                usize pop_count;
-                memcpy(&pop_count, &self->bytecode.m_data[self->pc], sizeof(pop_count));
-                while (pop_count-- > 0){
-                    primitive_deinit(vec_base_at(&self->data_stack, self->data_stack.m_size - 1), self->alloc);
-                    vec_base_pop_back_discard(&self->data_stack);
-                }
+                if (op_code == OP_CODE_RET)
+                    (void)vec_base_push_back(&self->data_stack, self->alloc, &ret_val);
 
                 usize return_address;
                 vec_base_pop_back_to(&self->return_address_stack, &return_address);
@@ -401,9 +386,12 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                 break;
             }
 
-            case OP_CODE_JMP:
-                self->pc = *(usize*)memcpy(&(usize){0}, &self->bytecode.m_data[self->pc], sizeof(usize));
+            case OP_CODE_JMP:{
+                usize jmp_offset;
+                memcpy(&jmp_offset, &self->bytecode.m_data[self->pc], sizeof(jmp_offset));
+                self->pc = jmp_offset;
                 break;
+            }
             case OP_CODE_JMPZ:{
                 Primitive *condition = vec_base_at(&self->data_stack, self->data_stack.m_size - 1);
 
@@ -415,11 +403,11 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                 primitive_deinit(condition, self->alloc);
                 vec_base_pop_back_discard(&self->data_stack);
 
-                usize offset;
-                memcpy(&offset, &self->bytecode.m_data[self->pc], sizeof(offset));
-                self->pc += sizeof(offset);
+                usize jmp_offset;
+                memcpy(&jmp_offset, &self->bytecode.m_data[self->pc], sizeof(jmp_offset));
+                self->pc += sizeof(jmp_offset);
                 if (!val)
-                    self->pc = offset;
+                    self->pc = jmp_offset;
                 break;
             }
 

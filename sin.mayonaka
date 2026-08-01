@@ -1,22 +1,27 @@
-fn sin(val: float) float {
-    let PI: float = 3.14159265;
-    let result: float = 2 * PI * val;
+fn sin(x: float) float {
+    let PI:  float = 3.14159265;
+    let PI2: float = PI / 2.0;
 
-    let n: int = result / (2 * PI / 4);
+    let temp: float = x / PI2;
 
-    result = result - n * PI / 2;
+    if (x < 0.0)
+        temp = temp - 0.5;
 
-    let q: int = n % 4;
+    let n: int = temp;
 
-    if (q % 2 == 1)
-        result = PI / 2 - result;
+    x = x - n * PI2;
 
-    result = result - result ** 3 / 6 + result ** 5 / 120;
+    let q: int = n & 3;
+
+    if (q & 1)
+        x = PI2 - x;
+
+    x = x - x ** 3.0 / 6.0 + x ** 5.0 / 120.0 - x ** 7.0 / 5040.0;
 
     if (q > 1)
-        result = -result;
+        x = -x;
 
-    return result;
+    return x;
 }
 
 fn main() int {
@@ -24,11 +29,11 @@ fn main() int {
     let HEIGHT:      int = 32;
     let FREQUENCY: float = 6.0;
 
+    let PI: float = 3.14159265;
+
     for (0..HEIGHT + 1) |y|{
         for (0..WIDTH + 1) |x|{
-            let float_cast: float = x;
-
-            let sin: float = 0.99 ** x * sin(FREQUENCY * float_cast / WIDTH);
+            let sin: float = 0.99 ** x * sin(2.0 * PI * FREQUENCY * x / WIDTH);
 
             let int_cast: int = sin * (HEIGHT / 2);
             if ((HEIGHT / 2 - y) == int_cast)
@@ -38,6 +43,7 @@ fn main() int {
         }
         print('\n');
     }
+
     return 0;
 }
 

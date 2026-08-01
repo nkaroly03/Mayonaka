@@ -93,7 +93,7 @@ static Bytecode_compile_result bytecode_compiler_syntax_error(Bytecode_compiler_
 }
 #define syntax_error(...) bytecode_compiler_syntax_error(self, __VA_ARGS__)
 
-static Bytecode_compile_result bytecode_compiler_state_sp_case(Bytecode_compiler_state *self, Str_view rhs){
+static Bytecode_compile_result bytecode_compiler_state_sp_arg_case(Bytecode_compiler_state *self, Str_view rhs){
     Usize_u8s_union sp_offset;
 
     if (errno = 0, sscanf(rhs.m_str, SP_SYMBOL " [ - " USIZE_SFMT " ]", &sp_offset.as_usize) != 1)
@@ -219,7 +219,7 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                         if (!vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)OP_CODE_PUSH_TAG_SP}))
                             return OOM_ERROR;
 
-                        Bytecode_compile_result sp_case_result = bytecode_compiler_state_sp_case(self, rhs);
+                        Bytecode_compile_result sp_case_result = bytecode_compiler_state_sp_arg_case(self, rhs);
                         if (sp_case_result.error != COMPILE_ERROR_NONE)
                             return sp_case_result;
                     }
@@ -353,7 +353,7 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                     if (!vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)op_code}))
                         return OOM_ERROR;
 
-                    Bytecode_compile_result sp_case_result = bytecode_compiler_state_sp_case(self, rhs);
+                    Bytecode_compile_result sp_case_result = bytecode_compiler_state_sp_arg_case(self, rhs);
                     if (sp_case_result.error != COMPILE_ERROR_NONE)
                         return sp_case_result;
                 }
