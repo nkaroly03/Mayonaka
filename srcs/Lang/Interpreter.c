@@ -162,8 +162,11 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                         self->pc += sizeof(f64_data);
                         break;
                     }
-                    case OP_CODE_PUSH_TAG_STR:
-                        if (self->pc + sizeof(char) > self->bytecode.m_size)
+                    case OP_CODE_PUSH_TAG_STR:{
+                        usize i = self->pc;
+                        while (i < self->bytecode.m_size && self->bytecode.m_data[i] != '\0')
+                            ++i;
+                        if (i >= self->bytecode.m_size)
                             return bad_instruction_error(instruction_idx);
                         temp = (Primitive){.m_tag = PRIMITIVE_TAG_STR, .m_str_data_ptr = allocator_alloc(self->alloc, Primitive_str_data, 1)};
                         if (!temp.m_str_data_ptr)
@@ -176,8 +179,9 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                             primitive_deinit(&temp, self->alloc);
                             return oom_error();
                         }
-                        self->pc += (str_base_size(&temp.m_str_data_ptr->m_data) + 1);
+                        self->pc = i + 1;
                         break;
+                    }
                     case OP_CODE_PUSH_TAG_LIST:
                         temp = (Primitive){.m_tag = PRIMITIVE_TAG_LIST, .m_list_data_ptr = allocator_alloc(self->alloc, Primitive_list_data, 1)};
                         if (!temp.m_list_data_ptr)

@@ -193,7 +193,7 @@ Lex_result lex(Arena *arena, const char *path){
                 case STR_UNESCAPE_ERROR_BAD_ESCAPE_SEQUENCE: return syntax_error("<%s> literal is escaped incorrectly", type_str);
             }
 
-            // TODO: <char> literals than have '\0'(s) might be consumed even when they contain multiple characters
+            // TODO: <char> literals that have '\0'(s) might be consumed even when they contain multiple characters
             if (quote == '\'' && (quoted_sv.m_size == 2 || str_base_size(&temp.result) > 1 + 2))
                 return syntax_error("<char> literal must represent 1 character");
 
