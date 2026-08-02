@@ -57,15 +57,6 @@ static Interpreter_run_result interpreter_state_oom_error(Interpreter_state *sel
 }
 #define oom_error() interpreter_state_oom_error(self)
 
-static Interpreter_run_result interpreter_state_primitive_op_error(Interpreter_state *self, Primitive_op_result op_result){
-    Str_base_result error_info;
-    if (op_result.error == PRIMITIVE_OP_ERROR_OOM || !(error_info = str_base_init_raw(self->alloc, op_result.error_info)).success)
-        return oom_error();
-    interpreter_state_deinit(self);
-    return (Interpreter_run_result){.error_info = error_info.result, .error = (enum Interpreter_run_error)op_result.error};
-}
-#define primitive_op_error(op_result) interpreter_state_primitive_op_error(self, (op_result))
-
 static Interpreter_run_result interpreter_state_runtime_error(Interpreter_state *self, const char *fmt, ...){
     va_list args;
     va_start(args, fmt);
@@ -87,6 +78,11 @@ static Interpreter_run_result interpreter_state_builtin_fn_arg_count_error(Inter
     return runtime_error("Not enough arguments for builtin function <%s>", builtin_fn_tag_to_str(bfn_tag));
 }
 #define builtin_fn_arg_count_error(bfn_tag) interpreter_state_builtin_fn_arg_count_error(self, (bfn_tag))
+
+static Interpreter_run_result interpreter_state_primitive_op_error(Interpreter_state *self, Primitive_op_result op_result){
+    return (op_result.error == PRIMITIVE_OP_ERROR_OOM) ? oom_error() : runtime_error("%s", op_result.error_info);
+}
+#define primitive_op_error(op_result) interpreter_state_primitive_op_error(self, (op_result))
 
 static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
     while (self->pc < self->bytecode.m_size){
@@ -212,8 +208,8 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                         if (self->pc + sizeof(call_offset) > self->bytecode.m_size)
                             return bad_instruction_error(op_code_str);
                         memcpy(&call_offset, &self->bytecode.m_data[self->pc], sizeof(call_offset));
-                        if (call_offset >= self->bytecode.m_size)
-                            return runtime_error("<%s> instruction jumps past the program", op_code_str);
+                        if (call_offset > self->bytecode.m_size)
+                            return runtime_error("<%s> instruction jumps past the end of the program", op_code_str);
                         self->pc += sizeof(call_offset);
                         if (!vec_base_push_back(&self->return_address_stack, self->alloc, &self->pc))
                             return oom_error();
@@ -242,7 +238,7 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                         }
                         primitive_deinit(sleep_for, self->alloc);
                         vec_base_pop_back_discard(&self->data_stack);
-                        if ((errno = 0, nanosleep(&(struct timespec){.tv_sec = (time_t)(sleep_for_val / 1000000000), .tv_nsec = (i32)(sleep_for_val % 1000000000)}, NULL)) != 0)
+                        if (errno = 0, nanosleep(&(struct timespec){.tv_sec = (time_t)(sleep_for_val / 1000000000), .tv_nsec = (i32)(sleep_for_val % 1000000000)}, NULL) != 0)
                             return runtime_error(strerror(errno));
                         break;
                     }
@@ -371,6 +367,9 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                         if (list->m_tag != PRIMITIVE_TAG_LIST)
                             return runtime_error("<%s> called on non-list type", builtin_fn_tag_to_str(bfn_tag));
 
+                        if (list->m_list_data_ptr->m_data.m_size == 0)
+                            return runtime_error("<%s> called on empty list", builtin_fn_tag_to_str(bfn_tag));
+
                         Primitive popped;
                         vec_base_pop_back_to(&list->m_list_data_ptr->m_data, &popped);
                         primitive_deinit(&popped, self->alloc);
@@ -424,11 +423,11 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                 break;
             }
             case OP_CODE_JMPZ:{
-                usize jmp_offset;
-                if (self->pc + sizeof(jmp_offset) > self->bytecode.m_size)
+                usize jmpz_offset;
+                if (self->pc + sizeof(jmpz_offset) > self->bytecode.m_size)
                     return bad_instruction_error(op_code_str);
-                memcpy(&jmp_offset, &self->bytecode.m_data[self->pc], sizeof(jmp_offset));
-                self->pc += sizeof(jmp_offset);
+                memcpy(&jmpz_offset, &self->bytecode.m_data[self->pc], sizeof(jmpz_offset));
+                self->pc += sizeof(jmpz_offset);
 
                 if (self->data_stack.m_size == 0)
                     return runtime_error("<%s> instruction used on empty stack", op_code_str);
@@ -439,12 +438,12 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                 if (op_result.error != PRIMITIVE_OP_ERROR_NONE)
                     return primitive_op_error(op_result);
 
-                bool val = condition->m_bool_data;
+                bool condition_val = condition->m_bool_data;
                 primitive_deinit(condition, self->alloc);
                 vec_base_pop_back_discard(&self->data_stack);
 
-                if (!val)
-                    self->pc = jmp_offset;
+                if (!condition_val)
+                    self->pc = jmpz_offset;
                 break;
             }
 
@@ -479,7 +478,6 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                 usize sp_offset;
                 if (self->pc + sizeof(sp_offset) > self->bytecode.m_size)
                     return bad_instruction_error(op_code_str);
-
                 memcpy(&sp_offset, &self->bytecode.m_data[self->pc], sizeof(sp_offset));
                 self->pc += sizeof(sp_offset);
 
