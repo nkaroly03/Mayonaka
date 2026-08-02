@@ -647,12 +647,12 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
         }
 
         case TOKEN_TYPE_LBRACKET:             bin_op = BINARY_OP_SUBSCRIPT; bin_op_code = OP_CODE_DEREF;   goto bin_op_case;
-        case TOKEN_TYPE_EQUALS2:              bin_op = BINARY_OP_EQ;        bin_op_code = OP_CODE_CMP_EQ;  goto bin_op_case;
-        case TOKEN_TYPE_NOT_EQUALS:           bin_op = BINARY_OP_NEQ;       bin_op_code = OP_CODE_CMP_NEQ; goto bin_op_case;
-        case TOKEN_TYPE_LESS_THAN1:           bin_op = BINARY_OP_LE;        bin_op_code = OP_CODE_CMP_LE;  goto bin_op_case;
-        case TOKEN_TYPE_LESS_THAN1_EQUALS:    bin_op = BINARY_OP_LEQ;       bin_op_code = OP_CODE_CMP_LEQ; goto bin_op_case;
-        case TOKEN_TYPE_GREATER_THAN1:        bin_op = BINARY_OP_GE;        bin_op_code = OP_CODE_CMP_GE;  goto bin_op_case;
-        case TOKEN_TYPE_GREATER_THAN1_EQUALS: bin_op = BINARY_OP_GEQ;       bin_op_code = OP_CODE_CMP_GEQ; goto bin_op_case;
+        case TOKEN_TYPE_EQUALS2:              bin_op = BINARY_OP_CMP_EQ;    bin_op_code = OP_CODE_CMP_EQ;  goto bin_op_case;
+        case TOKEN_TYPE_NOT_EQUALS:           bin_op = BINARY_OP_CMP_NEQ;   bin_op_code = OP_CODE_CMP_NEQ; goto bin_op_case;
+        case TOKEN_TYPE_LESS_THAN1:           bin_op = BINARY_OP_CMP_LE;    bin_op_code = OP_CODE_CMP_LE;  goto bin_op_case;
+        case TOKEN_TYPE_LESS_THAN1_EQUALS:    bin_op = BINARY_OP_CMP_LEQ;   bin_op_code = OP_CODE_CMP_LEQ; goto bin_op_case;
+        case TOKEN_TYPE_GREATER_THAN1:        bin_op = BINARY_OP_CMP_GE;    bin_op_code = OP_CODE_CMP_GE;  goto bin_op_case;
+        case TOKEN_TYPE_GREATER_THAN1_EQUALS: bin_op = BINARY_OP_CMP_GEQ;   bin_op_code = OP_CODE_CMP_GEQ; goto bin_op_case;
         case TOKEN_TYPE_ASTERISK1:            bin_op = BINARY_OP_MUL;       bin_op_code = OP_CODE_MUL;     goto bin_op_case;
         case TOKEN_TYPE_SLASH:                bin_op = BINARY_OP_DIV;       bin_op_code = OP_CODE_DIV;     goto bin_op_case;
         case TOKEN_TYPE_PERCENT:              bin_op = BINARY_OP_MOD;       bin_op_code = OP_CODE_MOD;     goto bin_op_case;

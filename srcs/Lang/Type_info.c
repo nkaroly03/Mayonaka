@@ -65,12 +65,12 @@ Type_info binary_op_type_info_result(enum Binary_op op, Type_info lhs, Type_info
                 }
                 break;
 
-            case BINARY_OP_EQ:
-            case BINARY_OP_NEQ:
-            case BINARY_OP_LE:
-            case BINARY_OP_LEQ:
-            case BINARY_OP_GE:
-            case BINARY_OP_GEQ:
+            case BINARY_OP_CMP_EQ:
+            case BINARY_OP_CMP_NEQ:
+            case BINARY_OP_CMP_LE:
+            case BINARY_OP_CMP_LEQ:
+            case BINARY_OP_CMP_GE:
+            case BINARY_OP_CMP_GEQ:
                 if (
                     (lhs.m_dimensions == 0 && rhs.m_dimensions == 0) &&
                     ((lhs.m_tag == TYPE_INFO_TAG_STR && rhs.m_tag == TYPE_INFO_TAG_STR) || (lhs.m_tag != TYPE_INFO_TAG_STR && rhs.m_tag != TYPE_INFO_TAG_STR))

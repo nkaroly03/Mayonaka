@@ -60,22 +60,25 @@ static Interpreter_run_result interpreter_state_oom_error(Interpreter_state *sel
 static Interpreter_run_result interpreter_state_runtime_error(Interpreter_state *self, const char *fmt, ...){
     va_list args;
     va_start(args, fmt);
-    Str_base_result error_info = str_base_init_fmt_va_list(self->alloc, fmt, args);
+    Str_base error_info = {0};
+    bool result = str_base_assign_fmt(&error_info, self->alloc, "At offset <" USIZE_PFMT ">: ", self->pc) && str_base_append_fmt_va_list(&error_info, self->alloc, fmt, args);
     va_end(args);
-    if (!error_info.success)
+    if (!result){
+        str_base_deinit(&error_info, self->alloc);
         return oom_error();
+    }
     interpreter_state_deinit(self);
-    return (Interpreter_run_result){.error_info = error_info.result, .error = INTERPRETER_RUN_ERROR_RUNTIME};
+    return (Interpreter_run_result){.error_info = error_info, .error = INTERPRETER_RUN_ERROR_RUNTIME};
 }
 #define runtime_error(...) interpreter_state_runtime_error(self, __VA_ARGS__)
 
-static Interpreter_run_result interpreter_state_bad_instruction_error(Interpreter_state *self, usize instruction_idx){
-    return runtime_error("Bad <%s> instruction at idx <" USIZE_PFMT ">", op_code_to_str((enum Op_code)self->bytecode.m_data[instruction_idx]), instruction_idx);
+static Interpreter_run_result interpreter_state_bad_instruction_error(Interpreter_state *self){
+    return runtime_error("Bad <%s> instruction", op_code_to_str((enum Op_code)self->bytecode.m_data[self->pc]));
 }
-#define bad_instruction_error(instruction_idx) interpreter_state_bad_instruction_error(self, (instruction_idx))
+#define bad_instruction_error() interpreter_state_bad_instruction_error(self)
 
-static Interpreter_run_result interpreter_state_builtin_fn_arg_count_error(Interpreter_state *self, enum Builtin_fn_tag bfn_tag){
-    return runtime_error("Not enough arguments for builtin function <%s>", builtin_fn_tag_to_str(bfn_tag));
+static Interpreter_run_result interpreter_state_builtin_fn_arg_count_error(Interpreter_state *self, const char *bfn_tag_str){
+    return runtime_error("Not enough arguments for builtin function <%s>", bfn_tag_str);
 }
 #define builtin_fn_arg_count_error(bfn_tag) interpreter_state_builtin_fn_arg_count_error(self, (bfn_tag))
 
@@ -88,23 +91,23 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
     while (self->pc < self->bytecode.m_size){
         Primitive_op_result op_result;
 
-        usize instruction_idx = self->pc;
+        usize new_pc = self->pc;
 
-        enum Op_code op_code = (enum Op_code)self->bytecode.m_data[self->pc++];
+        enum Op_code op_code = (enum Op_code)self->bytecode.m_data[new_pc++];
         const char *op_code_str = op_code_to_str(op_code);
 
         switch (op_code){
             case OP_CODE_PUSH:{
-                if (self->pc >= self->bytecode.m_size)
-                    return bad_instruction_error(instruction_idx);
+                if (new_pc >= self->bytecode.m_size)
+                    return bad_instruction_error();
                 Primitive temp;
-                switch ((enum Op_code_push_tag)self->bytecode.m_data[self->pc++]){
+                switch ((enum Op_code_push_tag)self->bytecode.m_data[new_pc++]){
                     case OP_CODE_PUSH_TAG_SP:{
                         usize sp_offset;
-                        if (self->pc + sizeof(sp_offset) > self->bytecode.m_size)
-                            return bad_instruction_error(instruction_idx);
-                        memcpy(&sp_offset, &self->bytecode.m_data[self->pc], sizeof(sp_offset));
-                        self->pc += sizeof(sp_offset);
+                        if (new_pc + sizeof(sp_offset) > self->bytecode.m_size)
+                            return bad_instruction_error();
+                        memcpy(&sp_offset, &self->bytecode.m_data[new_pc], sizeof(sp_offset));
+                        new_pc += sizeof(sp_offset);
 
                         usize offset = self->data_stack.m_size - sp_offset;
                         if (offset >= self->data_stack.m_size)
@@ -135,51 +138,55 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                         ++self->argv.m_list_data_ptr->m_ref_count;
                         break;
                     case OP_CODE_PUSH_TAG_BOOL:
-                        if (!vec_base_push_back(&self->data_stack, self->alloc, &(Primitive){.m_tag = PRIMITIVE_TAG_BOOL, .m_bool_data = (bool)self->bytecode.m_data[self->pc++]}))
+                        if (!vec_base_push_back(&self->data_stack, self->alloc, &(Primitive){.m_tag = PRIMITIVE_TAG_BOOL, .m_bool_data = (bool)self->bytecode.m_data[new_pc++]}))
                             return oom_error();
                         break;
                     case OP_CODE_PUSH_TAG_CHAR:
-                        if (!vec_base_push_back(&self->data_stack, self->alloc, &(Primitive){.m_tag = PRIMITIVE_TAG_CHAR, .m_char_data = self->bytecode.m_data[self->pc++]}))
+                        if (!vec_base_push_back(&self->data_stack, self->alloc, &(Primitive){.m_tag = PRIMITIVE_TAG_CHAR, .m_char_data = self->bytecode.m_data[new_pc++]}))
                             return oom_error();
                         break;
                     case OP_CODE_PUSH_TAG_INT:{
                         i64 i64_data;
-                        if (self->pc + sizeof(i64_data) > self->bytecode.m_size)
-                            return bad_instruction_error(instruction_idx);
-                        memcpy(&i64_data, &self->bytecode.m_data[self->pc], sizeof(i64_data));
+                        if (new_pc + sizeof(i64_data) > self->bytecode.m_size)
+                            return bad_instruction_error();
+                        memcpy(&i64_data, &self->bytecode.m_data[new_pc], sizeof(i64_data));
                         if (!vec_base_push_back(&self->data_stack, self->alloc, &(Primitive){.m_tag = PRIMITIVE_TAG_INT, .m_int_data = i64_data}))
                             return oom_error();
-                        self->pc += sizeof(i64_data);
+                        new_pc += sizeof(i64_data);
                         break;
                     }
                     case OP_CODE_PUSH_TAG_FLOAT:{
                         f64 f64_data;
-                        if (self->pc + sizeof(f64_data) > self->bytecode.m_size)
-                            return bad_instruction_error(instruction_idx);
-                        memcpy(&f64_data, &self->bytecode.m_data[self->pc], sizeof(f64_data));
+                        if (new_pc + sizeof(f64_data) > self->bytecode.m_size)
+                            return bad_instruction_error();
+                        memcpy(&f64_data, &self->bytecode.m_data[new_pc], sizeof(f64_data));
                         if (!vec_base_push_back(&self->data_stack, self->alloc, &(Primitive){.m_tag = PRIMITIVE_TAG_FLOAT, .m_float_data = f64_data}))
                             return oom_error();
-                        self->pc += sizeof(f64_data);
+                        new_pc += sizeof(f64_data);
                         break;
                     }
                     case OP_CODE_PUSH_TAG_STR:{
-                        usize i = self->pc;
+                        usize i = new_pc;
                         while (i < self->bytecode.m_size && self->bytecode.m_data[i] != '\0')
                             ++i;
                         if (i >= self->bytecode.m_size)
-                            return bad_instruction_error(instruction_idx);
+                            return bad_instruction_error();
                         temp = (Primitive){.m_tag = PRIMITIVE_TAG_STR, .m_str_data_ptr = allocator_alloc(self->alloc, Primitive_str_data, 1)};
                         if (!temp.m_str_data_ptr)
                             return oom_error();
                         *temp.m_str_data_ptr = (Primitive_str_data){.m_ref_count = 1, .m_data = {0}};
                         if (
-                            !str_base_assign_raw(&temp.m_str_data_ptr->m_data, self->alloc, (const char*)&self->bytecode.m_data[self->pc]) ||
+                            !str_base_assign_str_view(
+                                &temp.m_str_data_ptr->m_data,
+                                self->alloc,
+                                (Str_view){.m_size = i - new_pc, .m_str = (const char*)&self->bytecode.m_data[new_pc]}
+                            ) ||
                             !vec_base_push_back(&self->data_stack, self->alloc, &temp)
                         ){
                             primitive_deinit(&temp, self->alloc);
                             return oom_error();
                         }
-                        self->pc = i + 1;
+                        new_pc = i + 1;
                         break;
                     }
                     case OP_CODE_PUSH_TAG_LIST:
@@ -193,7 +200,7 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                         }
                         break;
                     default:
-                        return bad_instruction_error(instruction_idx);
+                        return bad_instruction_error();
                 }
                 break;
             }
@@ -205,26 +212,27 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                 break;
 
             case OP_CODE_CALL:{
-                if (self->pc >= self->bytecode.m_size)
-                    return bad_instruction_error(instruction_idx);
-                enum Builtin_fn_tag bfn_tag = (enum Builtin_fn_tag)self->bytecode.m_data[self->pc++];
+                if (new_pc >= self->bytecode.m_size)
+                    return bad_instruction_error();
+                enum Builtin_fn_tag bfn_tag = (enum Builtin_fn_tag)self->bytecode.m_data[new_pc++];
+                const char *bfn_tag_str = builtin_fn_tag_to_str(bfn_tag);
                 switch (bfn_tag){
                     case BUILTIN_FN_TAG_NONE:{
                         usize call_offset;
-                        if (self->pc + sizeof(call_offset) > self->bytecode.m_size)
-                            return bad_instruction_error(instruction_idx);
-                        memcpy(&call_offset, &self->bytecode.m_data[self->pc], sizeof(call_offset));
+                        if (new_pc + sizeof(call_offset) > self->bytecode.m_size)
+                            return bad_instruction_error();
+                        memcpy(&call_offset, &self->bytecode.m_data[new_pc], sizeof(call_offset));
                         if (call_offset > self->bytecode.m_size)
                             return runtime_error("<%s> instruction jumps past the end of the program", op_code_str);
-                        self->pc += sizeof(call_offset);
-                        if (!vec_base_push_back(&self->return_address_stack, self->alloc, &self->pc))
+                        new_pc += sizeof(call_offset);
+                        if (!vec_base_push_back(&self->return_address_stack, self->alloc, &new_pc))
                             return oom_error();
-                        self->pc = call_offset;
+                        new_pc = call_offset;
                         break;
                     }
                     case BUILTIN_FN_TAG_EXIT:{
                         if (self->data_stack.m_size < 1)
-                            return builtin_fn_arg_count_error(bfn_tag);
+                            return builtin_fn_arg_count_error(bfn_tag_str);
                         Primitive exit_val;
                         vec_base_pop_back_to(&self->data_stack, &exit_val);
                         interpreter_state_deinit(self);
@@ -232,7 +240,7 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                     }
                     case BUILTIN_FN_TAG_NSLEEP:{
                         if (self->data_stack.m_size < 1)
-                            return builtin_fn_arg_count_error(bfn_tag);
+                            return builtin_fn_arg_count_error(bfn_tag_str);
                         Primitive *sleep_for = vec_base_at(&self->data_stack, self->data_stack.m_size - 1);
                         i64 sleep_for_val;
                         switch (sleep_for->m_tag){
@@ -240,7 +248,7 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                             case PRIMITIVE_TAG_CHAR:  sleep_for_val = sleep_for->m_char_data;       break;
                             case PRIMITIVE_TAG_INT:   sleep_for_val = sleep_for->m_int_data;        break;
                             case PRIMITIVE_TAG_FLOAT: sleep_for_val = (i64)sleep_for->m_float_data; break;
-                            default:                  return runtime_error("Builtin function <%s> called on non-numeric type", builtin_fn_tag_to_str(bfn_tag));
+                            default:                  return runtime_error("Builtin function <%s> called on non-numeric type", bfn_tag_str);
                         }
                         primitive_deinit(sleep_for, self->alloc);
                         vec_base_pop_back_discard(&self->data_stack);
@@ -250,7 +258,7 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                     }
                     case BUILTIN_FN_TAG_PRINT:{
                         if (self->data_stack.m_size < 1)
-                            return builtin_fn_arg_count_error(bfn_tag);
+                            return builtin_fn_arg_count_error(bfn_tag_str);
                         Primitive to_print;
                         vec_base_pop_back_to(&self->data_stack, &to_print);
                         primitive_print(&to_print);
@@ -259,7 +267,7 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                     }
                     case BUILTIN_FN_TAG_SCAN:{
                         if (self->data_stack.m_size < 1)
-                            return builtin_fn_arg_count_error(bfn_tag);
+                            return builtin_fn_arg_count_error(bfn_tag_str);
 
                         Primitive *to_print = vec_base_at(&self->data_stack, self->data_stack.m_size - 1);
                         primitive_print(to_print);
@@ -324,7 +332,7 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                     }
                     case BUILTIN_FN_TAG_LEN:{
                         if (self->data_stack.m_size < 1)
-                            return builtin_fn_arg_count_error(bfn_tag);
+                            return builtin_fn_arg_count_error(bfn_tag_str);
 
                         Primitive len = {.m_tag = PRIMITIVE_TAG_INT};
 
@@ -332,7 +340,7 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                         switch (list_like->m_tag){
                             case PRIMITIVE_TAG_STR:  len.m_int_data = (i64)str_base_size(&list_like->m_str_data_ptr->m_data); break;
                             case PRIMITIVE_TAG_LIST: len.m_int_data = (i64)list_like->m_list_data_ptr->m_data.m_size;         break;
-                            default:                 return runtime_error("Builtin function <%s> called on a numeric type", builtin_fn_tag_to_str(bfn_tag));
+                            default:                 return runtime_error("Builtin function <%s> called on a numeric type", bfn_tag_str);
                         }
                         primitive_deinit(list_like, self->alloc);
 
@@ -345,7 +353,7 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                         break;
                     case BUILTIN_FN_TAG_PUSH_BACK:{
                         if (self->data_stack.m_size < 2)
-                            return builtin_fn_arg_count_error(bfn_tag);
+                            return builtin_fn_arg_count_error(bfn_tag_str);
 
                         Primitive to_push;
                         vec_base_pop_back_to(&self->data_stack, &to_push);
@@ -353,7 +361,7 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                         Primitive *list = vec_base_at(&self->data_stack, self->data_stack.m_size - 1);
                         if (list->m_tag != PRIMITIVE_TAG_LIST){
                             primitive_deinit(&to_push, self->alloc);
-                            return runtime_error("<%s> called on non-list type", builtin_fn_tag_to_str(bfn_tag));
+                            return runtime_error("<%s> called on non-list type", bfn_tag_str);
                         }
 
                         if (!vec_base_push_back(&list->m_list_data_ptr->m_data, self->alloc, &to_push)){
@@ -367,14 +375,14 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                     }
                     case BUILTIN_FN_TAG_POP_BACK:{
                         if (self->data_stack.m_size < 1)
-                            return builtin_fn_arg_count_error(bfn_tag);
+                            return builtin_fn_arg_count_error(bfn_tag_str);
 
                         Primitive *list = vec_base_at(&self->data_stack, self->data_stack.m_size - 1);
                         if (list->m_tag != PRIMITIVE_TAG_LIST)
-                            return runtime_error("<%s> called on non-list type", builtin_fn_tag_to_str(bfn_tag));
+                            return runtime_error("<%s> called on non-list type", bfn_tag_str);
 
                         if (list->m_list_data_ptr->m_data.m_size == 0)
-                            return runtime_error("<%s> called on empty list", builtin_fn_tag_to_str(bfn_tag));
+                            return runtime_error("<%s> called on empty list", bfn_tag_str);
 
                         Primitive popped;
                         vec_base_pop_back_to(&list->m_list_data_ptr->m_data, &popped);
@@ -385,16 +393,16 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                         break;
                     }
                     default:
-                        return bad_instruction_error(instruction_idx);
+                        return bad_instruction_error();
                 }
                 break;
             }
             case OP_CODE_RET:
             case OP_CODE_RETV:{
                 usize pop_count;
-                if (self->pc + sizeof(pop_count) > self->bytecode.m_size)
-                    return bad_instruction_error(instruction_idx);
-                memcpy(&pop_count, &self->bytecode.m_data[self->pc], sizeof(pop_count));
+                if (new_pc + sizeof(pop_count) > self->bytecode.m_size)
+                    return bad_instruction_error();
+                memcpy(&pop_count, &self->bytecode.m_data[new_pc], sizeof(pop_count));
 
                 if (pop_count + (op_code == OP_CODE_RET) > self->data_stack.m_size)
                     return runtime_error("<%s> instruction pops the stack too many times", op_code_str);
@@ -416,24 +424,24 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
 
                 usize return_address;
                 vec_base_pop_back_to(&self->return_address_stack, &return_address);
-                self->pc = return_address;
+                new_pc = return_address;
                 break;
             }
 
             case OP_CODE_JMP:{
                 usize jmp_offset;
-                if (self->pc + sizeof(jmp_offset) > self->bytecode.m_size)
-                    return bad_instruction_error(instruction_idx);
-                memcpy(&jmp_offset, &self->bytecode.m_data[self->pc], sizeof(jmp_offset));
-                self->pc = jmp_offset;
+                if (new_pc + sizeof(jmp_offset) > self->bytecode.m_size)
+                    return bad_instruction_error();
+                memcpy(&jmp_offset, &self->bytecode.m_data[new_pc], sizeof(jmp_offset));
+                new_pc = jmp_offset;
                 break;
             }
             case OP_CODE_JMPZ:{
                 usize jmpz_offset;
-                if (self->pc + sizeof(jmpz_offset) > self->bytecode.m_size)
-                    return bad_instruction_error(instruction_idx);
-                memcpy(&jmpz_offset, &self->bytecode.m_data[self->pc], sizeof(jmpz_offset));
-                self->pc += sizeof(jmpz_offset);
+                if (new_pc + sizeof(jmpz_offset) > self->bytecode.m_size)
+                    return bad_instruction_error();
+                memcpy(&jmpz_offset, &self->bytecode.m_data[new_pc], sizeof(jmpz_offset));
+                new_pc += sizeof(jmpz_offset);
 
                 if (self->data_stack.m_size == 0)
                     return runtime_error("<%s> instruction used on empty stack", op_code_str);
@@ -449,7 +457,7 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                 vec_base_pop_back_discard(&self->data_stack);
 
                 if (!condition_val)
-                    self->pc = jmpz_offset;
+                    new_pc = jmpz_offset;
                 break;
             }
 
@@ -482,10 +490,10 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
 
             case OP_CODE_MOV:{
                 usize sp_offset;
-                if (self->pc + sizeof(sp_offset) > self->bytecode.m_size)
-                    return bad_instruction_error(instruction_idx);
-                memcpy(&sp_offset, &self->bytecode.m_data[self->pc], sizeof(sp_offset));
-                self->pc += sizeof(sp_offset);
+                if (new_pc + sizeof(sp_offset) > self->bytecode.m_size)
+                    return bad_instruction_error();
+                memcpy(&sp_offset, &self->bytecode.m_data[new_pc], sizeof(sp_offset));
+                new_pc += sizeof(sp_offset);
 
                 usize offset = self->data_stack.m_size - sp_offset;
                 if (offset >= self->data_stack.m_size)
@@ -577,8 +585,10 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
             }
 
             default:
-                return runtime_error("Unknown instruction with value <%d> at idx <" USIZE_PFMT ">", (int)op_code, instruction_idx);
+                return runtime_error("Unknown instruction with value <%d>", (int)op_code);
         }
+
+        self->pc = new_pc;
     }
 
 end:
