@@ -797,6 +797,25 @@ static void ast_node_print(const AST_node *self, usize indent, FILE *file){
         ast_node_print(self->m_sub_nodes.m_data[i], indent + 4, file);
 }
 
+#ifndef NDEBUG
+static bool token_slice_is_valid(Token_slice tokens){
+    usize lparen_count   = 0, rparen_count   = 0;
+    usize lbracket_count = 0, rbracket_count = 0;
+    usize lbrace_count   = 0, rbrace_count   = 0;
+
+    for (usize i = 0; i < tokens.m_size; ++i){
+        lparen_count   += (tokens.m_data[i].m_type == TOKEN_TYPE_LPAREN  );
+        rparen_count   += (tokens.m_data[i].m_type == TOKEN_TYPE_RPAREN  );
+        lbracket_count += (tokens.m_data[i].m_type == TOKEN_TYPE_LBRACKET);
+        rbracket_count += (tokens.m_data[i].m_type == TOKEN_TYPE_RBRACKET);
+        lbrace_count   += (tokens.m_data[i].m_type == TOKEN_TYPE_LBRACE  );
+        rbrace_count   += (tokens.m_data[i].m_type == TOKEN_TYPE_RBRACE  );
+    }
+
+    return lparen_count == rparen_count && lbracket_count == rbracket_count && lbrace_count == rbrace_count;
+}
+#endif // NDEBUG
+
 // ------------------------------------------------------------------------------------------------
 
 void ast_node_ptr_slice_print(AST_node_ptr_slice ast_node_ptr_slice, FILE *file){
@@ -808,6 +827,7 @@ void ast_node_ptr_slice_print(AST_node_ptr_slice ast_node_ptr_slice, FILE *file)
 
 Parse_result parse(Arena *arena, Token_slice tokens){
     assert(arena && "<arena> is not nullable");
+    assert(token_slice_is_valid(tokens));
 
     Parser_state state = {
         .alloc         = arena_allocator(arena),

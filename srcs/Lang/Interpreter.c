@@ -69,10 +69,10 @@ static Interpreter_run_result interpreter_state_runtime_error(Interpreter_state 
 }
 #define runtime_error(...) interpreter_state_runtime_error(self, __VA_ARGS__)
 
-static Interpreter_run_result interpreter_state_bad_instruction_error(Interpreter_state *self, const char *op_code_str){
-    return runtime_error("Bad <%s> instruction", op_code_str);
+static Interpreter_run_result interpreter_state_bad_instruction_error(Interpreter_state *self, usize instruction_idx){
+    return runtime_error("Bad <%s> instruction at idx <" USIZE_PFMT ">", op_code_to_str((enum Op_code)self->bytecode.m_data[instruction_idx]), instruction_idx);
 }
-#define bad_instruction_error(op_code_str) interpreter_state_bad_instruction_error(self, (op_code_str))
+#define bad_instruction_error(instruction_idx) interpreter_state_bad_instruction_error(self, (instruction_idx))
 
 static Interpreter_run_result interpreter_state_builtin_fn_arg_count_error(Interpreter_state *self, enum Builtin_fn_tag bfn_tag){
     return runtime_error("Not enough arguments for builtin function <%s>", builtin_fn_tag_to_str(bfn_tag));
@@ -88,19 +88,21 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
     while (self->pc < self->bytecode.m_size){
         Primitive_op_result op_result;
 
+        usize instruction_idx = self->pc;
+
         enum Op_code op_code = (enum Op_code)self->bytecode.m_data[self->pc++];
         const char *op_code_str = op_code_to_str(op_code);
 
         switch (op_code){
             case OP_CODE_PUSH:{
                 if (self->pc >= self->bytecode.m_size)
-                    return bad_instruction_error(op_code_str);
+                    return bad_instruction_error(instruction_idx);
                 Primitive temp;
                 switch ((enum Op_code_push_tag)self->bytecode.m_data[self->pc++]){
                     case OP_CODE_PUSH_TAG_SP:{
                         usize sp_offset;
                         if (self->pc + sizeof(sp_offset) > self->bytecode.m_size)
-                            return bad_instruction_error(op_code_str);
+                            return bad_instruction_error(instruction_idx);
                         memcpy(&sp_offset, &self->bytecode.m_data[self->pc], sizeof(sp_offset));
                         self->pc += sizeof(sp_offset);
 
@@ -143,7 +145,7 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                     case OP_CODE_PUSH_TAG_INT:{
                         i64 i64_data;
                         if (self->pc + sizeof(i64_data) > self->bytecode.m_size)
-                            return bad_instruction_error(op_code_str);
+                            return bad_instruction_error(instruction_idx);
                         memcpy(&i64_data, &self->bytecode.m_data[self->pc], sizeof(i64_data));
                         if (!vec_base_push_back(&self->data_stack, self->alloc, &(Primitive){.m_tag = PRIMITIVE_TAG_INT, .m_int_data = i64_data}))
                             return oom_error();
@@ -153,7 +155,7 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                     case OP_CODE_PUSH_TAG_FLOAT:{
                         f64 f64_data;
                         if (self->pc + sizeof(f64_data) > self->bytecode.m_size)
-                            return bad_instruction_error(op_code_str);
+                            return bad_instruction_error(instruction_idx);
                         memcpy(&f64_data, &self->bytecode.m_data[self->pc], sizeof(f64_data));
                         if (!vec_base_push_back(&self->data_stack, self->alloc, &(Primitive){.m_tag = PRIMITIVE_TAG_FLOAT, .m_float_data = f64_data}))
                             return oom_error();
@@ -162,7 +164,7 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                     }
                     case OP_CODE_PUSH_TAG_STR:
                         if (self->pc + sizeof(char) > self->bytecode.m_size)
-                            return bad_instruction_error(op_code_str);
+                            return bad_instruction_error(instruction_idx);
                         temp = (Primitive){.m_tag = PRIMITIVE_TAG_STR, .m_str_data_ptr = allocator_alloc(self->alloc, Primitive_str_data, 1)};
                         if (!temp.m_str_data_ptr)
                             return oom_error();
@@ -187,7 +189,7 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                         }
                         break;
                     default:
-                        return bad_instruction_error(op_code_str);
+                        return bad_instruction_error(instruction_idx);
                 }
                 break;
             }
@@ -200,13 +202,13 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
 
             case OP_CODE_CALL:{
                 if (self->pc >= self->bytecode.m_size)
-                    return bad_instruction_error(op_code_str);
+                    return bad_instruction_error(instruction_idx);
                 enum Builtin_fn_tag bfn_tag = (enum Builtin_fn_tag)self->bytecode.m_data[self->pc++];
                 switch (bfn_tag){
                     case BUILTIN_FN_TAG_NONE:{
                         usize call_offset;
                         if (self->pc + sizeof(call_offset) > self->bytecode.m_size)
-                            return bad_instruction_error(op_code_str);
+                            return bad_instruction_error(instruction_idx);
                         memcpy(&call_offset, &self->bytecode.m_data[self->pc], sizeof(call_offset));
                         if (call_offset > self->bytecode.m_size)
                             return runtime_error("<%s> instruction jumps past the end of the program", op_code_str);
@@ -379,7 +381,7 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                         break;
                     }
                     default:
-                        return bad_instruction_error(op_code_str);
+                        return bad_instruction_error(instruction_idx);
                 }
                 break;
             }
@@ -387,7 +389,7 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
             case OP_CODE_RETV:{
                 usize pop_count;
                 if (self->pc + sizeof(pop_count) > self->bytecode.m_size)
-                    return bad_instruction_error(op_code_str);
+                    return bad_instruction_error(instruction_idx);
                 memcpy(&pop_count, &self->bytecode.m_data[self->pc], sizeof(pop_count));
 
                 if (pop_count + (op_code == OP_CODE_RET) > self->data_stack.m_size)
@@ -417,7 +419,7 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
             case OP_CODE_JMP:{
                 usize jmp_offset;
                 if (self->pc + sizeof(jmp_offset) > self->bytecode.m_size)
-                    return bad_instruction_error(op_code_str);
+                    return bad_instruction_error(instruction_idx);
                 memcpy(&jmp_offset, &self->bytecode.m_data[self->pc], sizeof(jmp_offset));
                 self->pc = jmp_offset;
                 break;
@@ -425,7 +427,7 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
             case OP_CODE_JMPZ:{
                 usize jmpz_offset;
                 if (self->pc + sizeof(jmpz_offset) > self->bytecode.m_size)
-                    return bad_instruction_error(op_code_str);
+                    return bad_instruction_error(instruction_idx);
                 memcpy(&jmpz_offset, &self->bytecode.m_data[self->pc], sizeof(jmpz_offset));
                 self->pc += sizeof(jmpz_offset);
 
@@ -477,7 +479,7 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
             case OP_CODE_MOV:{
                 usize sp_offset;
                 if (self->pc + sizeof(sp_offset) > self->bytecode.m_size)
-                    return bad_instruction_error(op_code_str);
+                    return bad_instruction_error(instruction_idx);
                 memcpy(&sp_offset, &self->bytecode.m_data[self->pc], sizeof(sp_offset));
                 self->pc += sizeof(sp_offset);
 
@@ -571,7 +573,7 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
             }
 
             default:
-                return runtime_error("Unknown instruction");
+                return runtime_error("Unknown instruction with value <%d> at idx <" USIZE_PFMT ">", (int)op_code, instruction_idx);
         }
     }
 
