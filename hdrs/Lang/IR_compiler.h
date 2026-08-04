@@ -11,6 +11,7 @@ extern "C"{
 #include "Parser.h"
 
 #define LOCAL_LABEL_PREFIX_SYMBOL "."
+#define BP_SYMBOL "bp"
 #define SP_SYMBOL "sp"
 
 enum Op_code{

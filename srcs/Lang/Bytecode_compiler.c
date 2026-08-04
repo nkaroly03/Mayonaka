@@ -93,11 +93,29 @@ static Bytecode_compile_result bytecode_compiler_syntax_error(Bytecode_compiler_
 }
 #define syntax_error(...) bytecode_compiler_syntax_error(self, __VA_ARGS__)
 
-static Bytecode_compile_result bytecode_compiler_state_sp_arg_case(Bytecode_compiler_state *self, Str_view rhs){
+static Bytecode_compile_result bytecode_compiler_state_arg_case_bp(Bytecode_compiler_state *self, Str_view rhs){
+    Usize_u8s_union bp_offset;
+
+    if (errno = 0, sscanf(rhs.m_str, BP_SYMBOL " [" USIZE_SFMT " ]", &bp_offset.as_usize) != 1)
+        return syntax_error("<" BP_SYMBOL "> must be followed by [<val>], where <val> is an integer");
+    if (errno != 0)
+        return syntax_error("<" BP_SYMBOL "> offset is not representable by <usize>");
+
+    rhs = str_view_trim_left_while(str_view_trim_left(str_view_trim_left_while_not(rhs, is_rbracket), 1), isspace);
+    if (rhs.m_size > 0 && rhs.m_str[0] != ';')
+        return syntax_error("Invalid or more than 1 argument");
+
+    for (usize i = 0; i < array_size(bp_offset.as_u8s); ++i)
+        if (!vec_base_push_back(&self->bytecode, self->alloc, &bp_offset.as_u8s[i]))
+            return OOM_ERROR;
+
+    return (Bytecode_compile_result){.error = COMPILE_ERROR_NONE};
+}
+static Bytecode_compile_result bytecode_compiler_state_arg_case_sp(Bytecode_compiler_state *self, Str_view rhs){
     Usize_u8s_union sp_offset;
 
     if (errno = 0, sscanf(rhs.m_str, SP_SYMBOL " [ - " USIZE_SFMT " ]", &sp_offset.as_usize) != 1)
-        return syntax_error("<" SP_SYMBOL "> must be followed by <[-<val>]>, where <val> is an integer");
+        return syntax_error("<" SP_SYMBOL "> must be followed by [-<val>], where <val> is an integer");
     if (errno != 0)
         return syntax_error("<" SP_SYMBOL "> offset is not representable by <usize>");
 
@@ -111,6 +129,14 @@ static Bytecode_compile_result bytecode_compiler_state_sp_arg_case(Bytecode_comp
 
     return (Bytecode_compile_result){.error = COMPILE_ERROR_NONE};
 }
+
+static_assert((int)OP_CODE_PUSH_TAG_BP == (int)OP_CODE_MOV_TAG_BP, "");
+static_assert((int)OP_CODE_PUSH_TAG_SP == (int)OP_CODE_MOV_TAG_SP, "");
+
+static Bytecode_compile_result (*const ARG_CASE_FNS[])(Bytecode_compiler_state*, Str_view) = {
+    [OP_CODE_PUSH_TAG_BP] = bytecode_compiler_state_arg_case_bp,
+    [OP_CODE_PUSH_TAG_SP] = bytecode_compiler_state_arg_case_sp
+};
 
 static Bytecode_compile_result bytecode_compiler_state_label_to_str(Bytecode_compiler_state *self, bool is_label_decl, Str_view label_sv, Str_base *out_label_str){
     label_sv = str_view_trim_right_while(
@@ -170,7 +196,10 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
         Str_view sv = *(Str_view*)vec_base_at(&self->instruction_views, self->instruction_idx);
 
         if (sv.m_size > 0 && sv.m_str[0] != ';'){
-            Str_view lhs = str_view_trim_right(sv, str_view_trim_left_while(sv, is_alpha_or_underscore).m_size);
+            if (!is_alpha_or_underscore(sv.m_str[0]) && sv.m_str[0] != '.')
+                return syntax_error("Op code starting with <%c>", sv.m_str[0]);
+
+            Str_view lhs = str_view_trim_right(sv, str_view_trim_left_while(sv, is_alnum_or_underscore).m_size);
             Str_view rhs = str_view_trim_left_while(str_view_trim_left(sv, lhs.m_size), isspace);
 
             enum Op_code op_code;
@@ -198,8 +227,6 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                     return syntax_error("Label <%s> is reserved for a builtin function", label_str_data);
             }
             else{
-                if (!is_alpha_or_underscore(lhs.m_str[0]))
-                    return syntax_error("Op code starting with <%c>", lhs.m_str[0]);
                 if (str_view_any_of(lhs, is_punct_and_not_underscore))
                     return syntax_error("Op code containing punctuation characters other than <_>");
 
@@ -215,13 +242,16 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
 
                     bool bool_val;
 
-                    if (str_view_starts_with(rhs, SP_SYMBOL)){
-                        if (!vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)OP_CODE_PUSH_TAG_SP}))
+                    if (
+                        (push_tag = OP_CODE_PUSH_TAG_BP, str_view_starts_with(rhs, BP_SYMBOL)) ||
+                        (push_tag = OP_CODE_PUSH_TAG_SP, str_view_starts_with(rhs, SP_SYMBOL))
+                    ){
+                        if (!vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)push_tag}))
                             return OOM_ERROR;
 
-                        Bytecode_compile_result sp_case_result = bytecode_compiler_state_sp_arg_case(self, rhs);
-                        if (sp_case_result.error != COMPILE_ERROR_NONE)
-                            return sp_case_result;
+                        Bytecode_compile_result arg_case_fn_result = ARG_CASE_FNS[push_tag](self, rhs);
+                        if (arg_case_fn_result.error != COMPILE_ERROR_NONE)
+                            return arg_case_fn_result;
                     }
                     else if (
                         push_tag = OP_CODE_PUSH_TAG_ARGV, rhs_starts_with = "argv",
@@ -347,15 +377,23 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                     }
                 }
                 else if (op_code_match(OP_CODE_MOV)){
-                    if (!str_view_starts_with(rhs, SP_SYMBOL))
-                        return syntax_error("Op code <%s> must be followed by sp[-<val>], where val is an integer", op_code_str);
-
                     if (!vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)op_code}))
                         return OOM_ERROR;
 
-                    Bytecode_compile_result sp_case_result = bytecode_compiler_state_sp_arg_case(self, rhs);
-                    if (sp_case_result.error != COMPILE_ERROR_NONE)
-                        return sp_case_result;
+                    enum Op_code_mov_tag mov_tag;
+
+                    if (
+                        (mov_tag = OP_CODE_MOV_TAG_BP, !str_view_starts_with(rhs, BP_SYMBOL)) &&
+                        (mov_tag = OP_CODE_MOV_TAG_SP, !str_view_starts_with(rhs, SP_SYMBOL))
+                    )
+                        return syntax_error("Op code <%s> must be followed by sp[-<val>], where val is an integer", op_code_str);
+
+                    if (!vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)mov_tag}))
+                        return OOM_ERROR;
+
+                    Bytecode_compile_result arg_case_fn_result = ARG_CASE_FNS[mov_tag](self, rhs);
+                    if (arg_case_fn_result.error != COMPILE_ERROR_NONE)
+                        return arg_case_fn_result;
                 }
                 else if (op_code_match(OP_CODE_CALL)){
                     if (rhs.m_size == 0 || rhs.m_str[0] == ';')

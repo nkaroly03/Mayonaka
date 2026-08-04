@@ -1,17 +1,32 @@
+let PI: float = 3.14159265;
+
+fn floor(x: float) float {
+    let rem: float = x % 1.0;
+    return x - rem - (rem != 0.0 and x < 0.0);
+}
+fn ceil(x: float) float {
+    let rem: float = x % 1.0;
+    return x - rem + (rem != 0.0 and x > 0.0);
+}
+fn round(x: float) float {
+    let rem: float = x % 1.0;
+    if (rem != 0.0){
+        if (x > 0)
+            x = x - rem + (rem >= 0.5);
+        else
+            x = x - rem + (rem <= -0.5);
+    }
+    return x;
+}
+
+
 fn sin(x: float) float {
-    let PI:  float = 3.14159265;
     let PI2: float = PI / 2.0;
 
-    let temp: float = x / PI2;
-
-    if (x < 0.0)
-        temp = temp - 0.5;
-
-    let n: int = temp;
+    let n: int = floor(x / PI2);
+    let q: int = n & 3;
 
     x = x - n * PI2;
-
-    let q: int = n & 3;
 
     if (q & 1)
         x = PI2 - x;
@@ -24,13 +39,11 @@ fn sin(x: float) float {
     return x;
 }
 
+let WIDTH:       int = 128;
+let HEIGHT:      int = 32;
+let FREQUENCY: float = 6.0;
+
 fn main() int {
-    let WIDTH:       int = 128;
-    let HEIGHT:      int = 32;
-    let FREQUENCY: float = 6.0;
-
-    let PI: float = 3.14159265;
-
     for (0..HEIGHT + 1) |y|{
         for (0..WIDTH + 1) |x|{
             let sin: float = 0.99 ** x * sin(2.0 * PI * FREQUENCY * x / WIDTH);

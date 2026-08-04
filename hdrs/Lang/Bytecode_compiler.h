@@ -12,6 +12,7 @@ extern "C"{
 #include "IR_compiler.h"
 
 enum Op_code_push_tag{
+    OP_CODE_PUSH_TAG_BP,
     OP_CODE_PUSH_TAG_SP,
     OP_CODE_PUSH_TAG_ARGV,
     OP_CODE_PUSH_TAG_BOOL,
@@ -20,6 +21,11 @@ enum Op_code_push_tag{
     OP_CODE_PUSH_TAG_FLOAT,
     OP_CODE_PUSH_TAG_STR,
     OP_CODE_PUSH_TAG_LIST
+};
+
+enum Op_code_mov_tag{
+    OP_CODE_MOV_TAG_BP,
+    OP_CODE_MOV_TAG_SP
 };
 
 typedef struct U8_slice{

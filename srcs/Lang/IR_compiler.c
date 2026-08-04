@@ -71,6 +71,7 @@ typedef struct Fn_id_info{
 typedef struct Var_id_info{
     usize stack_idx;
     Type_info type_info;
+    bool is_global;
 } Var_id_info;
 
 typedef struct While_label_info{
@@ -232,12 +233,18 @@ static bool IR_compiler_state_pop_on_discarded_expression(IR_compiler_state *sel
             return OOM_ERROR; \
     } while (0)
 
-static IR_compiler_state_compile_result IR_compiler_state_insert_var_id(IR_compiler_state *self, const AST_node *id_node, Type_info id_type_info){
+static IR_compiler_state_compile_result IR_compiler_state_push_back_var_id(IR_compiler_state *self, const AST_node *id_node, Type_info id_type_info){
+    assert(self->var_ids.m_keys.m_size == self->type_info_stack.m_size - 1);
+
     enum Umap_insert_error insert_error = ordered_umap_base_push_back(
         &self->var_ids,
         self->alloc,
         &id_node->m_token->m_id,
-        &(Var_id_info){.stack_idx = self->var_ids.m_keys.m_size, .type_info = id_type_info}
+        &(Var_id_info){
+            .stack_idx = self->var_ids.m_keys.m_size,
+            .type_info = id_type_info,
+            .is_global = (id_node->m_parent->m_token->m_type != TOKEN_TYPE_FN && id_node->m_parent->m_parent == NULL)
+        }
     ).error;
 
     switch (insert_error){
@@ -287,7 +294,10 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                 return syntax_error("Use of undeclared identifier <%s>", ast_node->m_token->m_line_number, str_base_data_const(&ast_node->m_token->m_id));
             if (!vec_base_push_back(&self->type_info_stack, self->alloc, &var_id_info_ptr->type_info))
                 return OOM_ERROR;
-            add_instruction("%s " SP_SYMBOL "[-" USIZE_PFMT "]", op_code_to_str(OP_CODE_PUSH), self->type_info_stack.m_size - var_id_info_ptr->stack_idx - 1);
+            if (var_id_info_ptr->is_global)
+                add_instruction("%s " BP_SYMBOL "[" USIZE_PFMT "]", op_code_to_str(OP_CODE_PUSH), var_id_info_ptr->stack_idx);
+            else
+                add_instruction("%s " SP_SYMBOL "[-" USIZE_PFMT "]", op_code_to_str(OP_CODE_PUSH), self->type_info_stack.m_size - var_id_info_ptr->stack_idx - 1);
             pop_on_discarded_expression(ast_node);
             break;
         }
@@ -577,7 +587,11 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                     return IR_compiler_state_binary_op_error(self, ast_node, lhs_type_info, rhs_type_info);
 
                 vec_base_pop_back_discard(&self->type_info_stack);
-                add_instruction("%s " SP_SYMBOL "[-" USIZE_PFMT "]", op_code_to_str(OP_CODE_MOV), self->type_info_stack.m_size - var_id_info_ptr->stack_idx + 1);
+
+                if (var_id_info_ptr->is_global)
+                    add_instruction("%s " BP_SYMBOL "[" USIZE_PFMT "]", op_code_to_str(OP_CODE_MOV), var_id_info_ptr->stack_idx);
+                else
+                    add_instruction("%s " SP_SYMBOL "[-" USIZE_PFMT "]", op_code_to_str(OP_CODE_MOV), self->type_info_stack.m_size - var_id_info_ptr->stack_idx + 1);
 
                 if (push_back_after_assignment && (compile_result = IR_compiler_state_compile(self, lhs_node)).error != COMPILE_ERROR_NONE)
                     return compile_result;
@@ -784,16 +798,30 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
             )
                 return OOM_ERROR;
 
+            Id_count *id_count_ptr = vec_base_at(&fn_IR_compiler_state.id_count_stack, 0);
+            for (usize i = 0; i < ((Id_count*)vec_base_at(&self->id_count_stack, 0))->var_id_count; ++i){
+                Umap_pair pair = ordered_umap_base_at_idx(&self->var_ids, i);
+                if (
+                    !vec_base_push_back(&fn_IR_compiler_state.type_info_stack, fn_IR_compiler_state.alloc, &((Var_id_info*)pair.m_value)->type_info) ||
+                    ordered_umap_base_push_back(&fn_IR_compiler_state.var_ids, fn_IR_compiler_state.alloc, pair.m_key, pair.m_value).error != UMAP_INSERT_ERROR_NONE
+                )
+                    return OOM_ERROR;
+                ++id_count_ptr->var_id_count;
+            }
+            if (!vec_base_push_back(&fn_IR_compiler_state.id_count_stack, fn_IR_compiler_state.alloc, &(Id_count){0}))
+                return OOM_ERROR;
+
             for (usize i = 0; i < fn_arg_nodes.m_size; ++i){
                 const AST_node *arg_id_node = fn_arg_nodes.m_data[i];
                 Type_info arg_type_info = ast_node_to_type_info(arg_id_node->m_sub_nodes.m_data[0]);
 
-                IR_compiler_state_compile_result insert_var_id_result = IR_compiler_state_insert_var_id(&fn_IR_compiler_state, arg_id_node, arg_type_info);
+                if (!vec_base_push_back(&fn_IR_compiler_state.type_info_stack, fn_IR_compiler_state.alloc, &arg_type_info))
+                    return OOM_ERROR;
+
+                IR_compiler_state_compile_result insert_var_id_result = IR_compiler_state_push_back_var_id(&fn_IR_compiler_state, arg_id_node, arg_type_info);
                 if (insert_var_id_result.error != COMPILE_ERROR_NONE)
                     return insert_var_id_result;
 
-                if (!vec_base_push_back(&fn_IR_compiler_state.type_info_stack, fn_IR_compiler_state.alloc, &arg_type_info))
-                    return OOM_ERROR;
                 (void)vec_base_push_back(&fn_arg_type_infos, self->alloc, &arg_type_info);
             }
 
@@ -831,8 +859,13 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                 )
             ){
                 usize fn_IR_compiler_state_type_info_stack_size = fn_IR_compiler_state.type_info_stack.m_size;
-                fn_IR_compiler_state.type_info_stack.m_size = 0;
-                if (!IR_compiler_state_add_instruction(&fn_IR_compiler_state, "%s " USIZE_PFMT, op_code_to_str(OP_CODE_RETV), fn_IR_compiler_state_type_info_stack_size))
+                fn_IR_compiler_state.type_info_stack.m_size = ((Id_count*)vec_base_at(&fn_IR_compiler_state.id_count_stack, 0))->var_id_count;
+                if (!IR_compiler_state_add_instruction(
+                    &fn_IR_compiler_state,
+                    "%s " USIZE_PFMT,
+                    op_code_to_str(OP_CODE_RETV),
+                    fn_IR_compiler_state_type_info_stack_size - fn_IR_compiler_state.type_info_stack.m_size
+                ))
                     return OOM_ERROR;
                 fn_IR_compiler_state.type_info_stack.m_size = fn_IR_compiler_state_type_info_stack_size;
             }
@@ -854,7 +887,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
             Type_info id_type_info = ast_node_to_type_info(type_node);
 
             IR_compiler_state_compile_result compile_result = IR_compiler_state_compile(self, expr_node);
-            if (compile_result.error != COMPILE_ERROR_NONE || (compile_result = IR_compiler_state_insert_var_id(self, id_node, id_type_info)).error != COMPILE_ERROR_NONE)
+            if (compile_result.error != COMPILE_ERROR_NONE || (compile_result = IR_compiler_state_push_back_var_id(self, id_node, id_type_info)).error != COMPILE_ERROR_NONE)
                 return compile_result;
 
             Type_info *last_type_info_ptr = vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1), last_type_info = *last_type_info_ptr;
@@ -1067,8 +1100,8 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                     return syntax_error("Function with return type <void> returning non-void", ast_node->m_token->m_line_number);
 
                 usize type_info_stack_size = self->type_info_stack.m_size;
-                self->type_info_stack.m_size = 0;
-                add_instruction("%s " USIZE_PFMT, op_code_to_str(ret_op_code), type_info_stack_size);
+                self->type_info_stack.m_size = ((Id_count*)vec_base_at(&self->id_count_stack, 0))->var_id_count;
+                add_instruction("%s " USIZE_PFMT, op_code_to_str(ret_op_code), type_info_stack_size - self->type_info_stack.m_size);
                 self->type_info_stack.m_size = type_info_stack_size;
             }
             break;

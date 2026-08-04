@@ -100,20 +100,27 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
             case OP_CODE_PUSH:{
                 if (new_pc >= self->bytecode.m_size)
                     return bad_instruction_error();
-                Primitive temp;
-                switch ((enum Op_code_push_tag)self->bytecode.m_data[new_pc++]){
-                    case OP_CODE_PUSH_TAG_SP:{
-                        usize sp_offset;
-                        if (new_pc + sizeof(sp_offset) > self->bytecode.m_size)
-                            return bad_instruction_error();
-                        memcpy(&sp_offset, &self->bytecode.m_data[new_pc], sizeof(sp_offset));
-                        new_pc += sizeof(sp_offset);
 
-                        usize offset = self->data_stack.m_size - sp_offset;
-                        if (offset >= self->data_stack.m_size)
+                Primitive temp;
+
+                enum Op_code_push_tag push_tag = (enum Op_code_push_tag)self->bytecode.m_data[new_pc++];
+                switch (push_tag){
+                    case OP_CODE_PUSH_TAG_BP:
+                    case OP_CODE_PUSH_TAG_SP:{
+                        usize offset;
+                        if (new_pc + sizeof(offset) > self->bytecode.m_size)
+                            return bad_instruction_error();
+                        memcpy(&offset, &self->bytecode.m_data[new_pc], sizeof(offset));
+                        new_pc += sizeof(offset);
+
+                        usize idx = offset;
+                        if (push_tag == OP_CODE_PUSH_TAG_SP)
+                            idx = self->data_stack.m_size - offset;
+
+                        if (idx >= self->data_stack.m_size)
                             return runtime_error("<%s> instruction references an out of range element on the stack", op_code_str);
 
-                        temp = *(Primitive*)vec_base_at(&self->data_stack, offset);
+                        temp = *(Primitive*)vec_base_at(&self->data_stack, idx);
                         if (!vec_base_push_back(&self->data_stack, self->alloc, &temp))
                             return oom_error();
 
@@ -489,29 +496,43 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
             }
 
             case OP_CODE_MOV:{
-                usize sp_offset;
-                if (new_pc + sizeof(sp_offset) > self->bytecode.m_size)
+                if (new_pc >= self->bytecode.m_size)
                     return bad_instruction_error();
-                memcpy(&sp_offset, &self->bytecode.m_data[new_pc], sizeof(sp_offset));
-                new_pc += sizeof(sp_offset);
+                enum Op_code_mov_tag mov_tag = (enum Op_code_mov_tag)self->bytecode.m_data[new_pc++];
+                switch (mov_tag){
+                    case OP_CODE_MOV_TAG_BP:
+                    case OP_CODE_MOV_TAG_SP:{
+                        usize offset;
+                        if (new_pc + sizeof(offset) > self->bytecode.m_size)
+                            return bad_instruction_error();
+                        memcpy(&offset, &self->bytecode.m_data[new_pc], sizeof(offset));
+                        new_pc += sizeof(offset);
 
-                usize offset = self->data_stack.m_size - sp_offset;
-                if (offset >= self->data_stack.m_size)
-                    return runtime_error("<%s> instruction references an out of range element on the stack", op_code_str);
-                if (offset == self->data_stack.m_size - 1)
-                    return runtime_error("<%s> instruction references the last element on the stack", op_code_str);
-                if (self->data_stack.m_size < 2)
-                    return runtime_error("<%s> instruction used with less than 2 elements on the stack", op_code_str);
+                        usize idx = offset;
+                        if (mov_tag == OP_CODE_MOV_TAG_SP)
+                            idx = self->data_stack.m_size - offset;
 
-                Primitive *lhs = vec_base_at(&self->data_stack, self->data_stack.m_size - sp_offset);
-                Primitive *rhs = vec_base_at(&self->data_stack, self->data_stack.m_size - 1);
+                        if (idx >= self->data_stack.m_size)
+                            return runtime_error("<%s> instruction references an out of range element on the stack", op_code_str);
+                        if (idx == self->data_stack.m_size - 1)
+                            return runtime_error("<%s> instruction references the last element on the stack", op_code_str);
+                        if (self->data_stack.m_size < 2)
+                            return runtime_error("<%s> instruction used with less than 2 elements on the stack", op_code_str);
 
-                op_result = primitive_mov(lhs, self->alloc, rhs);
-                if (op_result.error != PRIMITIVE_OP_ERROR_NONE)
-                    return primitive_op_error(op_result);
+                        Primitive *lhs = vec_base_at(&self->data_stack, idx);
+                        Primitive *rhs = vec_base_at(&self->data_stack, self->data_stack.m_size - 1);
 
-                primitive_deinit(rhs, self->alloc);
-                vec_base_pop_back_discard(&self->data_stack);
+                        op_result = primitive_mov(lhs, self->alloc, rhs);
+                        if (op_result.error != PRIMITIVE_OP_ERROR_NONE)
+                            return primitive_op_error(op_result);
+
+                        primitive_deinit(rhs, self->alloc);
+                        vec_base_pop_back_discard(&self->data_stack);
+                        break;
+                    }
+                    default:
+                        return bad_instruction_error();
+                }
                 break;
             }
             case OP_CODE_MOV_DEREF:{
