@@ -914,8 +914,17 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
         }
 
         case TOKEN_TYPE_IF:{
-            char if_end_label_str_buf[JMP_LABEL_BUFSIZE];
+            char   if_end_label_str_buf[JMP_LABEL_BUFSIZE];
+            char else_end_label_str_buf[JMP_LABEL_BUFSIZE];
+
             sprintf(if_end_label_str_buf, JMP_LABEL_FMT, self->label_counter++);
+
+            bool has_sub_nodes = (ast_node->m_sub_nodes.m_size > 1);
+            bool has_body = (has_sub_nodes && ast_node->m_sub_nodes.m_data[1]->m_token->m_type != TOKEN_TYPE_ELSE);
+            bool has_else = (has_sub_nodes && ast_node->m_sub_nodes.m_data[ast_node->m_sub_nodes.m_size - 1]->m_token->m_type == TOKEN_TYPE_ELSE);
+
+            if (has_else)
+                sprintf(else_end_label_str_buf, JMP_LABEL_FMT, self->label_counter++);
 
             IR_compiler_state_compile_result compile_result = IR_compiler_state_compile(self, ast_node->m_sub_nodes.m_data[0]);
             if (compile_result.error != COMPILE_ERROR_NONE)
@@ -930,10 +939,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
 
             add_instruction("%s %s", op_code_to_str(OP_CODE_JMPZ), if_end_label_str_buf);
 
-            if (ast_node->m_sub_nodes.m_size > 1){
-                bool has_body = (ast_node->m_sub_nodes.m_data[1]->m_token->m_type != TOKEN_TYPE_ELSE);
-                bool has_else = (ast_node->m_sub_nodes.m_data[ast_node->m_sub_nodes.m_size - 1]->m_token->m_type == TOKEN_TYPE_ELSE);
-                
+            if (has_sub_nodes){
                 if (has_body){
                     if (!vec_base_push_back(&self->id_count_stack, self->alloc, &(Id_count){0}))
                         return OOM_ERROR;
@@ -946,9 +952,6 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                 }
 
                 if (has_else){
-                    char else_end_label_str_buf[JMP_LABEL_BUFSIZE];
-                    sprintf(else_end_label_str_buf, JMP_LABEL_FMT, self->label_counter++);
-
                     add_instruction("%s %s", op_code_to_str(OP_CODE_JMP), else_end_label_str_buf);
 
                     if (!str_base_append_fmt(&self->IR, self->alloc, "%s:\n", if_end_label_str_buf))

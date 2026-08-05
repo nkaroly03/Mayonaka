@@ -73,8 +73,8 @@ push_back(TETROMINO_SHAPE_TABLES, "");
 
 let TETROMINO_SHAPE_SYMBOLS: []str = [];
 push_back(TETROMINO_SHAPE_SYMBOLS, "\x1b[38;2;255;255;0m#");
-push_back(TETROMINO_SHAPE_SYMBOLS, "\x1b[38;2;255;0;0m#");
 push_back(TETROMINO_SHAPE_SYMBOLS, "\x1b[38;2;0;255;0m#");
+push_back(TETROMINO_SHAPE_SYMBOLS, "\x1b[38;2;255;0;0m#");
 push_back(TETROMINO_SHAPE_SYMBOLS, "\x1b[38;2;255;127;0m#");
 push_back(TETROMINO_SHAPE_SYMBOLS, "\x1b[38;2;255;255;255m#");
 push_back(TETROMINO_SHAPE_SYMBOLS, "\x1b[38;2;255;0;255m#");
@@ -98,6 +98,7 @@ fn tetromino_init() []int {
 fn tetromino_rotate_idx(shape_idx: int, rotation_idx: int, x_idx: int, y_idx: int) int {
     let result: int = 0;
     let side_length: int = TETROMINO_SHAPE_SIDE_LENGTHS[shape_idx];
+
     if (rotation_idx == TETROMINO_ROTATION_IDX_0)
         result = y_idx * side_length + x_idx;
     else if (rotation_idx == TETROMINO_ROTATION_IDX_90)
@@ -106,6 +107,7 @@ fn tetromino_rotate_idx(shape_idx: int, rotation_idx: int, x_idx: int, y_idx: in
         result = (side_length * side_length - 1) - side_length * y_idx - x_idx;
     else
         result = (side_length - 1) - y_idx + side_length * x_idx;
+
     return result;
 }
 
@@ -124,11 +126,11 @@ fn tetromino_rotate_right(tetromino: []int) void {
 fn tetris_init_next_tetromino_table(next_tetromino: []int) str {
     let next_tetromino_table: str = "";
 
-    let shape_idx: int = next_tetromino[TETROMINO_SHAPE_IDX_IDX];
+    let shape_idx:    int = next_tetromino[TETROMINO_SHAPE_IDX_IDX];
     let rotation_idx: int = next_tetromino[TETROMINO_ROTATION_IDX_IDX];
 
-    let side_length: int = TETROMINO_SHAPE_SIDE_LENGTHS[shape_idx];
-    let shape_table: str = TETROMINO_SHAPE_TABLES[shape_idx];
+    let side_length:  int = TETROMINO_SHAPE_SIDE_LENGTHS[shape_idx];
+    let shape_table:  str = TETROMINO_SHAPE_TABLES[shape_idx];
     let shape_symbol: str = TETROMINO_SHAPE_SYMBOLS[shape_idx];
 
     for (0..side_length) |y|{
@@ -150,7 +152,7 @@ fn tetris_init_next_tetromino_table(next_tetromino: []int) str {
 }
 
 fn tetris_tetromino_fits(tetris_field: []int, tetromino: []int) bool {
-    let shape_idx: int = tetromino[TETROMINO_SHAPE_IDX_IDX];
+    let shape_idx:    int = tetromino[TETROMINO_SHAPE_IDX_IDX];
     let rotation_idx: int = tetromino[TETROMINO_ROTATION_IDX_IDX];
 
     let side_length: int = TETROMINO_SHAPE_SIDE_LENGTHS[shape_idx];
@@ -171,7 +173,7 @@ fn tetris_tetromino_fits(tetris_field: []int, tetromino: []int) bool {
 }
 
 fn tetris_setup_field_as(tetris_field: []int, tetromino: []int, shape_idx_as: int) void {
-    let shape_idx: int = tetromino[TETROMINO_SHAPE_IDX_IDX];
+    let shape_idx:    int = tetromino[TETROMINO_SHAPE_IDX_IDX];
     let rotation_idx: int = tetromino[TETROMINO_ROTATION_IDX_IDX];
     
     let side_length: int = TETROMINO_SHAPE_SIDE_LENGTHS[shape_idx];
@@ -300,11 +302,7 @@ fn main() void {
             for (0..TETRIS_WIDTH + 2) |_|
                 table = table + '#';
 
-            print("next:\n");
-            print(next_tetromino_table);
-            print("\x1b[0m\n");
-            print(table);
-            print("\x1b[H");
+            print("next:\n" + next_tetromino_table + "\x1b[0m\n" + table + "\x1b[H");
 
             if (reached_end){
                 current_tetromino = next_tetromino;

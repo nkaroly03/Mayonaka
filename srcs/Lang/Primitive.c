@@ -799,9 +799,9 @@ Primitive_op_result primitive_mov_deref(Primitive *self, Allocator alloc, const 
             }
             break;
         case PRIMITIVE_TAG_LIST:
-            return (i >= self->m_list_data_ptr->m_data.m_size)
-                ? runtime_error("Idx out of range")
-                : primitive_mov(vec_base_at(&self->m_list_data_ptr->m_data, (usize)i), alloc, other)
+            return (i < self->m_list_data_ptr->m_data.m_size)
+                ? primitive_mov(vec_base_at(&self->m_list_data_ptr->m_data, (usize)i), alloc, other)
+                : runtime_error("Idx out of range")
             ;
     }
 
@@ -943,32 +943,46 @@ Primitive_op_result primitive_add(Primitive *self, Allocator alloc, const Primit
                 case PRIMITIVE_TAG_BOOL:
                     return runtime_error("Trying to use addition between <str> and <bool>");
                 case PRIMITIVE_TAG_CHAR:
-                    temp = (Primitive){.m_tag = PRIMITIVE_TAG_STR, .m_str_data_ptr = allocator_alloc(alloc, Primitive_str_data, 1)};
-                    if (!temp.m_str_data_ptr)
-                        return OOM_ERROR;
-                    *temp.m_str_data_ptr = (Primitive_str_data){.m_ref_count = 1, .m_data = {0}};
-                    if (
-                        !str_base_assign_str_base(&temp.m_str_data_ptr->m_data, alloc, &self->m_str_data_ptr->m_data) ||
-                        !str_base_push_back(&temp.m_str_data_ptr->m_data, alloc, (char)other->m_char_data)
-                    )
-                        goto oom_error;
-                    primitive_deinit(self, alloc);
+                    if (self->m_str_data_ptr->m_ref_count > 1){
+                        temp = (Primitive){.m_tag = PRIMITIVE_TAG_STR, .m_str_data_ptr = allocator_alloc(alloc, Primitive_str_data, 1)};
+                        if (!temp.m_str_data_ptr)
+                            return OOM_ERROR;
+                        *temp.m_str_data_ptr = (Primitive_str_data){.m_ref_count = 1, .m_data = {0}};
+                        if (
+                            !str_base_assign_str_base(&temp.m_str_data_ptr->m_data, alloc, &self->m_str_data_ptr->m_data) ||
+                            !str_base_push_back(&temp.m_str_data_ptr->m_data, alloc, (char)other->m_char_data)
+                        )
+                            goto oom_error;
+                        primitive_deinit(self, alloc);
+                    }
+                    else{
+                        temp = *self;
+                        if (!str_base_push_back(&temp.m_str_data_ptr->m_data, alloc, (char)other->m_char_data))
+                            return OOM_ERROR;
+                    }
                     break;
                 case PRIMITIVE_TAG_INT:
                     return runtime_error("Trying to use addition between <str> and <int>");
                 case PRIMITIVE_TAG_FLOAT:
                     return runtime_error("Trying to use addition between <str> and <float>");
                 case PRIMITIVE_TAG_STR:
-                    temp = (Primitive){.m_tag = PRIMITIVE_TAG_STR, .m_str_data_ptr = allocator_alloc(alloc, Primitive_str_data, 1)};
-                    if (!temp.m_str_data_ptr)
-                        return OOM_ERROR;
-                    *temp.m_str_data_ptr = (Primitive_str_data){.m_ref_count = 1, .m_data = {0}};
-                    if (
-                        !str_base_assign_str_base(&temp.m_str_data_ptr->m_data, alloc, &self->m_str_data_ptr->m_data) ||
-                        !str_base_append_str_base(&temp.m_str_data_ptr->m_data, alloc, &other->m_str_data_ptr->m_data)
-                    )
-                        goto oom_error;
-                    primitive_deinit(self, alloc);
+                    if (self->m_str_data_ptr->m_ref_count > 1){
+                        temp = (Primitive){.m_tag = PRIMITIVE_TAG_STR, .m_str_data_ptr = allocator_alloc(alloc, Primitive_str_data, 1)};
+                        if (!temp.m_str_data_ptr)
+                            return OOM_ERROR;
+                        *temp.m_str_data_ptr = (Primitive_str_data){.m_ref_count = 1, .m_data = {0}};
+                        if (
+                            !str_base_assign_str_base(&temp.m_str_data_ptr->m_data, alloc, &self->m_str_data_ptr->m_data) ||
+                            !str_base_append_str_base(&temp.m_str_data_ptr->m_data, alloc, &other->m_str_data_ptr->m_data)
+                        )
+                            goto oom_error;
+                        primitive_deinit(self, alloc);
+                    }
+                    else{
+                        temp = *self;
+                        if (!str_base_append_str_base(&temp.m_str_data_ptr->m_data, alloc, &other->m_str_data_ptr->m_data))
+                            return OOM_ERROR;
+                    }
                     break;
                 default:
                     unreachable();

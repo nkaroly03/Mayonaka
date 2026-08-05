@@ -23,6 +23,7 @@ static void ordered_umap_base_erase_key_from_keys(Ordered_umap_base *self, const
         }
         ++i;
     }
+    unreachable();
 }
 
 #ifndef NDEBUG

@@ -440,6 +440,8 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                 if (new_pc + sizeof(jmp_offset) > self->bytecode.m_size)
                     return bad_instruction_error();
                 memcpy(&jmp_offset, &self->bytecode.m_data[new_pc], sizeof(jmp_offset));
+                if (jmp_offset > self->bytecode.m_size)
+                    return runtime_error("<%s> instruction jumps past the end of the program", op_code_str);
                 new_pc = jmp_offset;
                 break;
             }
@@ -448,6 +450,8 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                 if (new_pc + sizeof(jmpz_offset) > self->bytecode.m_size)
                     return bad_instruction_error();
                 memcpy(&jmpz_offset, &self->bytecode.m_data[new_pc], sizeof(jmpz_offset));
+                if (jmpz_offset > self->bytecode.m_size)
+                    return runtime_error("<%s> instruction jumps past the end of the program", op_code_str);
                 new_pc += sizeof(jmpz_offset);
 
                 if (self->data_stack.m_size == 0)

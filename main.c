@@ -45,7 +45,7 @@
 
 int main(const int argc, const char *const *const argv){
     if (argc < 2){
-        fprintf(stderr, "<%s> requires 1 argument <filepath>\n", argv[0]);
+        fprintf(stderr, "Usage: %s <filepath>\n", argv[0]);
         return 1;
     }
 
