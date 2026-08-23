@@ -190,9 +190,7 @@ static Bytecode_compile_result bytecode_compiler_state_add_label(Bytecode_compil
 }
 
 static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler_state *self){
-    usize instruction_count = self->instruction_views.m_size;
-    
-    for (; self->instruction_idx < instruction_count; ++self->instruction_idx){
+    for (usize instruction_count = self->instruction_views.m_size; self->instruction_idx < instruction_count; ++self->instruction_idx){
         Str_view sv = *(Str_view*)vec_base_at(&self->instruction_views, self->instruction_idx);
 
         if (sv.m_size > 0 && sv.m_str[0] != ';'){
@@ -428,13 +426,9 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                                 return OOM_ERROR;
                     }
                 }
-                else if (op_code_match(OP_CODE_RET) || op_code_match(OP_CODE_RETV)){
-                    if (
-                        rhs.m_size == 0 || (
-                            rhs = str_view_trim_right_while(str_view_trim_right(rhs, str_view_trim_left_while_not(rhs, is_semicolon).m_size), isspace),
-                            !str_view_all_of(rhs, isdigit)
-                        )
-                    )
+                else if (op_code_match(OP_CODE_POP) || op_code_match(OP_CODE_RET) || op_code_match(OP_CODE_RETV)){
+                    rhs = str_view_trim_right_while(str_view_trim_right(rhs, str_view_trim_left_while_not(rhs, is_semicolon).m_size), isspace);
+                    if (rhs.m_size == 0 || !str_view_all_of(rhs, isdigit))
                         return syntax_error("Op code <%s> takes in a positive integer literal", op_code_str);
 
                     if (!vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)op_code}))
@@ -476,7 +470,6 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                             return OOM_ERROR;
                 }
                 else if (
-                    op_code_match(OP_CODE_POP      ) ||
                     op_code_match(OP_CODE_TO_BOOL  ) ||
                     op_code_match(OP_CODE_TO_CHAR  ) ||
                     op_code_match(OP_CODE_TO_INT   ) ||

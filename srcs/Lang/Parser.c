@@ -316,9 +316,9 @@ static Parser_state_parse_result parser_state_parse_type(Parser_state *self, boo
     return (Parser_state_parse_result){.ast_node_ptr = node, .error = PARSE_ERROR_NONE};
 }
 
-static bool parser_state_for_to_while_tokens_push_back(Parser_state *self, Vec_base *for_to_while_tokens, const char *id, enum Token_type token_type){
+static bool parser_state_for_to_while_tokens_push_back(Parser_state *self, Vec_base *for_to_while_tokens, const char *id, enum Token_type token_type, usize line_number){
     Str_base_result token_id = str_base_init_raw(self->alloc, id);
-    return token_id.success && vec_base_push_back(for_to_while_tokens, self->alloc, &(Token){.m_type = token_type, .m_id = token_id.result, .m_line_number = 0});
+    return token_id.success && vec_base_push_back(for_to_while_tokens, self->alloc, &(Token){.m_type = token_type, .m_id = token_id.result, .m_line_number = line_number});
 }
 
 static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
@@ -671,10 +671,12 @@ static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
                 return OOM_ERROR;
             char *end_var = str_base_data(&end_var_id.result);
 
+            usize for_capture_node_line_number = for_capture_node->m_token->m_line_number;
+
             Vec_base for_to_while_tokens = vec_base_init(Token);
             #define for_to_while_push_back(id, token_type) \
                 do{ \
-                    if (!parser_state_for_to_while_tokens_push_back(self, &for_to_while_tokens, (id), (token_type))) \
+                    if (!parser_state_for_to_while_tokens_push_back(self, &for_to_while_tokens, (id), (token_type), for_capture_node_line_number)) \
                         return OOM_ERROR; \
                 } while (0)
 
@@ -804,12 +806,13 @@ static bool token_slice_is_valid(Token_slice tokens){
     usize lbrace_count   = 0, rbrace_count   = 0;
 
     for (usize i = 0; i < tokens.m_size; ++i){
-        lparen_count   += (tokens.m_data[i].m_type == TOKEN_TYPE_LPAREN  );
-        rparen_count   += (tokens.m_data[i].m_type == TOKEN_TYPE_RPAREN  );
-        lbracket_count += (tokens.m_data[i].m_type == TOKEN_TYPE_LBRACKET);
-        rbracket_count += (tokens.m_data[i].m_type == TOKEN_TYPE_RBRACKET);
-        lbrace_count   += (tokens.m_data[i].m_type == TOKEN_TYPE_LBRACE  );
-        rbrace_count   += (tokens.m_data[i].m_type == TOKEN_TYPE_RBRACE  );
+        enum Token_type token_type = tokens.m_data[i].m_type;
+        lparen_count   += (token_type == TOKEN_TYPE_LPAREN  );
+        rparen_count   += (token_type == TOKEN_TYPE_RPAREN  );
+        lbracket_count += (token_type == TOKEN_TYPE_LBRACKET);
+        rbracket_count += (token_type == TOKEN_TYPE_RBRACKET);
+        lbrace_count   += (token_type == TOKEN_TYPE_LBRACE  );
+        rbrace_count   += (token_type == TOKEN_TYPE_RBRACE  );
     }
 
     return lparen_count == rparen_count && lbracket_count == rbracket_count && lbrace_count == rbrace_count;

@@ -157,7 +157,7 @@ static IR_compiler_state_compile_result IR_compiler_state_type_conversion_error(
     Type_info src_type_info
 ){
     Str_base_result dest_type_info_str;
-    Str_base_result src_type_info_str;
+    Str_base_result  src_type_info_str;
     if (
         !(dest_type_info_str = type_info_to_str_base(dest_type_info, self->alloc)).success ||
         !( src_type_info_str = type_info_to_str_base( src_type_info, self->alloc)).success
@@ -225,7 +225,7 @@ static bool IR_compiler_state_pop_on_discarded_expression(IR_compiler_state *sel
 
     vec_base_pop_back_discard(&self->type_info_stack);
 
-    return IR_compiler_state_add_instruction(self, "%s", op_code_to_str(OP_CODE_POP));
+    return IR_compiler_state_add_instruction(self, "%s 1", op_code_to_str(OP_CODE_POP));
 }
 #define pop_on_discarded_expression(ast_node) \
     do{ \
@@ -265,13 +265,11 @@ static bool IR_compiler_state_pop_ids_in_current_scope(IR_compiler_state *self){
     vec_base_pop_back_to(&self->id_count_stack, &id_count);
     while (id_count.fn_id_count-- > 0)
         ordered_umap_base_pop_back_discard(self->fn_ids_ptr, self->alloc);
-    while (id_count.var_id_count-- > 0){
+    for (usize i = id_count.var_id_count; i-- > 0;){
         ordered_umap_base_pop_back_discard(&self->var_ids, self->alloc);
         vec_base_pop_back_discard(&self->type_info_stack);
-        if (!IR_compiler_state_add_instruction(self, "%s", op_code_to_str(OP_CODE_POP)))
-            return false;
     }
-    return true;
+    return (id_count.var_id_count > 0) ? IR_compiler_state_add_instruction(self, "%s " USIZE_PFMT, op_code_to_str(OP_CODE_POP), id_count.var_id_count) : true;
 }
 #define pop_ids_in_current_scope() \
     do{ \
@@ -730,7 +728,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
             add_instruction("%s %s", op_code_to_str(OP_CODE_JMPZ), and_or_label_str_buf);
 
             vec_base_pop_back_discard(&self->type_info_stack);
-            add_instruction("%s", op_code_to_str(OP_CODE_POP));
+            add_instruction("%s 1", op_code_to_str(OP_CODE_POP));
 
             compile_result = IR_compiler_state_compile(self, rhs_node);
             if (compile_result.error != COMPILE_ERROR_NONE)
@@ -798,15 +796,15 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
             )
                 return OOM_ERROR;
 
-            Id_count *id_count_ptr = vec_base_at(&fn_IR_compiler_state.id_count_stack, 0);
-            for (usize i = 0; i < ((Id_count*)vec_base_at(&self->id_count_stack, 0))->var_id_count; ++i){
+            usize *fn_IR_compiler_state_global_var_id_count_ptr = &((Id_count*)vec_base_at(&fn_IR_compiler_state.id_count_stack, 0))->var_id_count;
+            for (usize i = 0, global_var_id_count = ((Id_count*)vec_base_at(&self->id_count_stack, 0))->var_id_count; i < global_var_id_count; ++i){
                 Umap_pair pair = ordered_umap_base_at_idx(&self->var_ids, i);
                 if (
                     !vec_base_push_back(&fn_IR_compiler_state.type_info_stack, fn_IR_compiler_state.alloc, &((Var_id_info*)pair.m_value)->type_info) ||
                     ordered_umap_base_push_back(&fn_IR_compiler_state.var_ids, fn_IR_compiler_state.alloc, pair.m_key, pair.m_value).error != UMAP_INSERT_ERROR_NONE
                 )
                     return OOM_ERROR;
-                ++id_count_ptr->var_id_count;
+                ++*fn_IR_compiler_state_global_var_id_count_ptr;
             }
             if (!vec_base_push_back(&fn_IR_compiler_state.id_count_stack, fn_IR_compiler_state.alloc, &(Id_count){0}))
                 return OOM_ERROR;
@@ -1046,12 +1044,11 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                 return syntax_error("<%s> must be used inside a loop", ast_node->m_token->m_line_number, str_base_data_const(&ast_node->m_token->m_id));
             While_label_info while_label_info = *(While_label_info*)vec_base_at(&self->while_label_info_stack, self->while_label_info_stack.m_size - 1);
             usize type_info_stack_size = self->type_info_stack.m_size;
-            for (usize i = self->id_count_stack.m_size; i-- > while_label_info.id_count_stack_idx;){
-                for (usize var_id_count = ((Id_count*)vec_base_at(&self->id_count_stack, i))->var_id_count; var_id_count-- > 0;){
+            for (usize i = self->id_count_stack.m_size; i-- > while_label_info.id_count_stack_idx;)
+                for (usize var_id_count = ((Id_count*)vec_base_at(&self->id_count_stack, i))->var_id_count; var_id_count-- > 0;)
                     --self->type_info_stack.m_size;
-                    add_instruction("%s", op_code_to_str(OP_CODE_POP));
-                }
-            }
+            if (self->type_info_stack.m_size < type_info_stack_size)
+                add_instruction("%s " USIZE_PFMT, op_code_to_str(OP_CODE_POP), type_info_stack_size - self->type_info_stack.m_size);
             add_instruction(
                 "%s %s",
                 op_code_to_str(OP_CODE_JMP),

@@ -306,8 +306,9 @@ Lex_result lex(Arena *arena, const char *path){
                         return oom_error();
                 }
 
-                if (sv.m_str[i - 1] == '_' || (!isspace(sv.m_str[i]) && !ispunct(sv.m_str[i])))
-                    return syntax_error("<%s> literal followed by digit separator(s) <_>", (dot_count > 0) ? "float" : "int");
+                char temp = sv.m_str[i - 1];
+                if (temp == '_' || (temp = sv.m_str[i], !isspace(temp) && !ispunct(temp)))
+                    return syntax_error("<%s> literal followed by <%c>", (dot_count > 0) ? "float" : "int", temp);
 
                 char *data = str_base_data(&decimal_buf);
 

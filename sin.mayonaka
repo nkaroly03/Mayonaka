@@ -19,7 +19,6 @@ fn round(x: float) float {
     return x;
 }
 
-
 fn sin(x: float) float {
     let PI2: float = PI / 2.0;
 
@@ -41,21 +40,28 @@ fn sin(x: float) float {
 
 let WIDTH:       int = 128;
 let HEIGHT:      int = 32;
-let FREQUENCY: float = 6.0;
+let FREQUENCY: float = 8.0;
+
+let STEP: float = 0.1;
 
 fn main() int {
-    for (0..HEIGHT + 1) |y|{
-        for (0..WIDTH + 1) |x|{
-            let sin: float = 0.99 ** x * sin(2.0 * PI * FREQUENCY * x / WIDTH);
+    let buf: str = "";
+    for (0..(WIDTH + 1) * HEIGHT) |_|
+        buf = buf + ' ';
 
-            let int_cast: int = sin * (HEIGHT / 2);
-            if ((HEIGHT / 2 - y) == int_cast)
-                print('*');
-            else
-                print(' ');
+    for (0..HEIGHT) |y|{
+        let x: float = 0.0;
+        while (x < WIDTH) : (x = x + STEP){
+            let sin: float = 0.985 ** x * sin(2.0 * PI * FREQUENCY * x / WIDTH);
+
+            let int_cast: int = sin * HEIGHT / 2.0;
+            if (HEIGHT / 2 - y == int_cast)
+                buf[y * (WIDTH + 1) + (int_cast = x)] = '*';
         }
-        print('\n');
+        buf[(y + 1) * (WIDTH + 1) - 1] = '\n';
     }
+
+    print(buf);
 
     return 0;
 }

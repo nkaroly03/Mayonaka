@@ -88,10 +88,8 @@ static Interpreter_run_result interpreter_state_primitive_op_error(Interpreter_s
 #define primitive_op_error(op_result) interpreter_state_primitive_op_error(self, (op_result))
 
 static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
-    while (self->pc < self->bytecode.m_size){
+    for (usize new_pc = 0; self->pc < self->bytecode.m_size; self->pc = new_pc){
         Primitive_op_result op_result;
-
-        usize new_pc = self->pc;
 
         enum Op_code op_code = (enum Op_code)self->bytecode.m_data[new_pc++];
         const char *op_code_str = op_code_to_str(op_code);
@@ -211,12 +209,21 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                 }
                 break;
             }
-            case OP_CODE_POP:
-                if (self->data_stack.m_size == 0)
-                    return runtime_error("<%s> instruction used on empty stack", op_code_str);
-                primitive_deinit(vec_base_at(&self->data_stack, self->data_stack.m_size - 1), self->alloc);
-                vec_base_pop_back_discard(&self->data_stack);
+            case OP_CODE_POP:{
+                usize pop_count;
+                if (new_pc + sizeof(pop_count) > self->bytecode.m_size)
+                    return bad_instruction_error();
+                memcpy(&pop_count, &self->bytecode.m_data[new_pc], sizeof(pop_count));
+                new_pc += sizeof(pop_count);
+                if (pop_count > self->data_stack.m_size)
+                    return runtime_error("<%s> instruction pops the stack too many times", op_code_str);
+                while (pop_count-- > 0){
+                    Primitive temp;
+                    vec_base_pop_back_to(&self->data_stack, &temp);
+                    primitive_deinit(&temp, self->alloc);
+                }
                 break;
+            }
 
             case OP_CODE_CALL:{
                 if (new_pc >= self->bytecode.m_size)
@@ -612,8 +619,6 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
             default:
                 return runtime_error("Unknown instruction with value <%d>", (int)op_code);
         }
-
-        self->pc = new_pc;
     }
 
 end:
