@@ -324,12 +324,33 @@ static bool parser_state_for_to_while_tokens_push_back(Parser_state *self, Vec_b
 static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
     Parser_state_parse_result parse_result;
 
+    const Token *loop_label_tok_ptr = NULL;
+
     AST_node *node;
     Vec_base sub_nodes = vec_base_init(AST_node*);
 
     const Token *tok = &self->tokens.m_data[self->token_idx++];
     switch (tok->m_type){
-        case TOKEN_TYPE_ID:
+        case TOKEN_TYPE_ID:{
+            if (self->token_idx >= self->tokens.m_size)
+                return syntax_error("No tokens are available", tok->m_line_number);
+
+            const Token *colon_token = &self->tokens.m_data[self->token_idx];
+            if (colon_token->m_type == TOKEN_TYPE_COLON){
+                loop_label_tok_ptr = tok;
+
+                const Token *temp = colon_token;
+                if (++self->token_idx >= self->tokens.m_size || ((temp = &self->tokens.m_data[self->token_idx])->m_type != TOKEN_TYPE_WHILE && temp->m_type != TOKEN_TYPE_FOR))
+                    return syntax_error("<:> must be followed by <while> or <for>", temp->m_line_number);
+
+                tok = &self->tokens.m_data[self->token_idx++];
+                if (tok->m_type == TOKEN_TYPE_WHILE)
+                    goto if_while_case;
+                goto for_case;
+            }
+
+            FALLTHROUGH;
+        }
         case TOKEN_TYPE_ARGV:
         case TOKEN_TYPE_FALSE:
         case TOKEN_TYPE_TRUE:
@@ -505,13 +526,30 @@ static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
         }
 
         case TOKEN_TYPE_IF:
-        case TOKEN_TYPE_WHILE:{
+        case TOKEN_TYPE_WHILE:
+        if_while_case:{
             if (self->token_idx >= self->tokens.m_size || self->tokens.m_data[self->token_idx++].m_type != TOKEN_TYPE_LPAREN)
                 return syntax_error("<%s> must be followed by <(>", tok->m_line_number, str_base_data_const(&tok->m_id));
 
             node = parser_state_ast_node_alloc(self, tok);
             if (!node)
                 return OOM_ERROR;
+
+            if (loop_label_tok_ptr){
+                AST_node *loop_label_id_node = parser_state_ast_node_alloc(self, loop_label_tok_ptr);
+                AST_node *colon_node = parser_state_ast_node_alloc(self, &loop_label_tok_ptr[1]);
+                Vec_base colon_node_sub_nodes = vec_base_init(AST_node*);
+                if (
+                    !loop_label_id_node ||
+                    !colon_node ||
+                    !vec_base_push_back(&colon_node_sub_nodes, self->alloc, &loop_label_id_node) ||
+                    !vec_base_push_back(&sub_nodes, self->alloc, &colon_node)
+                )
+                    return OOM_ERROR;
+                loop_label_id_node->m_parent = colon_node;
+                colon_node->m_parent = node;
+                colon_node->m_sub_nodes = (AST_node_ptr_slice){.m_size = colon_node_sub_nodes.m_size, .m_data = colon_node_sub_nodes.m_data};
+            }
 
             parse_result = parser_state_parse_arithm_expr(self, 0);
             if (parse_result.error != PARSE_ERROR_NONE)
@@ -607,7 +645,8 @@ static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
             break;
         }
 
-        case TOKEN_TYPE_FOR:{
+        case TOKEN_TYPE_FOR:
+        for_case:{
             if (self->token_idx >= self->tokens.m_size || self->tokens.m_data[self->token_idx++].m_type != TOKEN_TYPE_LPAREN)
                 return syntax_error("<for> must be followed by <(>", tok->m_line_number);
 
@@ -699,6 +738,10 @@ static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
                 if (!vec_base_push_back(&for_to_while_tokens, self->alloc, &self->tokens.m_data[i]))
                     return OOM_ERROR;
             for_to_while_push_back(";", TOKEN_TYPE_SEMICOLON);
+            if (loop_label_tok_ptr){
+                for_to_while_push_back(str_base_data_const(&loop_label_tok_ptr->m_id), TOKEN_TYPE_ID);
+                for_to_while_push_back(":", TOKEN_TYPE_COLON);
+            }
             for_to_while_push_back("while", TOKEN_TYPE_WHILE);
             for_to_while_push_back("(", TOKEN_TYPE_LPAREN);
             for_to_while_push_back(start_var, TOKEN_TYPE_ID);
@@ -745,16 +788,32 @@ static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
         }
 
         case TOKEN_TYPE_BREAK:
-        case TOKEN_TYPE_CONTINUE:
-            if (self->token_idx >= self->tokens.m_size || self->tokens.m_data[self->token_idx++].m_type != TOKEN_TYPE_SEMICOLON)
-                return syntax_error("<%s> must be followed by a <;>", tok->m_line_number, str_base_data_const(&tok->m_id));
-            
+        case TOKEN_TYPE_CONTINUE:{
+            if (self->token_idx >= self->tokens.m_size)
+                return syntax_error("No tokens are available", tok->m_line_number);
+
             node = parser_state_ast_node_alloc(self, tok);
             if (!node)
                 return OOM_ERROR;
 
+            const Token *tok_temp = &self->tokens.m_data[self->token_idx++];
+            if (tok_temp->m_type != TOKEN_TYPE_SEMICOLON){
+                if (tok_temp->m_type != TOKEN_TYPE_ID)
+                    return syntax_error("<%s> must be followed by an identifier", tok->m_line_number, str_base_data_const(&tok->m_id));
+
+                if (self->token_idx >= self->tokens.m_size || self->tokens.m_data[self->token_idx++].m_type != TOKEN_TYPE_SEMICOLON)
+                    return syntax_error("<%s> must be followed by <;>", tok_temp->m_line_number, str_base_data_const(&tok_temp->m_id));
+
+                AST_node *break_continue_id_node = parser_state_ast_node_alloc(self, tok_temp);
+                if (!break_continue_id_node || !vec_base_push_back(&sub_nodes, self->alloc, &break_continue_id_node))
+                    return OOM_ERROR;
+
+                break_continue_id_node->m_parent = node;
+            }
+
             node->m_sub_nodes = (AST_node_ptr_slice){.m_size = sub_nodes.m_size, .m_data = sub_nodes.m_data};
             break;
+        }
 
         case TOKEN_TYPE_RETURN:
             if (self->token_idx >= self->tokens.m_size)

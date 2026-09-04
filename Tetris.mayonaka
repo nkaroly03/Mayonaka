@@ -198,8 +198,7 @@ fn tetris_row_is_full(tetris_field: []int, y_idx: int) bool {
 }
 
 fn main() void {
-    let restart: bool = true;
-    while (restart){
+    restart: while (true){
         fn to_upper(c: char) char { return c - (c >= 'a' and c <= 'z') * ('a' - 'A'); }
 
         print("\x1b[?25l\x1b[2J\x1b[H");
@@ -214,8 +213,7 @@ fn main() void {
             push_back(tetris_field, TETROMINO_SHAPE_IDX_NONE);
 
         let tetris_tick: int = 0;
-        let is_running: bool = true;
-        while (is_running) : (tetris_tick = tetris_tick + 1){
+        game: while (true) : (tetris_tick = tetris_tick + 1){
             let keypress: char = poll_keypress();
             if (keypress){
                 let keypress_cpy: char = keypress;
@@ -247,8 +245,8 @@ fn main() void {
                     new_tetromino[TETROMINO_Y_POS_IDX] = new_tetromino[TETROMINO_Y_POS_IDX] - 1;
                     tetris_tick = TETRIS_MOVE_TICK - 1;
                 }
-                else
-                    is_running = (keypress != '\x1b');
+                else if (keypress == '\x1b')
+                    break game;
 
                 if (tetris_tetromino_fits(tetris_field, new_tetromino))
                     current_tetromino = new_tetromino;
@@ -308,7 +306,8 @@ fn main() void {
                 current_tetromino = next_tetromino;
                 next_tetromino = tetromino_init();
                 next_tetromino_table = tetris_init_next_tetromino_table(next_tetromino);
-                is_running = tetris_tetromino_fits(tetris_field, current_tetromino);
+                if (not tetris_tetromino_fits(tetris_field, current_tetromino))
+                    break game;
             }
             else
                 tetris_setup_field_as(tetris_field, current_tetromino, TETROMINO_SHAPE_IDX_NONE);
@@ -320,10 +319,10 @@ fn main() void {
 
         while (true){
             let keypress: char = to_upper(poll_keypress());
-            if (keypress == 'Y' or keypress == 'N'){
-                restart = (keypress == 'Y');
+            if (keypress == 'Y')
                 break;
-            }
+            if (keypress == 'N')
+                break restart;
         }
     }
 }

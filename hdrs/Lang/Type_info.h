@@ -55,7 +55,7 @@ enum Binary_op{
     BINARY_OP_SUB,
     BINARY_OP_MUL,
     BINARY_OP_DIV,
-    BINARY_OP_MOD,
+    BINARY_OP_REM,
     BINARY_OP_POW,
 
     BINARY_OP_SHL,

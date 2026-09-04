@@ -83,7 +83,7 @@ Primitive_op_result primitive_add (Primitive *self, Allocator alloc, const Primi
 Primitive_op_result primitive_sub (Primitive *self, const Primitive *other);
 Primitive_op_result primitive_mul (Primitive *self, const Primitive *other);
 Primitive_op_result primitive_div (Primitive *self, const Primitive *other);
-Primitive_op_result primitive_mod (Primitive *self, const Primitive *other);
+Primitive_op_result primitive_rem (Primitive *self, const Primitive *other);
 Primitive_op_result primitive_pow (Primitive *self, const Primitive *other);
 
 Primitive_op_result primitive_shl (Primitive *self, const Primitive *other);

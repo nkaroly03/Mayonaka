@@ -489,7 +489,7 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                     op_code_match(OP_CODE_SUB      ) ||
                     op_code_match(OP_CODE_MUL      ) ||
                     op_code_match(OP_CODE_DIV      ) ||
-                    op_code_match(OP_CODE_MOD      ) ||
+                    op_code_match(OP_CODE_REM      ) ||
                     op_code_match(OP_CODE_POW      ) ||
                     op_code_match(OP_CODE_SHL      ) ||
                     op_code_match(OP_CODE_SHR      ) ||

@@ -86,22 +86,22 @@ typedef struct IR_compiler_state{
     Ordered_umap_base var_ids;
     Vec_base type_info_stack;
     usize label_counter;
-    Vec_base while_label_info_stack;
+    Ordered_umap_base while_labels;
     Str_base IR;
     Str_base fn_IRs;
 } IR_compiler_state;
 
 static bool IR_compiler_state_init_in_place(IR_compiler_state *self, Allocator arena_alloc, usize label_counter_start, Ordered_umap_base *fn_ids_ptr){
     *self = (IR_compiler_state){
-        .alloc                  = arena_alloc,
-        .id_count_stack         = vec_base_init(Id_count),
-        .fn_ids_ptr             = fn_ids_ptr,
-        .var_ids                = ordered_umap_base_init(Str_base, Var_id_info),
-        .type_info_stack        = vec_base_init(Type_info),
-        .label_counter          = label_counter_start,
-        .while_label_info_stack = vec_base_init(While_label_info),
-        .IR                     = {0},
-        .fn_IRs                 = {0}
+        .alloc           = arena_alloc,
+        .id_count_stack  = vec_base_init(Id_count),
+        .fn_ids_ptr      = fn_ids_ptr,
+        .var_ids         = ordered_umap_base_init(Str_base, Var_id_info),
+        .type_info_stack = vec_base_init(Type_info),
+        .label_counter   = label_counter_start,
+        .while_labels    = ordered_umap_base_init(Str_base, While_label_info),
+        .IR              = {0},
+        .fn_IRs          = {0}
     };
     return vec_base_push_back(&self->id_count_stack, self->alloc, &(Id_count){0}) != NULL;
 }
@@ -215,7 +215,7 @@ static bool IR_compiler_state_pop_on_discarded_expression(IR_compiler_state *sel
                 break;
             case TOKEN_TYPE_IF:
             case TOKEN_TYPE_WHILE:
-                if (parent->m_sub_nodes.m_data[0] != ast_node)
+                if (parent->m_sub_nodes.m_data[parent->m_sub_nodes.m_data[0]->m_token->m_type == TOKEN_TYPE_COLON] != ast_node)
                     break;
                 FALLTHROUGH;
             default:
@@ -429,7 +429,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                         break;
                     case TOKEN_TYPE_IF:
                     case TOKEN_TYPE_WHILE:
-                        if (parent->m_sub_nodes.m_data[0] != ast_node)
+                        if (parent->m_sub_nodes.m_data[parent->m_sub_nodes.m_data[0]->m_token->m_type == TOKEN_TYPE_COLON] != ast_node)
                             break;
                         FALLTHROUGH;
                     default:
@@ -523,10 +523,11 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
 
             bool push_back_after_assignment = false;
             if (ast_node->m_parent){
-                switch (ast_node->m_parent->m_token->m_type){
+                const AST_node *parent = ast_node->m_parent;
+                switch (parent->m_token->m_type){
                     case TOKEN_TYPE_IF:
                     case TOKEN_TYPE_WHILE:
-                        if (ast_node->m_parent->m_sub_nodes.m_data[0] != ast_node)
+                        if (parent->m_sub_nodes.m_data[parent->m_sub_nodes.m_data[0]->m_token->m_type == TOKEN_TYPE_COLON] != ast_node)
                             break;
                         FALLTHROUGH;
                     case TOKEN_TYPE_LPAREN:
@@ -667,7 +668,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
         case TOKEN_TYPE_GREATER_THAN1_EQUALS: bin_op = BINARY_OP_CMP_GEQ;   bin_op_code = OP_CODE_CMP_GEQ; goto bin_op_case;
         case TOKEN_TYPE_ASTERISK1:            bin_op = BINARY_OP_MUL;       bin_op_code = OP_CODE_MUL;     goto bin_op_case;
         case TOKEN_TYPE_SLASH:                bin_op = BINARY_OP_DIV;       bin_op_code = OP_CODE_DIV;     goto bin_op_case;
-        case TOKEN_TYPE_PERCENT:              bin_op = BINARY_OP_MOD;       bin_op_code = OP_CODE_MOD;     goto bin_op_case;
+        case TOKEN_TYPE_PERCENT:              bin_op = BINARY_OP_REM;       bin_op_code = OP_CODE_REM;     goto bin_op_case;
         case TOKEN_TYPE_ASTERISK2:            bin_op = BINARY_OP_POW;       bin_op_code = OP_CODE_POW;     goto bin_op_case;
         case TOKEN_TYPE_LESS_THAN2:           bin_op = BINARY_OP_SHL;       bin_op_code = OP_CODE_SHL;     goto bin_op_case;
         case TOKEN_TYPE_GREATER_THAN2:        bin_op = BINARY_OP_SHR;       bin_op_code = OP_CODE_SHR;     goto bin_op_case;
@@ -986,7 +987,16 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
             if (!str_base_append_fmt(&self->IR, self->alloc, "%s:\n", start_label_str_buf))
                 return OOM_ERROR;
 
-            IR_compiler_state_compile_result compile_result = IR_compiler_state_compile(self, ast_node->m_sub_nodes.m_data[0]);
+            AST_node_ptr_slice while_node_sub_nodes = ast_node->m_sub_nodes;
+
+            const AST_node *while_label_id_node = (while_node_sub_nodes.m_data[0]->m_token->m_type == TOKEN_TYPE_COLON)
+                ? while_node_sub_nodes.m_data[0]->m_sub_nodes.m_data[0]
+                : NULL
+            ;
+            while_node_sub_nodes.m_size -= (while_label_id_node != NULL);
+            while_node_sub_nodes.m_data += (while_label_id_node != NULL);
+
+            IR_compiler_state_compile_result compile_result = IR_compiler_state_compile(self, while_node_sub_nodes.m_data[0]);
             if (compile_result.error != COMPILE_ERROR_NONE)
                 return compile_result;
 
@@ -1000,35 +1010,46 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
             add_instruction("%s %s", op_code_to_str(OP_CODE_JMPZ), break_label_str_buf);
 
             bool has_continue_expr = false;
-            if (ast_node->m_sub_nodes.m_size > 1){
-                has_continue_expr = (ast_node->m_sub_nodes.m_data[1]->m_token->m_type == TOKEN_TYPE_COLON);
-                bool has_body = (ast_node->m_sub_nodes.m_data[ast_node->m_sub_nodes.m_size - 1]->m_token->m_type != TOKEN_TYPE_COLON);
+            if (while_node_sub_nodes.m_size > 1){
+                has_continue_expr = (while_node_sub_nodes.m_data[1]->m_token->m_type == TOKEN_TYPE_COLON);
+                bool has_body = (while_node_sub_nodes.m_data[while_node_sub_nodes.m_size - 1]->m_token->m_type != TOKEN_TYPE_COLON);
 
                 if (has_body){
-                    if (
-                        !vec_base_push_back(
-                            &self->while_label_info_stack,
-                            self->alloc,
-                            &(While_label_info){
-                                .break_label_str    = break_label_str_buf,
-                                .continue_label_str = continue_label_str_buf,
-                                .id_count_stack_idx = self->id_count_stack.m_size
-                            }
-                        ) ||
-                        !vec_base_push_back(&self->id_count_stack, self->alloc, &(Id_count){0})
-                    )
+                    Str_base while_label_id_str = {0};
+                    if (while_label_id_node)
+                        while_label_id_str = while_label_id_node->m_token->m_id;
+                    else if (!str_base_assign_fmt(&while_label_id_str, self->alloc, USIZE_PFMT, self->label_counter))
                         return OOM_ERROR;
-                    compile_result = IR_compiler_state_compile(self, ast_node->m_sub_nodes.m_data[ast_node->m_sub_nodes.m_size - 1]);
+                    switch (ordered_umap_base_push_back(
+                        &self->while_labels,
+                        self->alloc,
+                        &while_label_id_str,
+                        &(While_label_info){
+                            .break_label_str    = break_label_str_buf,
+                            .continue_label_str = continue_label_str_buf,
+                            .id_count_stack_idx = self->id_count_stack.m_size
+                        }
+                    ).error){
+                        case UMAP_INSERT_ERROR_NONE:
+                            break;
+                        case UMAP_INSERT_ERROR_OOM:
+                            return OOM_ERROR;
+                        case UMAP_INSERT_ERROR_ALREADY_INSERTED:
+                            return syntax_error("Identifier <%s> is already in use", while_label_id_node->m_token->m_line_number, str_base_data_const(&while_label_id_str));
+                    }
+                    if (!vec_base_push_back(&self->id_count_stack, self->alloc, &(Id_count){0}))
+                        return OOM_ERROR;
+                    compile_result = IR_compiler_state_compile(self, while_node_sub_nodes.m_data[while_node_sub_nodes.m_size - 1]);
                     if (compile_result.error != COMPILE_ERROR_NONE)
                         return compile_result;
                     pop_ids_in_current_scope();
-                    vec_base_pop_back_discard(&self->while_label_info_stack);
+                    ordered_umap_base_pop_back_discard(&self->while_labels, self->alloc);
                 }
             }
 
             if (!str_base_append_fmt(&self->IR, self->alloc, "%s:\n", continue_label_str_buf))
                 return OOM_ERROR;
-            if (has_continue_expr && (compile_result = IR_compiler_state_compile(self, ast_node->m_sub_nodes.m_data[1]->m_sub_nodes.m_data[0])).error != COMPILE_ERROR_NONE)
+            if (has_continue_expr && (compile_result = IR_compiler_state_compile(self, while_node_sub_nodes.m_data[1]->m_sub_nodes.m_data[0])).error != COMPILE_ERROR_NONE)
                 return compile_result;
 
             add_instruction("%s %s", op_code_to_str(OP_CODE_JMP), start_label_str_buf);
@@ -1040,11 +1061,19 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
 
         case TOKEN_TYPE_BREAK:
         case TOKEN_TYPE_CONTINUE:{
-            if (self->while_label_info_stack.m_size == 0)
+            if (self->while_labels.m_keys.m_size == 0)
                 return syntax_error("<%s> must be used inside a loop", ast_node->m_token->m_line_number, str_base_data_const(&ast_node->m_token->m_id));
-            While_label_info while_label_info = *(While_label_info*)vec_base_at(&self->while_label_info_stack, self->while_label_info_stack.m_size - 1);
+            While_label_info *while_label_info_ptr = (
+                (ast_node->m_sub_nodes.m_size > 0)
+                ? ordered_umap_base_at_key(&self->while_labels, &ast_node->m_sub_nodes.m_data[0]->m_token->m_id)
+                : ordered_umap_base_at_idx(&self->while_labels, self->while_labels.m_keys.m_size - 1)
+            ).m_value;
+            if (!while_label_info_ptr){
+                const AST_node *label_id_node = ast_node->m_sub_nodes.m_data[0];
+                return syntax_error("Use of undeclared identifier <%s>", label_id_node->m_token->m_line_number, str_base_data_const(&label_id_node->m_token->m_id));
+            }
             usize type_info_stack_size = self->type_info_stack.m_size;
-            for (usize i = self->id_count_stack.m_size; i-- > while_label_info.id_count_stack_idx;)
+            for (usize i = self->id_count_stack.m_size; i-- > while_label_info_ptr->id_count_stack_idx;)
                 for (usize var_id_count = ((Id_count*)vec_base_at(&self->id_count_stack, i))->var_id_count; var_id_count-- > 0;)
                     --self->type_info_stack.m_size;
             if (self->type_info_stack.m_size < type_info_stack_size)
@@ -1052,7 +1081,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
             add_instruction(
                 "%s %s",
                 op_code_to_str(OP_CODE_JMP),
-                (ast_node->m_token->m_type == TOKEN_TYPE_BREAK) ? while_label_info.break_label_str : while_label_info.continue_label_str
+                (ast_node->m_token->m_type == TOKEN_TYPE_BREAK) ? while_label_info_ptr->break_label_str : while_label_info_ptr->continue_label_str
             );
             self->type_info_stack.m_size = type_info_stack_size;
             break;
@@ -1154,7 +1183,7 @@ const char* op_code_to_str(enum Op_code op_code){
         case OP_CODE_SUB:       return "sub";
         case OP_CODE_MUL:       return "mul";
         case OP_CODE_DIV:       return "div";
-        case OP_CODE_MOD:       return "mod";
+        case OP_CODE_REM:       return "rem";
         case OP_CODE_POW:       return "pow";
 
         case OP_CODE_SHL:       return "shl";

@@ -575,7 +575,7 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
             case OP_CODE_SUB:
             case OP_CODE_MUL:
             case OP_CODE_DIV:
-            case OP_CODE_MOD:
+            case OP_CODE_REM:
             case OP_CODE_POW:
             case OP_CODE_SHL:
             case OP_CODE_SHR:
@@ -599,7 +599,7 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                     case OP_CODE_SUB:     op_result = primitive_sub (lhs, rhs); break;
                     case OP_CODE_MUL:     op_result = primitive_mul (lhs, rhs); break;
                     case OP_CODE_DIV:     op_result = primitive_div (lhs, rhs); break;
-                    case OP_CODE_MOD:     op_result = primitive_mod (lhs, rhs); break;
+                    case OP_CODE_REM:     op_result = primitive_rem (lhs, rhs); break;
                     case OP_CODE_POW:     op_result = primitive_pow (lhs, rhs); break;
                     case OP_CODE_SHL:     op_result = primitive_shl (lhs, rhs); break;
                     case OP_CODE_SHR:     op_result = primitive_shr (lhs, rhs); break;

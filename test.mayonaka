@@ -16,7 +16,6 @@
         }
         return _fib(n);
     }
-/*/
 
 fn main() int {
     {
@@ -74,3 +73,16 @@ fn main() int {
 }
 
 return main();
+/*/
+
+outer: for (0..10) |i|{
+    inner: for (0..10) |j|{
+        print("i: ");
+        print(i);
+        print(", j: ");
+        print(j);
+        print('\n');
+        break outer;
+    }
+    print("----------------\n");
+}

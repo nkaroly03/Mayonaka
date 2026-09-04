@@ -111,7 +111,7 @@ enum Bin_op{
     BIN_OP_SUB,
     BIN_OP_MUL,
     BIN_OP_DIV,
-    BIN_OP_MOD,
+    BIN_OP_REM,
     BIN_OP_POW,
     
     BIN_OP_SHL,
@@ -127,7 +127,7 @@ static Primitive_op_result primitive_bin_op(Primitive *self, const Primitive *ot
             case BIN_OP_SUB:  return runtime_error("Trying to use subtration on <list>");
             case BIN_OP_MUL:  return runtime_error("Trying to use multiplication on <list>");
             case BIN_OP_DIV:  return runtime_error("Trying to use division on <list>");
-            case BIN_OP_MOD:  return runtime_error("Trying to use modulus on <list>");
+            case BIN_OP_REM:  return runtime_error("Trying to use remainder on <list>");
             case BIN_OP_POW:  return runtime_error("Trying to use exponentiation on <list>");
             case BIN_OP_SHL:  return runtime_error("Trying to use left shift on <list>");
             case BIN_OP_SHR:  return runtime_error("Trying to use right shift on <list>");
@@ -141,7 +141,7 @@ static Primitive_op_result primitive_bin_op(Primitive *self, const Primitive *ot
             case BIN_OP_SUB:  return runtime_error("Trying to use subtration on <str>");
             case BIN_OP_MUL:  return runtime_error("Trying to use multiplication on <str>");
             case BIN_OP_DIV:  return runtime_error("Trying to use division on <str>");
-            case BIN_OP_MOD:  return runtime_error("Trying to use modulus on <str>");
+            case BIN_OP_REM:  return runtime_error("Trying to use remainder on <str>");
             case BIN_OP_POW:  return runtime_error("Trying to use exponentiation on <str>");
             case BIN_OP_SHL:  return runtime_error("Trying to use left shift on <str>");
             case BIN_OP_SHR:  return runtime_error("Trying to use right shift on <str>");
@@ -251,7 +251,7 @@ static Primitive_op_result primitive_bin_op(Primitive *self, const Primitive *ot
                 default:                  unreachable();
             }
             break;
-        case BIN_OP_MOD:
+        case BIN_OP_REM:
             switch (lhs_temp.m_tag){
                 case PRIMITIVE_TAG_BOOL:  lhs_temp.m_bool_data  = false;                                              break;
                 case PRIMITIVE_TAG_CHAR:  lhs_temp.m_char_data  = (u8)(lhs_temp.m_char_data % rhs_temp.m_char_data);  break;
@@ -1011,7 +1011,7 @@ oom_error:
 primitive_bin_op_generate(sub, BIN_OP_SUB)
 primitive_bin_op_generate(mul, BIN_OP_MUL)
 primitive_bin_op_generate(div, BIN_OP_DIV)
-primitive_bin_op_generate(mod, BIN_OP_MOD)
+primitive_bin_op_generate(rem, BIN_OP_REM)
 primitive_bin_op_generate(pow, BIN_OP_POW)
 
 primitive_bin_op_generate(shl,  BIN_OP_SHL)

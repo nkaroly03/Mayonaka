@@ -50,7 +50,7 @@ enum Op_code{
     OP_CODE_SUB,
     OP_CODE_MUL,
     OP_CODE_DIV,
-    OP_CODE_MOD,
+    OP_CODE_REM,
     OP_CODE_POW,
 
     OP_CODE_SHL,
