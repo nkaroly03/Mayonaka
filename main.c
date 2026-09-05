@@ -45,7 +45,7 @@
 
 int main(const int argc, const char *const *const argv){
     if (argc < 2){
-        fprintf(stderr, "Usage: %s <filepath>\n", argv[0]);
+        fprintf(stderr, "Usage: %s file...\n", argv[0]);
         return 1;
     }
 
@@ -55,23 +55,10 @@ int main(const int argc, const char *const *const argv){
 
     Lex_result lex_result = lex(&arena, argv[1]);
     switch (lex_result.error){
-        case LEX_ERROR_NONE:
-            break;
-        case LEX_ERROR_OOM:
-            goto oom_error;
-        case LEX_ERROR_FILE:
-            fprintf(stderr, "\x1b[38;2;255;0;0m");
-            fprintf(stderr, "%s\n", str_base_data(&lex_result.error_info));
-            if (errno != 0){
-                fprintf(stderr, "perror msg:\n\t");
-                perror(argv[1]);
-            }
-            fprintf(stderr, "\x1b[0m");
-            arena_deinit(&arena);
-            return 1;
-        case LEX_ERROR_SYNTAX:
-            error_info = lex_result.error_info;
-            goto syntax_error;
+        case LEX_ERROR_NONE:   break;
+        case LEX_ERROR_OOM:    goto oom_error;
+        case LEX_ERROR_FILE:   error_info = lex_result.error_info; goto file_error;
+        case LEX_ERROR_SYNTAX: error_info = lex_result.error_info; goto syntax_error;
     }
 
     token_slice_print(lex_result.tokens, stderr);
@@ -79,13 +66,9 @@ int main(const int argc, const char *const *const argv){
 
     Parse_result parse_result = parse(&arena, lex_result.tokens);
     switch (parse_result.error){
-        case PARSE_ERROR_NONE:
-            break;
-        case PARSE_ERROR_OOM:
-            goto oom_error;
-        case PARSE_ERROR_SYNTAX:
-            error_info = parse_result.error_info;
-            goto syntax_error;
+        case PARSE_ERROR_NONE:   break;
+        case PARSE_ERROR_OOM:    goto oom_error;
+        case PARSE_ERROR_SYNTAX: error_info = parse_result.error_info; goto syntax_error;
     }
 
     ast_node_ptr_slice_print(parse_result.ast_nodes, stderr);
@@ -94,13 +77,9 @@ int main(const int argc, const char *const *const argv){
     IR_compile_result IR_compile_result = IR_compile(&arena, parse_result.ast_nodes);
 
     switch (IR_compile_result.error){
-        case COMPILE_ERROR_NONE:
-            break;
-        case COMPILE_ERROR_OOM:
-            goto oom_error;
-        case COMPILE_ERROR_SYNTAX:
-            error_info = IR_compile_result.error_info;
-            goto syntax_error;
+        case COMPILE_ERROR_NONE:   break;
+        case COMPILE_ERROR_OOM:    goto oom_error;
+        case COMPILE_ERROR_SYNTAX: error_info = IR_compile_result.error_info; goto syntax_error;
     }
 
     fprintf(stderr, "%s", str_base_data(&IR_compile_result.IR));
@@ -108,13 +87,9 @@ int main(const int argc, const char *const *const argv){
 
     Bytecode_compile_result bytecode_compile_result = bytecode_compile(&arena, &IR_compile_result.IR);
     switch (bytecode_compile_result.error){
-        case COMPILE_ERROR_NONE:
-            break;
-        case COMPILE_ERROR_OOM:
-            goto oom_error;
-        case COMPILE_ERROR_SYNTAX:
-            error_info = bytecode_compile_result.error_info;
-            goto syntax_error;
+        case COMPILE_ERROR_NONE:   break;
+        case COMPILE_ERROR_OOM:    goto oom_error;
+        case COMPILE_ERROR_SYNTAX: error_info = bytecode_compile_result.error_info; goto syntax_error;
     }
 
     for (usize i = 0; i < bytecode_compile_result.bytecode.m_size; ++i){
@@ -151,6 +126,7 @@ oom_error:
     fprintf(stderr, "\x1b[38;2;255;0;0mOut of memory\n\x1b[0m");
     arena_deinit(&arena);
     return 1;
+file_error:
 syntax_error:
     fprintf(stderr, "\x1b[38;2;255;0;0m%s\x1b[0m", str_base_data(&error_info));
     arena_deinit(&arena);

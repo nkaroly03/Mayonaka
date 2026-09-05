@@ -1,4 +1,4 @@
-DEBUG = 0
+DEBUG = 1
 
 CC = gcc
 CFLAGS = -Wall -Wextra -Wpedantic -Wconversion -fwrapv -std=c11 -pthread

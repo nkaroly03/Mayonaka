@@ -6,6 +6,7 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "../../hdrs/Allocator/Allocator.h"
 #include "../../hdrs/Allocator/Arena.h"
@@ -106,7 +107,7 @@ Lex_result lex(Arena *arena, const char *path){
         } while (0)
 
     if (!state.file){
-        Str_base_result error_info = str_base_init_raw(state.alloc, "File not found");
+        Str_base_result error_info = str_base_init_fmt(state.alloc, "<%s>: %s", path, strerror(errno));
         return (error_info.success) ? (Lex_result){.error_info = error_info.result, .error = LEX_ERROR_FILE} : (Lex_result){.error = LEX_ERROR_OOM};
     }
 

@@ -213,7 +213,7 @@ fn main() void {
             push_back(tetris_field, TETROMINO_SHAPE_IDX_NONE);
 
         let tetris_tick: int = 0;
-        game: while (true) : (tetris_tick = tetris_tick + 1){
+        while (true) : (tetris_tick = tetris_tick + 1){
             let keypress: char = poll_keypress();
             if (keypress){
                 let keypress_cpy: char = keypress;
@@ -246,7 +246,7 @@ fn main() void {
                     tetris_tick = TETRIS_MOVE_TICK - 1;
                 }
                 else if (keypress == '\x1b')
-                    break game;
+                    break;
 
                 if (tetris_tetromino_fits(tetris_field, new_tetromino))
                     current_tetromino = new_tetromino;
@@ -307,7 +307,7 @@ fn main() void {
                 next_tetromino = tetromino_init();
                 next_tetromino_table = tetris_init_next_tetromino_table(next_tetromino);
                 if (not tetris_tetromino_fits(tetris_field, current_tetromino))
-                    break game;
+                    break;
             }
             else
                 tetris_setup_field_as(tetris_field, current_tetromino, TETROMINO_SHAPE_IDX_NONE);

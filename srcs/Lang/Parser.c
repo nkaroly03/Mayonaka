@@ -580,7 +580,8 @@ static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
                 if (parse_result.error != PARSE_ERROR_NONE)
                     return parse_result;
 
-                if ((tok_temp = &self->tokens.m_data[self->token_idx++])->m_type != TOKEN_TYPE_RPAREN)
+                tok_temp = &self->tokens.m_data[self->token_idx++];
+                if (tok_temp->m_type != TOKEN_TYPE_RPAREN)
                     return syntax_error("<while> loop's continue expression must be closed by <)>", tok_temp->m_line_number);
 
                 AST_node *colon_node = parser_state_ast_node_alloc(self, colon_token);

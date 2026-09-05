@@ -92,8 +92,15 @@ Type_info binary_op_type_info_result(enum Binary_op op, Type_info lhs, Type_info
             case BINARY_OP_MUL:
             case BINARY_OP_DIV:
             case BINARY_OP_REM:
-            case BINARY_OP_POW:
                 if (lhs.m_dimensions == 0 && rhs.m_dimensions == 0 && type_info_tag_is_arithmetic(lhs.m_tag) && type_info_tag_is_arithmetic(rhs.m_tag))
+                    result = (Type_info){.m_tag = (lhs.m_tag > rhs.m_tag) ? lhs.m_tag : rhs.m_tag, .m_dimensions = 0};
+                break;
+            case BINARY_OP_POW:
+                if (
+                    lhs.m_dimensions == 0 && rhs.m_dimensions == 0 &&
+                    type_info_tag_is_arithmetic(lhs.m_tag) && type_info_tag_is_arithmetic(rhs.m_tag) &&
+                    (!type_info_tag_is_int_like(lhs.m_tag) || !type_info_tag_is_int_like(rhs.m_tag))
+                )
                     result = (Type_info){.m_tag = (lhs.m_tag > rhs.m_tag) ? lhs.m_tag : rhs.m_tag, .m_dimensions = 0};
                 break;
 
