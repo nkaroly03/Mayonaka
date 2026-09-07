@@ -1030,7 +1030,7 @@ Primitive_op_result primitive_add(Primitive *self, Allocator alloc, const Primit
                 case PRIMITIVE_TAG_CHAR:
                 case PRIMITIVE_TAG_STR:{
                     Str_view sv = (other->m_tag == PRIMITIVE_TAG_CHAR)
-                        ? (Str_view){.m_size = 1, .m_str = (char*)&other->m_char_data}
+                        ? (Str_view){.m_size = (other->m_char_data != 0), .m_str = (char*)&other->m_char_data}
                         : str_base_to_str_view(&other->m_str_data_ptr->m_data)
                     ;
                     if (self->m_str_data_ptr->m_ref_count > 1){
