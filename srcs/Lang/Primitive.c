@@ -307,7 +307,7 @@ static Primitive_op_result primitive_bin_op(Primitive *self, const Primitive *ot
                 case PRIMITIVE_TAG_INT:
                     return runtime_error("Trying to use exponentiation on int types");
                 case PRIMITIVE_TAG_FLOAT:
-                    lhs_temp.m_float_data = pow(lhs_temp.m_float_data, rhs_temp.m_float_data);
+                    lhs_temp.m_float_data = (f64)pow(lhs_temp.m_float_data, rhs_temp.m_float_data);
                     break;
                 default:
                     unreachable();
@@ -1024,9 +1024,15 @@ Primitive_op_result primitive_add(Primitive *self, Allocator alloc, const Primit
             break;
         case PRIMITIVE_TAG_STR:
             switch (other->m_tag){
-                case PRIMITIVE_TAG_BOOL:
-                    return runtime_error("Trying to use addition between <str> and <bool>");
+                case PRIMITIVE_TAG_BOOL:  return runtime_error("Trying to use addition between <str> and <bool>");
+                case PRIMITIVE_TAG_INT:   return runtime_error("Trying to use addition between <str> and <int>");
+                case PRIMITIVE_TAG_FLOAT: return runtime_error("Trying to use addition between <str> and <float>");
                 case PRIMITIVE_TAG_CHAR:
+                case PRIMITIVE_TAG_STR:{
+                    Str_view sv = (other->m_tag == PRIMITIVE_TAG_CHAR)
+                        ? (Str_view){.m_size = 1, .m_str = (char*)&other->m_char_data}
+                        : str_base_to_str_view(&other->m_str_data_ptr->m_data)
+                    ;
                     if (self->m_str_data_ptr->m_ref_count > 1){
                         temp = (Primitive){.m_tag = PRIMITIVE_TAG_STR, .m_str_data_ptr = allocator_alloc(alloc, Primitive_str_data, 1)};
                         if (!temp.m_str_data_ptr)
@@ -1034,40 +1040,19 @@ Primitive_op_result primitive_add(Primitive *self, Allocator alloc, const Primit
                         *temp.m_str_data_ptr = (Primitive_str_data){.m_ref_count = 1, .m_data = {0}};
                         if (
                             !str_base_assign_str_base(&temp.m_str_data_ptr->m_data, alloc, &self->m_str_data_ptr->m_data) ||
-                            !str_base_push_back(&temp.m_str_data_ptr->m_data, alloc, (char)other->m_char_data)
+                            !str_base_append_str_view(&temp.m_str_data_ptr->m_data, alloc, sv)
                         )
                             goto oom_error;
                         primitive_deinit(self, alloc);
                     }
-                    else{
-                        temp = *self;
-                        if (!str_base_push_back(&temp.m_str_data_ptr->m_data, alloc, (char)other->m_char_data))
-                            return OOM_ERROR;
-                    }
+                    else if (
+                        temp = *self,
+                        !str_base_assign_str_base(&temp.m_str_data_ptr->m_data, alloc, &self->m_str_data_ptr->m_data) ||
+                        !str_base_append_str_view(&temp.m_str_data_ptr->m_data, alloc, sv)
+                    )
+                        return OOM_ERROR;
                     break;
-                case PRIMITIVE_TAG_INT:
-                    return runtime_error("Trying to use addition between <str> and <int>");
-                case PRIMITIVE_TAG_FLOAT:
-                    return runtime_error("Trying to use addition between <str> and <float>");
-                case PRIMITIVE_TAG_STR:
-                    if (self->m_str_data_ptr->m_ref_count > 1){
-                        temp = (Primitive){.m_tag = PRIMITIVE_TAG_STR, .m_str_data_ptr = allocator_alloc(alloc, Primitive_str_data, 1)};
-                        if (!temp.m_str_data_ptr)
-                            return OOM_ERROR;
-                        *temp.m_str_data_ptr = (Primitive_str_data){.m_ref_count = 1, .m_data = {0}};
-                        if (
-                            !str_base_assign_str_base(&temp.m_str_data_ptr->m_data, alloc, &self->m_str_data_ptr->m_data) ||
-                            !str_base_append_str_base(&temp.m_str_data_ptr->m_data, alloc, &other->m_str_data_ptr->m_data)
-                        )
-                            goto oom_error;
-                        primitive_deinit(self, alloc);
-                    }
-                    else{
-                        temp = *self;
-                        if (!str_base_append_str_base(&temp.m_str_data_ptr->m_data, alloc, &other->m_str_data_ptr->m_data))
-                            return OOM_ERROR;
-                    }
-                    break;
+                }
                 default:
                     unreachable();
             }

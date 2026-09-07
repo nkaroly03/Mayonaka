@@ -369,21 +369,15 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                         if (self->data_stack.m_size < 2)
                             return builtin_fn_arg_count_error(bfn_tag_str);
 
-                        Primitive to_push;
-                        vec_base_pop_back_to(&self->data_stack, &to_push);
-
-                        Primitive *list = vec_base_at(&self->data_stack, self->data_stack.m_size - 1);
-                        if (list->m_tag != PRIMITIVE_TAG_LIST){
-                            primitive_deinit(&to_push, self->alloc);
+                        Primitive *list = vec_base_at(&self->data_stack, self->data_stack.m_size - 2);
+                        if (list->m_tag != PRIMITIVE_TAG_LIST)
                             return runtime_error("<%s> called on non-list type", bfn_tag_str);
-                        }
 
-                        if (!vec_base_push_back(&list->m_list_data_ptr->m_data, self->alloc, &to_push)){
-                            primitive_deinit(&to_push, self->alloc);
+                        if (!vec_base_push_back(&list->m_list_data_ptr->m_data, self->alloc, vec_base_at(&self->data_stack, self->data_stack.m_size - 1)))
                             return oom_error();
-                        }
 
                         primitive_deinit(list, self->alloc);
+                        vec_base_pop_back_discard(&self->data_stack);
                         vec_base_pop_back_discard(&self->data_stack);
                         break;
                     }

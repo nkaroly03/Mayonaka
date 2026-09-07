@@ -282,6 +282,7 @@ static bool IR_compiler_state_pop_ids_in_current_scope(IR_compiler_state *self){
 #define JMP_LABEL_BUFSIZE array_size(LOCAL_LABEL_PREFIX_SYMBOL JMP_LABEL_SYMBOL "18446744073709551615")
 
 static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_state *self, const AST_node *ast_node){
+    enum Unary_op un_op;
     enum Binary_op bin_op;
     enum Op_code bin_op_code;
 
@@ -455,68 +456,6 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
             pop_ids_in_current_scope();
             break;
 
-        case TOKEN_TYPE_TILDE:
-        case TOKEN_TYPE_NOT:{
-            enum Unary_op un_op = (ast_node->m_token->m_type == TOKEN_TYPE_TILDE) ? UNARY_OP_BNEG : UNARY_OP_NOT;
-
-            IR_compiler_state_compile_result compile_result = IR_compiler_state_compile(self, ast_node->m_sub_nodes.m_data[0]);
-            if (compile_result.error != COMPILE_ERROR_NONE)
-                return compile_result;
-
-            Type_info *last_type_info_ptr = vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1);
-
-            Type_info un_op_result = unary_op_type_info_result(un_op, *last_type_info_ptr);
-            if (un_op_result.m_tag == TYPE_INFO_TAG_NONE)
-                return IR_compiler_state_unary_op_error(self, ast_node, *last_type_info_ptr);
-
-            *last_type_info_ptr = un_op_result;
-
-            if (un_op == UNARY_OP_BNEG)
-                add_instruction("%s", op_code_to_str(OP_CODE_BNEG));
-            else{
-                add_instruction("%s", op_code_to_str(OP_CODE_TO_BOOL));
-                add_instruction("%s", op_code_to_str(OP_CODE_NEG));
-            }
-
-            pop_on_discarded_expression(ast_node);
-            break;
-        }
-
-        case TOKEN_TYPE_PLUS:
-        case TOKEN_TYPE_MINUS:
-            if (ast_node->m_sub_nodes.m_size > 1){
-                if (ast_node->m_token->m_type == TOKEN_TYPE_PLUS){
-                    bin_op      = BINARY_OP_ADD;
-                    bin_op_code = OP_CODE_ADD;
-                }
-                else{
-                    bin_op      = BINARY_OP_SUB;
-                    bin_op_code = OP_CODE_SUB;
-                }
-                goto bin_op_case;
-            }
-            else{
-                enum Unary_op un_op = (ast_node->m_token->m_type == TOKEN_TYPE_PLUS) ? UNARY_OP_PLUS : UNARY_OP_MINUS;
-
-                IR_compiler_state_compile_result compile_result = IR_compiler_state_compile(self, ast_node->m_sub_nodes.m_data[0]);
-                if (compile_result.error != COMPILE_ERROR_NONE)
-                    return compile_result;
-
-                Type_info *last_type_info_ptr = vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1);
-
-                Type_info un_op_result = unary_op_type_info_result(un_op, *last_type_info_ptr);
-                if (un_op_result.m_tag == TYPE_INFO_TAG_NONE)
-                    return IR_compiler_state_unary_op_error(self, ast_node, *last_type_info_ptr);
-
-                *last_type_info_ptr = un_op_result;
-
-                if (un_op == UNARY_OP_MINUS)
-                    add_instruction("%s", op_code_to_str(OP_CODE_NEG));
-
-                pop_on_discarded_expression(ast_node);
-            }
-            break;
-
         case TOKEN_TYPE_EQUALS1:{
             const AST_node *lhs_node = ast_node->m_sub_nodes.m_data[0];
             const AST_node *rhs_node = ast_node->m_sub_nodes.m_data[1];
@@ -656,6 +595,52 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                     add_instruction("%s", op_code_to_str(OP_CODE_DEREF));
                 }
             }
+            break;
+        }
+
+        case TOKEN_TYPE_PLUS:
+        case TOKEN_TYPE_MINUS:
+            if (ast_node->m_sub_nodes.m_size > 1){
+                if (ast_node->m_token->m_type == TOKEN_TYPE_PLUS){
+                    bin_op      = BINARY_OP_ADD;
+                    bin_op_code = OP_CODE_ADD;
+                }
+                else{
+                    bin_op      = BINARY_OP_SUB;
+                    bin_op_code = OP_CODE_SUB;
+                }
+                goto bin_op_case;
+            }
+            else{
+                un_op = (ast_node->m_token->m_type == TOKEN_TYPE_PLUS) ? UNARY_OP_PLUS : UNARY_OP_MINUS;
+                goto un_op_case;
+            }
+            break;
+
+        case TOKEN_TYPE_TILDE: un_op = UNARY_OP_BNEG; goto un_op_case;
+        case TOKEN_TYPE_NOT:   un_op = UNARY_OP_NOT;
+        un_op_case:{
+            IR_compiler_state_compile_result compile_result = IR_compiler_state_compile(self, ast_node->m_sub_nodes.m_data[0]);
+            if (compile_result.error != COMPILE_ERROR_NONE)
+                return compile_result;
+
+            Type_info *last_type_info_ptr = vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1);
+
+            Type_info un_op_result = unary_op_type_info_result(un_op, *last_type_info_ptr);
+            if (un_op_result.m_tag == TYPE_INFO_TAG_NONE)
+                return IR_compiler_state_unary_op_error(self, ast_node, *last_type_info_ptr);
+
+            *last_type_info_ptr = un_op_result;
+
+            if (un_op == UNARY_OP_BNEG)
+                add_instruction("%s", op_code_to_str(OP_CODE_BNEG));
+            else if (un_op != UNARY_OP_PLUS){
+                if (un_op == UNARY_OP_NOT)
+                    add_instruction("%s", op_code_to_str(OP_CODE_TO_BOOL));
+                add_instruction("%s", op_code_to_str(OP_CODE_NEG));
+            }
+
+            pop_on_discarded_expression(ast_node);
             break;
         }
 
@@ -1063,8 +1048,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
         case TOKEN_TYPE_CONTINUE:{
             if (self->while_labels.m_keys.m_size == 0)
                 return syntax_error("<%s> must be used inside a loop", ast_node->m_token->m_line_number, str_base_data_const(&ast_node->m_token->m_id));
-            While_label_info *while_label_info_ptr = (
-                (ast_node->m_sub_nodes.m_size > 0)
+            While_label_info *while_label_info_ptr = ((ast_node->m_sub_nodes.m_size > 0)
                 ? ordered_umap_base_at_key(&self->while_labels, &ast_node->m_sub_nodes.m_data[0]->m_token->m_id)
                 : ordered_umap_base_at_idx(&self->while_labels, self->while_labels.m_keys.m_size - 1)
             ).m_value;

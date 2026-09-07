@@ -18,8 +18,8 @@
 static bool token_type_is_atom(enum Token_type token_type){
     return token_type >= TOKEN_TYPE_ID && token_type <= TOKEN_TYPE_INIT_LIST;
 }
-static bool token_type_is_operation(enum Token_type token_type){
-    return token_type >= TOKEN_TYPE_EQUALS2 && token_type <= TOKEN_TYPE_EQUALS1;
+static bool token_type_is_bin_op(enum Token_type token_type){
+    return token_type >= TOKEN_TYPE_EQUALS1 && token_type <= TOKEN_TYPE_OR;
 }
 
 typedef struct Binding_powers{
@@ -241,7 +241,7 @@ static Parser_state_parse_result parser_state_parse_arithm_expr(Parser_state *se
                 ++self->token_idx;
                 break;
             default:{
-                if (!token_type_is_operation(op->m_type))
+                if (!token_type_is_bin_op(op->m_type))
                     return syntax_error("Found invalid token <%s>", op->m_line_number, str_base_data_const(&op->m_id));
 
                 Binding_powers bps = token_type_binding_powers(op->m_type);
