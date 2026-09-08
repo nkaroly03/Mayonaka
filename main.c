@@ -111,7 +111,7 @@ int main(const int argc, const char *const *const argv){
         case INTERPRETER_RUN_ERROR_OOM:
             goto oom_error;
         case INTERPRETER_RUN_ERROR_RUNTIME:
-            fprintf(stderr, "\x1b[38;2;255;0;0m%s\x1b[0m", str_base_data(&run_result.error_info));
+            fprintf(stderr, "\x1b[38;2;255;0;0m%s\n\x1b[0m", str_base_data(&run_result.error_info));
             str_base_deinit(&run_result.error_info, interpreter_alloc);
             arena_deinit(&arena);
             return 1;
@@ -128,7 +128,7 @@ oom_error:
     return 1;
 file_error:
 syntax_error:
-    fprintf(stderr, "\x1b[38;2;255;0;0m%s\x1b[0m", str_base_data(&error_info));
+    fprintf(stderr, "\x1b[38;2;255;0;0m%s\n\x1b[0m", str_base_data(&error_info));
     arena_deinit(&arena);
     return 1;
 }

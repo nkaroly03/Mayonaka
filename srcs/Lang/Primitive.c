@@ -23,6 +23,64 @@ static const Primitive_op_result OOM_ERROR = {.error = PRIMITIVE_OP_ERROR_OOM, .
 
 #define runtime_error(error_info_) (Primitive_op_result){.error = PRIMITIVE_OP_ERROR_RUNTIME, .error_info = (error_info_)}
 
+static bool float_to_char_cast_is_safe(f64 f){
+    return isfinite((f32)f) && f > -1.0 && f < 256.0;
+}
+static bool float_to_int_cast_is_safe(f64 f){
+    return isfinite((f32)f) && f >= (f64)I64_MIN && f < (f64)((u64)I64_MAX + 1);
+}
+
+typedef struct Primitive_str_conversion_result{
+    union{
+        bool b;
+        i64 i;
+        f64 f;
+    };
+    bool success;
+} Primitive_str_conversion_result;
+
+static Primitive_str_conversion_result primitive_str_to_bool(const Primitive *self){
+    Str_view sv = str_view_trim_left_while(str_view_trim_right_while(str_base_to_str_view(&self->m_str_data_ptr->m_data), isspace), isspace);
+
+    Str_view match;
+    bool val;
+    if (
+        (val = false, match = str_view_init("false"), sv.m_size != match.m_size) &&
+        (val = true,  match = str_view_init("true" ), sv.m_size != match.m_size)
+    )
+        return (Primitive_str_conversion_result){0};
+
+    for (usize i = 0; i < sv.m_size; ++i)
+        if (tolower(sv.m_str[i]) != match.m_str[i])
+            return (Primitive_str_conversion_result){0};
+
+    return (Primitive_str_conversion_result){.b = val, .success = true};
+}
+
+static Primitive_str_conversion_result primitive_str_to_int(const Primitive *self){
+    Str_view sv = str_view_trim_right_while(str_view_trim_left_while(str_base_to_str_view(&self->m_str_data_ptr->m_data), isspace), isspace);
+
+    char *end;
+    i64 val = (errno = 0, (i64)strtoll(sv.m_str, &end, 10)); // TODO?: change str conversion to detect base 2 or 16
+
+    if (end == sv.m_str || end != &sv.m_str[sv.m_size] || errno != 0)
+        return (Primitive_str_conversion_result){0};
+
+    return (Primitive_str_conversion_result){.i = val, .success = true};
+}
+
+static Primitive_str_conversion_result primitive_str_to_float(const Primitive *self){
+    Str_view sv = str_view_trim_right_while(str_view_trim_left_while(str_base_to_str_view(&self->m_str_data_ptr->m_data), isspace), isspace);
+
+    char *end;
+    f64 val = (errno = 0, (f64)strtod(sv.m_str, &end));
+
+    if (end == sv.m_str || end != &sv.m_str[sv.m_size] || errno != 0)
+        return (Primitive_str_conversion_result){0};
+
+    return (Primitive_str_conversion_result){.f = val, .success = true};
+}
+
 enum Cmp_bin_op{
     CMP_BIN_OP_EQ,
     CMP_BIN_OP_NEQ,
@@ -31,13 +89,6 @@ enum Cmp_bin_op{
     CMP_BIN_OP_GE,
     CMP_BIN_OP_GEQ
 };
-
-static bool float_to_char_cast_is_safe(f64 f){
-    return isfinite((f32)f) && f > -1.0 && f < 256.0;
-}
-static bool float_to_int_cast_is_safe(f64 f){
-    return isfinite((f32)f) && f >= (f64)I64_MIN && f < (f64)((u64)I64_MAX + 1);
-}
 
 static Primitive_op_result primitive_cmp(Primitive *self, Allocator alloc, const Primitive *other, enum Cmp_bin_op op){
     if (self->m_tag == PRIMITIVE_TAG_LIST || other->m_tag == PRIMITIVE_TAG_LIST)
@@ -466,18 +517,11 @@ Primitive_op_result primitive_to_bool(Primitive *self, Allocator alloc){
             *self = (Primitive){.m_tag = PRIMITIVE_TAG_BOOL, .m_bool_data = (bool)self->m_float_data};
             break;
         case PRIMITIVE_TAG_STR:{
-            Str_view sv = str_view_trim_right_while(str_view_trim_left_while(str_base_to_str_view(&self->m_str_data_ptr->m_data), isspace), isspace);
-
-            Str_view match;
-            bool val;
-            if (
-                (val = false, match = str_view_init("false"), !cmp_eq_Str_view(&sv, &match)) &&
-                (val = true,  match = str_view_init("true" ), !cmp_eq_Str_view(&sv, &match))
-            )
-                return runtime_error("Trying to convert <str> not containing \"false\" or \"true\" to <bool>");
-
+            Primitive_str_conversion_result bool_result = primitive_str_to_bool(self);
+            if (!bool_result.success)
+                return runtime_error("Trying to convert invalid <str> to <bool>");
             primitive_deinit(self, alloc);
-            *self = (Primitive){.m_tag = PRIMITIVE_TAG_BOOL, .m_bool_data = val};
+            *self = (Primitive){.m_tag = PRIMITIVE_TAG_BOOL, .m_bool_data = bool_result.b};
             break;
         }
         case PRIMITIVE_TAG_LIST:
@@ -535,19 +579,11 @@ Primitive_op_result primitive_to_int(Primitive *self, Allocator alloc){
             *self = (Primitive){.m_tag = PRIMITIVE_TAG_INT, .m_int_data = (i64)self->m_float_data};
             break;
         case PRIMITIVE_TAG_STR:{
-            Str_view sv = str_view_trim_right_while(str_view_trim_left_while(str_base_to_str_view(&self->m_str_data_ptr->m_data), isspace), isspace);
-
-            char *end;
-            i64 val = (errno = 0, (i64)strtoll(sv.m_str, &end, 10)); // TODO?: change str conversion to detect base 2 or 16
-
-            if (end == sv.m_str || end != &sv.m_str[sv.m_size])
-                return runtime_error("Failed to convert <str> to <int>");
-
-            if (errno != 0)
-                return runtime_error("<str> converted to <int> is out of range");
-
+            Primitive_str_conversion_result int_result = primitive_str_to_int(self);
+            if (!int_result.success)
+                return runtime_error("Trying to convert invalid <str> to <int>");
             primitive_deinit(self, alloc);
-            *self = (Primitive){.m_tag = PRIMITIVE_TAG_INT, .m_int_data = val};
+            *self = (Primitive){.m_tag = PRIMITIVE_TAG_INT, .m_int_data = int_result.i};
             break;
         }
         case PRIMITIVE_TAG_LIST:
@@ -572,19 +608,11 @@ Primitive_op_result primitive_to_float(Primitive *self, Allocator alloc){
         case PRIMITIVE_TAG_FLOAT:
             break;
         case PRIMITIVE_TAG_STR:{
-            Str_view sv = str_view_trim_right_while(str_view_trim_left_while(str_base_to_str_view(&self->m_str_data_ptr->m_data), isspace), isspace);
-
-            char *end;
-            f64 val = (errno = 0, (f64)strtod(sv.m_str, &end));
-
-            if (end == sv.m_str || end != &sv.m_str[sv.m_size] || sv.m_str[sv.m_size - 1] == '.')
-                return runtime_error("Failed to convert <str> to <float>");
-
-            if (errno != 0)
-                return runtime_error("<str> converted to <float> is out of range");
-
+            Primitive_str_conversion_result float_result = primitive_str_to_float(self);
+            if (!float_result.success)
+                return runtime_error("Trying to convert invalid <str> to <float>");
             primitive_deinit(self, alloc);
-            *self = (Primitive){.m_tag = PRIMITIVE_TAG_FLOAT, .m_float_data = val};
+            *self = (Primitive){.m_tag = PRIMITIVE_TAG_FLOAT, .m_float_data = float_result.f};
             break;
         }
         case PRIMITIVE_TAG_LIST:
@@ -693,15 +721,10 @@ Primitive_op_result primitive_mov(Primitive *self, Allocator alloc, const Primit
                 case PRIMITIVE_TAG_INT:   self->m_bool_data = (bool)other->m_int_data;   break;
                 case PRIMITIVE_TAG_FLOAT: self->m_bool_data = (bool)other->m_float_data; break;
                 case PRIMITIVE_TAG_STR:{
-                    Str_view sv = str_view_trim_right_while(str_view_trim_left_while(str_base_to_str_view(&other->m_str_data_ptr->m_data), isspace), isspace);
-                    Str_view match;
-                    bool val;
-                    if (
-                        (val = false, match = str_view_init("false"), !cmp_eq_Str_view(&sv, &match)) &&
-                        (val = true,  match = str_view_init("true" ), !cmp_eq_Str_view(&sv, &match))
-                    )
-                        return runtime_error("Trying to move <str> not containing \"false\" or \"true\" to <bool>");
-                    self->m_bool_data = val;
+                    Primitive_str_conversion_result bool_result = primitive_str_to_bool(other);
+                    if (!bool_result.success)
+                        return runtime_error("Trying to move invalid <str> to <bool>");
+                    self->m_bool_data = bool_result.b;
                     break;
                 }
                 case PRIMITIVE_TAG_LIST:
@@ -738,18 +761,10 @@ Primitive_op_result primitive_mov(Primitive *self, Allocator alloc, const Primit
                     self->m_int_data = (i64)other->m_float_data;
                     break;
                 case PRIMITIVE_TAG_STR:{
-                    Str_view sv = str_view_trim_right_while(str_view_trim_left_while(str_base_to_str_view(&other->m_str_data_ptr->m_data), isspace), isspace);
-
-                    char *end;
-                    i64 val = (errno = 0, (i64)strtoll(sv.m_str, &end, 10)); // TODO?: change str conversion to detect base 2 or 16
-
-                    if (end == sv.m_str || end != &sv.m_str[sv.m_size])
-                        return runtime_error("Failed to convert <str> to <int> during move");
-
-                    if (errno != 0)
-                        return runtime_error("<str> converted to <int> is out of range during move");
-
-                    self->m_int_data = val;
+                    Primitive_str_conversion_result int_result = primitive_str_to_int(other);
+                    if (!int_result.success)
+                        return runtime_error("Trying to move invalid <str> into <int>");
+                    self->m_int_data = int_result.i;
                     break;
                 }
                 case PRIMITIVE_TAG_LIST:
@@ -763,18 +778,10 @@ Primitive_op_result primitive_mov(Primitive *self, Allocator alloc, const Primit
                 case PRIMITIVE_TAG_INT:   self->m_float_data = (f64)other->m_int_data;  break;
                 case PRIMITIVE_TAG_FLOAT: self->m_float_data = other->m_float_data;     break;
                 case PRIMITIVE_TAG_STR:{
-                    Str_view sv = str_view_trim_right_while(str_view_trim_left_while(str_base_to_str_view(&other->m_str_data_ptr->m_data), isspace), isspace);
-
-                    char *end;
-                    f64 val = (errno = 0, (f64)strtod(sv.m_str, &end));
-
-                    if (end == sv.m_str || end != &sv.m_str[sv.m_size] || sv.m_str[sv.m_size - 1] == '.')
-                        return runtime_error("Failed to convert <str> to <float> during move");
-
-                    if (errno != 0)
-                        return runtime_error("<str> converted to <float> is out of range during move");
-
-                    self->m_float_data = val;
+                    Primitive_str_conversion_result float_result = primitive_str_to_float(other);
+                    if (!float_result.success)
+                        return runtime_error("Trying to move invalid <str> into <float>");
+                    self->m_float_data = float_result.f;
                     break;
                 }
                 case PRIMITIVE_TAG_LIST:

@@ -102,7 +102,6 @@ fn int_to_bin_str(x: int) str {
 
 for (0..INT_MSB - 1) |i|
     print(int_to_bin_str(i) + '\n');
-/*/
 
 let f: float = "inf";
 
@@ -110,4 +109,10 @@ let c: char = f;
 let i: int = c;
 print("i: ");
 print(i);
+print('\n');
+/*/
+
+let f: float = "    .10   ";
+print("f: ");
+print(f);
 print('\n');
