@@ -105,7 +105,7 @@ static Str_base_unescape_result str_base_unescape(Allocator alloc, const char *r
                         oct_buf[i] = *raw_str;
                     }
                     *it = (char)strtol(oct_buf, NULL, 8);
-                    escaped_0 = escaped_0 || !*it;
+                    escaped_0 |= !*it;
                     --raw_str;
                     break;
                 case 'x':
@@ -117,7 +117,7 @@ static Str_base_unescape_result str_base_unescape(Allocator alloc, const char *r
                         hex_buf[i] = *raw_str;
                     }
                     *it = (char)strtoumax(hex_buf, NULL, 16);
-                    escaped_0 = escaped_0 || !*it;
+                    escaped_0 |= !*it;
                     --raw_str;
                     break;
                 default:
@@ -490,7 +490,7 @@ bool str_base_append_fmt_va_list(Str_base *self, Allocator alloc, const char *fm
 bool str_base_push_back(Str_base *self, Allocator alloc, char c){
     assert(self && "<self> is never null");
 
-    if (c != '\0'){
+    if (c){
         usize size = str_base_size(self), cap = str_base_capacity(self);
 
         if (size >= cap && !str_base_reserve(self, alloc, cap * 2))

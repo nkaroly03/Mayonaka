@@ -16,70 +16,50 @@ let TETROMINO_ROTATION_IDX_90:  int = 1;
 let TETROMINO_ROTATION_IDX_180: int = 2;
 let TETROMINO_ROTATION_IDX_270: int = 3;
 
-let TETROMINO_SHAPE_SIDE_LENGTHS: []int = [];
-push_back(TETROMINO_SHAPE_SIDE_LENGTHS, 2);
-push_back(TETROMINO_SHAPE_SIDE_LENGTHS, 3);
-push_back(TETROMINO_SHAPE_SIDE_LENGTHS, 3);
-push_back(TETROMINO_SHAPE_SIDE_LENGTHS, 3);
-push_back(TETROMINO_SHAPE_SIDE_LENGTHS, 3);
-push_back(TETROMINO_SHAPE_SIDE_LENGTHS, 3);
-push_back(TETROMINO_SHAPE_SIDE_LENGTHS, 4);
-push_back(TETROMINO_SHAPE_SIDE_LENGTHS, 0);
+let TETROMINO_SHAPE_SIDE_LENGTHS: []int = [2, 3, 3, 3, 3, 3, 4, 0];
 
-let TETROMINO_SHAPE_TABLES: []str = [];
-push_back(
-    TETROMINO_SHAPE_TABLES,
+let TETROMINO_SHAPE_TABLES: []str = [
     "XX"
-    "XX"
-);
-push_back(
-    TETROMINO_SHAPE_TABLES,
+    "XX",
+
     ".XX"
     "XX."
-    "..."
-);
-push_back(
-    TETROMINO_SHAPE_TABLES,
+    "...",
+
     "XX."
     ".XX"
-    "..."
-);
-push_back(
-    TETROMINO_SHAPE_TABLES,
+    "...",
+
     "..X"
     "XXX"
-    "..."
-);
-push_back(
-    TETROMINO_SHAPE_TABLES,
+    "...",
+
     "X.."
     "XXX"
-    "..."
-);
-push_back(
-    TETROMINO_SHAPE_TABLES,
+    "...",
+
     ".X."
     "XXX"
-    "..."
-);
-push_back(
-    TETROMINO_SHAPE_TABLES,
+    "...",
+
     "...."
     "XXXX"
     "...."
-    "...."
-);
-push_back(TETROMINO_SHAPE_TABLES, "");
+    "....",
 
-let TETROMINO_SHAPE_SYMBOLS: []str = [];
-push_back(TETROMINO_SHAPE_SYMBOLS, "\x1b[38;2;255;255;0m#");
-push_back(TETROMINO_SHAPE_SYMBOLS, "\x1b[38;2;0;255;0m#");
-push_back(TETROMINO_SHAPE_SYMBOLS, "\x1b[38;2;255;0;0m#");
-push_back(TETROMINO_SHAPE_SYMBOLS, "\x1b[38;2;255;127;0m#");
-push_back(TETROMINO_SHAPE_SYMBOLS, "\x1b[38;2;255;255;255m#");
-push_back(TETROMINO_SHAPE_SYMBOLS, "\x1b[38;2;255;0;255m#");
-push_back(TETROMINO_SHAPE_SYMBOLS, "\x1b[38;2;0;255;255m#");
-push_back(TETROMINO_SHAPE_SYMBOLS, " ");
+    ""
+];
+
+let TETROMINO_SHAPE_SYMBOLS: []str = [
+    "\x1b[38;2;255;255;0m#",
+    "\x1b[38;2;0;255;0m#",
+    "\x1b[38;2;255;0;0m#",
+    "\x1b[38;2;255;127;0m#",
+    "\x1b[38;2;255;255;255m#",
+    "\x1b[38;2;255;0;255m#",
+    "\x1b[38;2;0;255;255m#",
+    " "
+];
 
 let TETROMINO_SHAPE_IDX_IDX:    int = 0;
 let TETROMINO_ROTATION_IDX_IDX: int = 1;
@@ -87,12 +67,12 @@ let TETROMINO_X_POS_IDX:        int = 2;
 let TETROMINO_Y_POS_IDX:        int = 3;
 
 fn tetromino_init() []int {
-    let result: []int = [];
-    push_back(result, (rand() & ~0x8000000000000000) % TETROMINO_SHAPE_IDX_NONE);
-    push_back(result, TETROMINO_ROTATION_IDX_0);
-    push_back(result, TETRIS_WIDTH / 2 - 1);
-    push_back(result, 0);
-    return result;
+    return [
+        (rand() & ~0x8000000000000000) % TETROMINO_SHAPE_IDX_NONE,
+        TETROMINO_ROTATION_IDX_0,
+        TETRIS_WIDTH / 2 - 1,
+        0
+    ];
 }
 
 fn tetromino_rotate_idx(shape_idx: int, rotation_idx: int, x_idx: int, y_idx: int) int {
@@ -220,11 +200,12 @@ fn main() void {
 
                 keypress = to_upper(keypress);
 
-                let new_tetromino: []int = [];
-                push_back(new_tetromino, current_tetromino[TETROMINO_SHAPE_IDX_IDX]);
-                push_back(new_tetromino, current_tetromino[TETROMINO_ROTATION_IDX_IDX]);
-                push_back(new_tetromino, current_tetromino[TETROMINO_X_POS_IDX]);
-                push_back(new_tetromino, current_tetromino[TETROMINO_Y_POS_IDX]);
+                let new_tetromino: []int = [
+                    current_tetromino[TETROMINO_SHAPE_IDX_IDX],
+                    current_tetromino[TETROMINO_ROTATION_IDX_IDX],
+                    current_tetromino[TETROMINO_X_POS_IDX],
+                    current_tetromino[TETROMINO_Y_POS_IDX]
+                ];
 
                 if (keypress == 'S')
                     new_tetromino[TETROMINO_Y_POS_IDX] = new_tetromino[TETROMINO_Y_POS_IDX] + 1;

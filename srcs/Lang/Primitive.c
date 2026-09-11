@@ -998,7 +998,7 @@ Primitive_op_result primitive_add(Primitive *self, Allocator alloc, const Primit
                         return OOM_ERROR;
                     *temp.m_str_data_ptr = (Primitive_str_data){.m_ref_count = 1, .m_data = {0}};
                     if (
-                        self->m_char_data != '\0' && (
+                        self->m_char_data != 0 && (
                             !str_base_push_back(&temp.m_str_data_ptr->m_data, alloc, (char)self->m_char_data) ||
                             !str_base_append_str_base(&temp.m_str_data_ptr->m_data, alloc, &other->m_str_data_ptr->m_data)
                         )

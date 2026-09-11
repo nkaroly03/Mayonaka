@@ -110,9 +110,21 @@ let i: int = c;
 print("i: ");
 print(i);
 print('\n');
+
+let i: int = 1 + not 2;
+print("i: ");
+print(i);
+print('\n');
 /*/
 
-let f: float = "    .10   ";
-print("f: ");
-print(f);
+fn foo(x: [][]int) [][]int {
+    return x;
+}
+
+let i_arr1: []int = [0,1,2,3, ];
+
+let i_arr2: [][]int = foo([[3, 2], [i_arr1]]);
+
+print("i_arr2: ");
+print(i_arr2);
 print('\n');

@@ -26,16 +26,13 @@ typedef struct Binding_powers{
     u8 lhs, rhs;
 } Binding_powers;
 
-static const Binding_powers BINDING_POWERS_UNARY = {.lhs = 111, .rhs = 110};
+static const u8 UNARY_RHS_BINDING_POWER = 110;
 
 static Binding_powers token_type_binding_powers(enum Token_type token_type){
     #define bps_init(lhs_bp, rhs_bp) (Binding_powers){.lhs = lhs_bp, .rhs = rhs_bp}
 
     switch (token_type){
         case TOKEN_TYPE_ASTERISK2:            return bps_init(121, 120);
-
-        case TOKEN_TYPE_NOT:
-        case TOKEN_TYPE_TILDE:                return BINDING_POWERS_UNARY;
 
         case TOKEN_TYPE_ASTERISK1:
         case TOKEN_TYPE_SLASH:
@@ -167,7 +164,7 @@ static Parser_state_parse_result parser_state_parse_arithm_expr(Parser_state *se
             case TOKEN_TYPE_MINUS:
             case TOKEN_TYPE_TILDE:
             case TOKEN_TYPE_NOT:{
-                Parser_state_parse_result unary_rhs = parser_state_parse_arithm_expr(self, BINDING_POWERS_UNARY.rhs);
+                Parser_state_parse_result unary_rhs = parser_state_parse_arithm_expr(self, UNARY_RHS_BINDING_POWER);
                 if (unary_rhs.error != PARSE_ERROR_NONE)
                     return unary_rhs;
 

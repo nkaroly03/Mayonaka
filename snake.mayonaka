@@ -10,12 +10,13 @@ let SNAKE_FIELD_TYPE_IDX_APPLE:      int = 2;
 let SNAKE_FIELD_TYPE_IDX_SNAKE_TAIL: int = 3;
 let SNAKE_FIELD_TYPE_IDX_SNAKE_HEAD: int = 4;
 
-let SNAKE_FIELD_TYPE_SYMBOLS: []str = [];
-push_back(SNAKE_FIELD_TYPE_SYMBOLS, " ");
-push_back(SNAKE_FIELD_TYPE_SYMBOLS, "\x1b[0mX");
-push_back(SNAKE_FIELD_TYPE_SYMBOLS, "\x1b[31m$");
-push_back(SNAKE_FIELD_TYPE_SYMBOLS, "\x1b[32m*");
-push_back(SNAKE_FIELD_TYPE_SYMBOLS, "\x1b[32m@");
+let SNAKE_FIELD_TYPE_SYMBOLS: []str = [
+    " ",
+    "\x1b[0mX",
+    "\x1b[31m$",
+    "\x1b[32m*",
+    "\x1b[32m@"
+];
 
 let MOVE_STATE_UP:    int = 0;
 let MOVE_STATE_DOWN:  int = 1;
@@ -33,9 +34,7 @@ while (not stop){
     let obstacles_buf: [][]int = [];
     for (0..HEIGHT) |y|{
         for (0..WIDTH) |x|{
-            let temp: []int = [];
-            push_back(temp, x);
-            push_back(temp, y);
+            let temp: []int = [x,y];
             push_back(obstacles_buf, temp);
         }
     }
@@ -51,25 +50,20 @@ while (not stop){
     }
     let obstacles_start_idx: int = len(obstacles_buf) - 3;
 
-    let snake_parts_buf: [][]int = [];
-    {
-        let temp: []int = [];
-        push_back(temp, WIDTH_HALF + 1);
-        push_back(temp, HEIGHT_HALF);
-        push_back(snake_parts_buf, temp);
-    }
-    {
-        let temp: []int = [];
-        push_back(temp, WIDTH_HALF);
-        push_back(temp, HEIGHT_HALF);
-        push_back(snake_parts_buf, temp);
-    }
-    {
-        let temp: []int = [];
-        push_back(temp, WIDTH_HALF - 1);
-        push_back(temp, HEIGHT_HALF);
-        push_back(snake_parts_buf, temp);
-    }
+    let snake_parts_buf: [][]int = [
+        [
+            WIDTH_HALF + 1,
+            HEIGHT_HALF
+        ],
+        [
+            WIDTH_HALF,
+            HEIGHT_HALF
+        ],
+        [
+            WIDTH_HALF - 1,
+            HEIGHT_HALF
+        ]
+    ];
 
     let move_state: int = MOVE_STATE_RIGHT;
 
@@ -99,9 +93,10 @@ while (not stop){
                 break;
             
             if (snake_head_pos_x == apple[0] and snake_head_pos_y == apple[1]){
-                let new_snake_part: []int = [];
-                push_back(new_snake_part, snake_parts_buf[len(snake_parts_buf) - 1][0]);
-                push_back(new_snake_part, snake_parts_buf[len(snake_parts_buf) - 1][1]);
+                let new_snake_part: []int = [
+                    snake_parts_buf[len(snake_parts_buf) - 1][0],
+                    snake_parts_buf[len(snake_parts_buf) - 1][1]
+                ];
                 push_back(snake_parts_buf, new_snake_part);
 
                 if (len(snake_parts_buf) % 2 == 0)

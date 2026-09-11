@@ -56,6 +56,17 @@ oom_error:
     str_base_deinit(&result, alloc);
     return (Str_base_result){0};
 }
+static Str_base_result type_info_slice_to_str_base(Type_info_slice type_info_slice, Allocator alloc){
+    Str_base result = {0};
+    for (usize i = 0; i < type_info_slice.m_size; ++i){
+        Str_base_result type_info_str = type_info_to_str_base(type_info_slice.m_data[i], alloc);
+        if (!type_info_str.success || !str_base_append_fmt(&result, alloc, "%s, ", str_base_data(&type_info_str.result)))
+            return (Str_base_result){0};
+    }
+    str_base_pop_back(&result);
+    str_base_pop_back(&result);
+    return (Str_base_result){.result = result, .success = true};
+}
 
 typedef struct Id_count{
     usize fn_id_count;
@@ -277,6 +288,60 @@ static bool IR_compiler_state_pop_ids_in_current_scope(IR_compiler_state *self){
             return OOM_ERROR; \
     } while (0)
 
+static IR_compiler_state_compile_result IR_compiler_state_init_list_type_info_from_context(
+    IR_compiler_state *self,
+    const AST_node *init_list_node,
+    Type_info *out_init_list_type_info
+){
+    if (!init_list_node->m_parent)
+        goto init_list_context_error;
+
+    const AST_node *parent = init_list_node->m_parent;
+
+    switch (parent->m_token->m_type){
+        case TOKEN_TYPE_INIT_LIST:
+            (void)IR_compiler_state_init_list_type_info_from_context(self, parent, out_init_list_type_info);
+            if (--out_init_list_type_info->m_dimensions == 0)
+                return syntax_error("Initializer list has an incorrect number of dimensions", init_list_node->m_token->m_line_number);
+            break;
+        case TOKEN_TYPE_LPAREN:{
+            usize i = 1;
+            while (parent->m_sub_nodes.m_data[i] != init_list_node)
+                ++i;
+            if (builtin_fn_tag_init(str_base_data_const(&parent->m_sub_nodes.m_data[0]->m_token->m_id)) != BUILTIN_FN_TAG_NONE)
+                return syntax_error("Using an initializer list as a parameter to a function is only allowed in user-defined functions", init_list_node->m_token->m_line_number);
+            *out_init_list_type_info = (
+                (Fn_id_info*)ordered_umap_base_at_key(self->fn_ids_ptr, &parent->m_sub_nodes.m_data[0]->m_token->m_id).m_value
+            )->arg_type_infos.m_data[i - 1];
+            break;
+        }
+        case TOKEN_TYPE_EQUALS1:{
+            const AST_node *id_node = parent->m_sub_nodes.m_data[0];
+            while (id_node->m_token->m_type != TOKEN_TYPE_ID)
+                id_node = id_node->m_sub_nodes.m_data[0];
+            *out_init_list_type_info = ((Var_id_info*)ordered_umap_base_at_key(&self->var_ids, &id_node->m_token->m_id).m_value)->type_info;
+            break;
+        }
+        case TOKEN_TYPE_LET:
+            *out_init_list_type_info = ast_node_to_type_info(parent->m_sub_nodes.m_data[1]);
+            break;
+        case TOKEN_TYPE_RETURN:{
+            const AST_node *fn_node = parent->m_parent;
+            while (fn_node && fn_node->m_token->m_type != TOKEN_TYPE_FN)
+                fn_node = fn_node->m_parent;
+            if (!fn_node)
+                return syntax_error("Returning an initializer list is only allowed inside a user-defined function", init_list_node->m_token->m_line_number);
+            *out_init_list_type_info = ((Fn_id_info*)ordered_umap_base_at_key(self->fn_ids_ptr, &fn_node->m_sub_nodes.m_data[0]->m_token->m_id).m_value)->return_type_info;
+            break;
+        }
+        default:
+        init_list_context_error:
+            return syntax_error("Initializer list's type is contextually unknown", init_list_node->m_token->m_line_number);
+    }
+
+    return (IR_compiler_state_compile_result){.error = COMPILE_ERROR_NONE};
+}
+
 #define JMP_LABEL_SYMBOL "L"
 #define JMP_LABEL_FMT LOCAL_LABEL_PREFIX_SYMBOL JMP_LABEL_SYMBOL USIZE_PFMT
 #define JMP_LABEL_BUFSIZE array_size(LOCAL_LABEL_PREFIX_SYMBOL JMP_LABEL_SYMBOL "18446744073709551615")
@@ -326,18 +391,48 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
             add_instruction("%s %s", op_code_to_str(OP_CODE_PUSH), str_base_data_const(&ast_node->m_token->m_id));
             pop_on_discarded_expression(ast_node);
             break;
-        case TOKEN_TYPE_INIT_LIST:
-            if (!ast_node->m_parent || ast_node->m_parent->m_token->m_type != TOKEN_TYPE_LET)
-                return syntax_error("Initilizer list is only allowed in <let> statement", ast_node->m_token->m_line_number);
-            if (!vec_base_push_back(&self->type_info_stack, self->alloc, &(Type_info){.m_tag = TYPE_INFO_TAG_VOID, .m_dimensions = 1}))
+        case TOKEN_TYPE_INIT_LIST:{
+            if (!ast_node->m_parent)
+                return syntax_error("Initializer list's type is unknown in the current context", ast_node->m_token->m_line_number);
+
+            Type_info init_list_type_info;
+
+            IR_compiler_state_compile_result compile_result = IR_compiler_state_init_list_type_info_from_context(self, ast_node, &init_list_type_info);
+            if (compile_result.error != COMPILE_ERROR_NONE)
+                return compile_result;
+
+            if (!vec_base_push_back(&self->type_info_stack, self->alloc, &init_list_type_info))
                 return OOM_ERROR;
             add_instruction("%s []", op_code_to_str(OP_CODE_PUSH));
-            if (ast_node->m_sub_nodes.m_size > 0){
-                fprintf(stderr, "Initilizer list with elements is not implemented");
-                abort();
+
+            for (usize i = 0; i < ast_node->m_sub_nodes.m_size; ++i){
+                if (!vec_base_push_back(&self->type_info_stack, self->alloc, &init_list_type_info))
+                    return OOM_ERROR;
+                add_instruction("%s " SP_SYMBOL "[-1]", op_code_to_str(OP_CODE_PUSH));
+
+                compile_result = IR_compiler_state_compile(self, ast_node->m_sub_nodes.m_data[i]);
+                if (compile_result.error != COMPILE_ERROR_NONE)
+                    return compile_result;
+
+                if (
+                    !builtin_fn_tag_call(
+                        BUILTIN_FN_TAG_PUSH_BACK,
+                        (Type_info_slice){.m_size = 2, .m_data = vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 2)}
+                    ).m_is_callable
+                ){
+                    --init_list_type_info.m_dimensions;
+                    Str_base_result type_info_str = type_info_to_str_base(init_list_type_info, self->alloc);
+                    if (!type_info_str.success)
+                        return OOM_ERROR;
+                    return syntax_error("Initializer list must only contain elements of type <%s>", ast_node->m_token->m_line_number, str_base_data(&type_info_str.result));
+                }
+
+                vec_base_pop_back_discard(&self->type_info_stack);
+                vec_base_pop_back_discard(&self->type_info_stack);
+                add_instruction("%s %s", op_code_to_str(OP_CODE_CALL), builtin_fn_tag_to_str(BUILTIN_FN_TAG_PUSH_BACK));
             }
-            // pop_on_discarded_expression(ast_node);
             break;
+        }
 
         case TOKEN_TYPE_LPAREN:{
             const char *fn_id = str_base_data_const(&ast_node->m_sub_nodes.m_data[0]->m_token->m_id);
@@ -366,20 +461,15 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                     };
                     bfn_call_result = builtin_fn_tag_call(bfn_tag, arg_type_infos);
                     if (!bfn_call_result.m_is_callable){
-                        Str_base type_info_list_str = {0};
-                        for (usize i = 0; i < arg_type_infos.m_size; ++i){
-                            Str_base_result type_info_str = type_info_to_str_base(arg_type_infos.m_data[i], self->alloc);
-                            if (!type_info_str.success || !str_base_append_fmt(&type_info_list_str, self->alloc, "%s, ", str_base_data(&type_info_str.result)))
-                                return OOM_ERROR;
-                        }
-                        str_base_pop_back(&type_info_list_str);
-                        str_base_pop_back(&type_info_list_str);
+                        Str_base_result type_info_list_str = type_info_slice_to_str_base(arg_type_infos, self->alloc);
+                        if (!type_info_list_str.success)
+                            return OOM_ERROR;
 
                         return syntax_error(
                             "Builtin function <%s> is not callable with types <%s>",
                             ast_node->m_token->m_line_number,
                             fn_id,
-                            str_base_data(&type_info_list_str)
+                            str_base_data(&type_info_list_str.result)
                         );
                     }
                 }
@@ -802,9 +892,9 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                 if (!vec_base_push_back(&fn_IR_compiler_state.type_info_stack, fn_IR_compiler_state.alloc, &arg_type_info))
                     return OOM_ERROR;
 
-                IR_compiler_state_compile_result insert_var_id_result = IR_compiler_state_push_back_var_id(&fn_IR_compiler_state, arg_id_node, arg_type_info);
-                if (insert_var_id_result.error != COMPILE_ERROR_NONE)
-                    return insert_var_id_result;
+                IR_compiler_state_compile_result push_back_var_id_result = IR_compiler_state_push_back_var_id(&fn_IR_compiler_state, arg_id_node, arg_type_info);
+                if (push_back_var_id_result.error != COMPILE_ERROR_NONE)
+                    return push_back_var_id_result;
 
                 (void)vec_base_push_back(&fn_arg_type_infos, self->alloc, &arg_type_info);
             }
@@ -1005,7 +1095,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                         while_label_id_str = while_label_id_node->m_token->m_id;
                     else if (!str_base_assign_fmt(&while_label_id_str, self->alloc, USIZE_PFMT, self->label_counter))
                         return OOM_ERROR;
-                    switch (ordered_umap_base_push_back(
+                    enum Umap_insert_error insert_error = ordered_umap_base_push_back(
                         &self->while_labels,
                         self->alloc,
                         &while_label_id_str,
@@ -1014,7 +1104,8 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                             .continue_label_str = continue_label_str_buf,
                             .id_count_stack_idx = self->id_count_stack.m_size
                         }
-                    ).error){
+                    ).error;
+                    switch (insert_error){
                         case UMAP_INSERT_ERROR_NONE:
                             break;
                         case UMAP_INSERT_ERROR_OOM:

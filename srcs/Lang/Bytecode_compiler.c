@@ -93,7 +93,7 @@ static Bytecode_compile_result bytecode_compiler_syntax_error(Bytecode_compiler_
 }
 #define syntax_error(...) bytecode_compiler_syntax_error(self, __VA_ARGS__)
 
-static Bytecode_compile_result bytecode_compiler_state_arg_case_bp(Bytecode_compiler_state *self, Str_view rhs){
+static Bytecode_compile_result bytecode_compiler_state_arg_bp(Bytecode_compiler_state *self, Str_view rhs){
     Usize_u8s_union bp_offset;
 
     if (errno = 0, sscanf(rhs.m_str, BP_SYMBOL " [" USIZE_SFMT " ]", &bp_offset.as_usize) != 1)
@@ -111,7 +111,7 @@ static Bytecode_compile_result bytecode_compiler_state_arg_case_bp(Bytecode_comp
 
     return (Bytecode_compile_result){.error = COMPILE_ERROR_NONE};
 }
-static Bytecode_compile_result bytecode_compiler_state_arg_case_sp(Bytecode_compiler_state *self, Str_view rhs){
+static Bytecode_compile_result bytecode_compiler_state_arg_sp(Bytecode_compiler_state *self, Str_view rhs){
     Usize_u8s_union sp_offset;
 
     if (errno = 0, sscanf(rhs.m_str, SP_SYMBOL " [ - " USIZE_SFMT " ]", &sp_offset.as_usize) != 1)
@@ -130,12 +130,9 @@ static Bytecode_compile_result bytecode_compiler_state_arg_case_sp(Bytecode_comp
     return (Bytecode_compile_result){.error = COMPILE_ERROR_NONE};
 }
 
-static_assert((int)OP_CODE_PUSH_TAG_BP == (int)OP_CODE_MOV_TAG_BP, "");
-static_assert((int)OP_CODE_PUSH_TAG_SP == (int)OP_CODE_MOV_TAG_SP, "");
-
-static Bytecode_compile_result (*const ARG_CASE_FNS[])(Bytecode_compiler_state*, Str_view) = {
-    [OP_CODE_PUSH_TAG_BP] = bytecode_compiler_state_arg_case_bp,
-    [OP_CODE_PUSH_TAG_SP] = bytecode_compiler_state_arg_case_sp
+static Bytecode_compile_result (*const ARG_FNS[])(Bytecode_compiler_state*, Str_view) = {
+    [OP_CODE_ARG_TAG_BP] = bytecode_compiler_state_arg_bp,
+    [OP_CODE_ARG_TAG_SP] = bytecode_compiler_state_arg_sp
 };
 
 static Bytecode_compile_result bytecode_compiler_state_label_to_str(Bytecode_compiler_state *self, bool is_label_decl, Str_view label_sv, Str_base *out_label_str){
@@ -228,6 +225,8 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                 if (str_view_any_of(lhs, is_punct_and_not_underscore))
                     return syntax_error("Op code containing punctuation characters other than <_>");
 
+                enum Op_code_arg_tag arg_tag;
+
                 if (op_code_match(OP_CODE_PUSH)){
                     if (rhs.m_size == 0 || rhs.m_str[0] == ';')
                         return syntax_error("Op code <%s> takes 1 argument", op_code_str);
@@ -235,26 +234,24 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                     if (!vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)op_code}))
                         return OOM_ERROR;
 
-                    enum Op_code_push_tag push_tag;
                     const char *rhs_starts_with;
-
                     bool bool_val;
 
                     if (
-                        (push_tag = OP_CODE_PUSH_TAG_BP, str_view_starts_with(rhs, BP_SYMBOL)) ||
-                        (push_tag = OP_CODE_PUSH_TAG_SP, str_view_starts_with(rhs, SP_SYMBOL))
+                        (arg_tag = OP_CODE_ARG_TAG_BP, str_view_starts_with(rhs, BP_SYMBOL)) ||
+                        (arg_tag = OP_CODE_ARG_TAG_SP, str_view_starts_with(rhs, SP_SYMBOL))
                     ){
-                        if (!vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)push_tag}))
+                        if (!vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)arg_tag}))
                             return OOM_ERROR;
 
-                        Bytecode_compile_result arg_case_fn_result = ARG_CASE_FNS[push_tag](self, rhs);
+                        Bytecode_compile_result arg_case_fn_result = ARG_FNS[arg_tag](self, rhs);
                         if (arg_case_fn_result.error != COMPILE_ERROR_NONE)
                             return arg_case_fn_result;
                     }
                     else if (
-                        push_tag = OP_CODE_PUSH_TAG_ARGV, rhs_starts_with = "argv",
+                        arg_tag = OP_CODE_ARG_TAG_ARGV, rhs_starts_with = "argv",
                         str_view_starts_with(rhs, rhs_starts_with) || (
-                            push_tag = OP_CODE_PUSH_TAG_LIST, rhs_starts_with = "[",
+                            arg_tag = OP_CODE_ARG_TAG_LIST, rhs_starts_with = "[",
                             str_view_starts_with(rhs, rhs_starts_with) && (
                                 rhs_starts_with = "]", rhs = str_view_trim_left_while(str_view_trim_left(rhs, 1), isspace),
                                 str_view_starts_with(rhs, rhs_starts_with)
@@ -265,7 +262,7 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                         if (rhs.m_size > 0 && rhs.m_str[0] != ';')
                             return syntax_error("Invalid or more than 1 argument");
 
-                        if (!vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)push_tag}))
+                        if (!vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)arg_tag}))
                             return OOM_ERROR;
                     }
                     else if (
@@ -277,7 +274,7 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                             return syntax_error("Invalid or more than 1 argument");
 
                         if (
-                            !vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)OP_CODE_PUSH_TAG_BOOL}) ||
+                            !vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)OP_CODE_ARG_TAG_BOOL}) ||
                             !vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)bool_val})
                         )
                             return OOM_ERROR;
@@ -311,13 +308,13 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                                 return syntax_error("<char> literal must represent 1 character");
                             
                             if (
-                                !vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)OP_CODE_PUSH_TAG_CHAR}) ||
+                                !vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)OP_CODE_ARG_TAG_CHAR}) ||
                                 !vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)str_base_data(&unescaped.result)[0]})
                             )
                                 return OOM_ERROR;
                         }
                         else{
-                            if (!vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)OP_CODE_PUSH_TAG_STR}))
+                            if (!vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)OP_CODE_ARG_TAG_STR}))
                                 return OOM_ERROR;
                             for (char *it = str_base_data(&unescaped.result); *it; ++it)
                                 if (!vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)*it}))
@@ -341,7 +338,7 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                             if (errno != 0)
                                 return syntax_error("<int> literal out of range");
 
-                            if (!vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)OP_CODE_PUSH_TAG_INT}))
+                            if (!vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)OP_CODE_ARG_TAG_INT}))
                                 return OOM_ERROR;
                             for (usize i = 0; i < array_size(int_literal.as_u8s); ++i)
                                 if (!vec_base_push_back(&self->bytecode, self->alloc, &int_literal.as_u8s[i]))
@@ -363,7 +360,7 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                             if (errno != 0)
                                 return syntax_error("<float> literal out of range");
 
-                            if (!vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)OP_CODE_PUSH_TAG_FLOAT}))
+                            if (!vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)OP_CODE_ARG_TAG_FLOAT}))
                                 return OOM_ERROR;
 
                             for (usize i = 0; i < array_size(float_literal.as_u8s); ++i)
@@ -378,18 +375,16 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                     if (!vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)op_code}))
                         return OOM_ERROR;
 
-                    enum Op_code_mov_tag mov_tag;
-
                     if (
-                        (mov_tag = OP_CODE_MOV_TAG_BP, !str_view_starts_with(rhs, BP_SYMBOL)) &&
-                        (mov_tag = OP_CODE_MOV_TAG_SP, !str_view_starts_with(rhs, SP_SYMBOL))
+                        (arg_tag = OP_CODE_ARG_TAG_BP, !str_view_starts_with(rhs, BP_SYMBOL)) &&
+                        (arg_tag = OP_CODE_ARG_TAG_SP, !str_view_starts_with(rhs, SP_SYMBOL))
                     )
                         return syntax_error("Op code <%s> must be followed by sp[-<val>], where val is an integer", op_code_str);
 
-                    if (!vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)mov_tag}))
+                    if (!vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)arg_tag}))
                         return OOM_ERROR;
 
-                    Bytecode_compile_result arg_case_fn_result = ARG_CASE_FNS[mov_tag](self, rhs);
+                    Bytecode_compile_result arg_case_fn_result = ARG_FNS[arg_tag](self, rhs);
                     if (arg_case_fn_result.error != COMPILE_ERROR_NONE)
                         return arg_case_fn_result;
                 }

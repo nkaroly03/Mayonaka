@@ -94,6 +94,8 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
         enum Op_code op_code = (enum Op_code)self->bytecode.m_data[new_pc++];
         const char *op_code_str = op_code_to_str(op_code);
 
+        enum Op_code_arg_tag arg_tag;
+
         switch (op_code){
             case OP_CODE_PUSH:{
                 if (new_pc >= self->bytecode.m_size)
@@ -101,10 +103,10 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
 
                 Primitive temp;
 
-                enum Op_code_push_tag push_tag = (enum Op_code_push_tag)self->bytecode.m_data[new_pc++];
-                switch (push_tag){
-                    case OP_CODE_PUSH_TAG_BP:
-                    case OP_CODE_PUSH_TAG_SP:{
+                arg_tag = (enum Op_code_arg_tag)self->bytecode.m_data[new_pc++];
+                switch (arg_tag){
+                    case OP_CODE_ARG_TAG_BP:
+                    case OP_CODE_ARG_TAG_SP:{
                         usize offset;
                         if (new_pc + sizeof(offset) > self->bytecode.m_size)
                             return bad_instruction_error();
@@ -112,7 +114,7 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                         new_pc += sizeof(offset);
 
                         usize idx = offset;
-                        if (push_tag == OP_CODE_PUSH_TAG_SP)
+                        if (arg_tag == OP_CODE_ARG_TAG_SP)
                             idx = self->data_stack.m_size - offset;
 
                         if (idx >= self->data_stack.m_size)
@@ -137,20 +139,20 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                         }
                         break;
                     }
-                    case OP_CODE_PUSH_TAG_ARGV:
+                    case OP_CODE_ARG_TAG_ARGV:
                         if (!vec_base_push_back(&self->data_stack, self->alloc, &self->argv))
                             return oom_error();
                         ++self->argv.m_list_data_ptr->m_ref_count;
                         break;
-                    case OP_CODE_PUSH_TAG_BOOL:
+                    case OP_CODE_ARG_TAG_BOOL:
                         if (!vec_base_push_back(&self->data_stack, self->alloc, &(Primitive){.m_tag = PRIMITIVE_TAG_BOOL, .m_bool_data = (bool)self->bytecode.m_data[new_pc++]}))
                             return oom_error();
                         break;
-                    case OP_CODE_PUSH_TAG_CHAR:
+                    case OP_CODE_ARG_TAG_CHAR:
                         if (!vec_base_push_back(&self->data_stack, self->alloc, &(Primitive){.m_tag = PRIMITIVE_TAG_CHAR, .m_char_data = self->bytecode.m_data[new_pc++]}))
                             return oom_error();
                         break;
-                    case OP_CODE_PUSH_TAG_INT:{
+                    case OP_CODE_ARG_TAG_INT:{
                         i64 i64_data;
                         if (new_pc + sizeof(i64_data) > self->bytecode.m_size)
                             return bad_instruction_error();
@@ -160,7 +162,7 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                         new_pc += sizeof(i64_data);
                         break;
                     }
-                    case OP_CODE_PUSH_TAG_FLOAT:{
+                    case OP_CODE_ARG_TAG_FLOAT:{
                         f64 f64_data;
                         if (new_pc + sizeof(f64_data) > self->bytecode.m_size)
                             return bad_instruction_error();
@@ -170,9 +172,9 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                         new_pc += sizeof(f64_data);
                         break;
                     }
-                    case OP_CODE_PUSH_TAG_STR:{
+                    case OP_CODE_ARG_TAG_STR:{
                         usize i = new_pc;
-                        while (i < self->bytecode.m_size && self->bytecode.m_data[i] != '\0')
+                        while (i < self->bytecode.m_size && self->bytecode.m_data[i] != 0)
                             ++i;
                         if (i >= self->bytecode.m_size)
                             return bad_instruction_error();
@@ -194,7 +196,7 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                         new_pc = i + 1;
                         break;
                     }
-                    case OP_CODE_PUSH_TAG_LIST:
+                    case OP_CODE_ARG_TAG_LIST:
                         temp = (Primitive){.m_tag = PRIMITIVE_TAG_LIST, .m_list_data_ptr = allocator_alloc(self->alloc, Primitive_list_data, 1)};
                         if (!temp.m_list_data_ptr)
                             return oom_error();
@@ -503,10 +505,10 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
             case OP_CODE_MOV:{
                 if (new_pc >= self->bytecode.m_size)
                     return bad_instruction_error();
-                enum Op_code_mov_tag mov_tag = (enum Op_code_mov_tag)self->bytecode.m_data[new_pc++];
-                switch (mov_tag){
-                    case OP_CODE_MOV_TAG_BP:
-                    case OP_CODE_MOV_TAG_SP:{
+                arg_tag = (enum Op_code_arg_tag)self->bytecode.m_data[new_pc++];
+                switch (arg_tag){
+                    case OP_CODE_ARG_TAG_BP:
+                    case OP_CODE_ARG_TAG_SP:{
                         usize offset;
                         if (new_pc + sizeof(offset) > self->bytecode.m_size)
                             return bad_instruction_error();
@@ -514,7 +516,7 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                         new_pc += sizeof(offset);
 
                         usize idx = offset;
-                        if (mov_tag == OP_CODE_MOV_TAG_SP)
+                        if (arg_tag == OP_CODE_ARG_TAG_SP)
                             idx = self->data_stack.m_size - offset;
 
                         if (idx >= self->data_stack.m_size)
