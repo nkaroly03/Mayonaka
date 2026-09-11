@@ -316,10 +316,14 @@ static IR_compiler_state_compile_result IR_compiler_state_init_list_type_info_fr
             break;
         }
         case TOKEN_TYPE_EQUALS1:{
+            usize i = 0;
             const AST_node *id_node = parent->m_sub_nodes.m_data[0];
-            while (id_node->m_token->m_type != TOKEN_TYPE_ID)
+            while (id_node->m_token->m_type != TOKEN_TYPE_ID){
+                i += (id_node->m_token->m_type == TOKEN_TYPE_LBRACKET);
                 id_node = id_node->m_sub_nodes.m_data[0];
+            }
             *out_init_list_type_info = ((Var_id_info*)ordered_umap_base_at_key(&self->var_ids, &id_node->m_token->m_id).m_value)->type_info;
+            out_init_list_type_info->m_dimensions -= i;
             break;
         }
         case TOKEN_TYPE_LET:
