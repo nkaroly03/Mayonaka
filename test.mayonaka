@@ -127,7 +127,6 @@ i_arr2[0] = [10,20];
 print("i_arr2: ");
 print(i_arr2);
 print('\n');
-/*/
 
 let i: [][][]int = [[[0,1,2,3]]];
 let j: [][][]int = [[[10,11,12,13]]];
@@ -140,4 +139,18 @@ print('\n');
 
 print("j: ");
 print(j);
+print('\n');
+/*/
+
+let s: str = "Hello";
+
+print("s: " + s + '\n');
+
+let slist: []str = [s];
+
+slist[0] = "OK";
+
+print("s: " + s + '\n');
+print("slist: ");
+print(slist);
 print('\n');

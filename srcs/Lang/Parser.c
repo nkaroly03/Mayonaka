@@ -59,7 +59,7 @@ static Binding_powers token_type_binding_powers(enum Token_type token_type){
         case TOKEN_TYPE_EQUALS1:              return bps_init(11, 10);
 
         default:
-            fprintf(stderr, "Not implemented");
+            fprintf(stderr, __FILE__ ":" tok_to_str(__LINE__) ": Not implemented");
             abort();
     }
 }
