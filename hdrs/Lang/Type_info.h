@@ -40,6 +40,8 @@ Type_info unary_op_type_info_result(enum Unary_op op, Type_info type_info);
 enum Binary_op{
     BINARY_OP_NONE,
 
+    BINARY_OP_AS,
+
     BINARY_OP_ASSIGNMENT,
 
     BINARY_OP_SUBSCRIPT,

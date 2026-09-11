@@ -329,6 +329,11 @@ static IR_compiler_state_compile_result IR_compiler_state_init_list_type_info_fr
             out_init_list_type_info->m_dimensions -= i;
             break;
         }
+        case TOKEN_TYPE_AS:
+            *out_init_list_type_info = ast_node_to_type_info(parent->m_sub_nodes.m_data[1]);
+            if (out_init_list_type_info->m_dimensions == 0)
+                return syntax_error("Casting initializer list to non-list type in <as> expression", init_list_node->m_token->m_line_number);
+            break;
         case TOKEN_TYPE_LET:
             *out_init_list_type_info = ast_node_to_type_info(parent->m_sub_nodes.m_data[1]);
             break;
@@ -553,6 +558,27 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
             pop_ids_in_current_scope();
             break;
 
+        case TOKEN_TYPE_AS:{
+            const AST_node *lhs_node = ast_node->m_sub_nodes.m_data[0];
+            const AST_node *rhs_node = ast_node->m_sub_nodes.m_data[1];
+
+            IR_compiler_state_compile_result compile_result = IR_compiler_state_compile(self, lhs_node);
+            if (compile_result.error != COMPILE_ERROR_NONE)
+                return compile_result;
+
+            Type_info *last_type_info_ptr = vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1);
+            Type_info as_type_info = ast_node_to_type_info(rhs_node);
+
+            if (binary_op_type_info_result(BINARY_OP_AS, *last_type_info_ptr, as_type_info).m_tag == TYPE_INFO_TAG_NONE)
+                return IR_compiler_state_binary_op_error(self, ast_node, *last_type_info_ptr, as_type_info);
+
+            *last_type_info_ptr = as_type_info;
+            add_type_conversion_instruction(as_type_info);
+
+            pop_on_discarded_expression(ast_node);
+            break;
+        }
+
         case TOKEN_TYPE_EQUALS1:{
             const AST_node *lhs_node = ast_node->m_sub_nodes.m_data[0];
             const AST_node *rhs_node = ast_node->m_sub_nodes.m_data[1];
@@ -569,9 +595,10 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                     case TOKEN_TYPE_LPAREN:
                     case TOKEN_TYPE_TILDE:
                     case TOKEN_TYPE_NOT:
+                    case TOKEN_TYPE_AS:
+                    case TOKEN_TYPE_EQUALS1:
                     case TOKEN_TYPE_PLUS:
                     case TOKEN_TYPE_MINUS:
-                    case TOKEN_TYPE_EQUALS1:
                     case TOKEN_TYPE_LBRACKET:
                     case TOKEN_TYPE_EQUALS2:
                     case TOKEN_TYPE_NOT_EQUALS:
@@ -638,7 +665,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                     enum Token_type token_type = lhs_sub_node->m_token->m_type;
                     if (token_type == TOKEN_TYPE_ARGV)
                         return syntax_error("<argv> is immutable", lhs_sub_node->m_token->m_line_number);
-                    if (token_type != TOKEN_TYPE_EQUALS1 && token_type != TOKEN_TYPE_LBRACKET)
+                    if (token_type != TOKEN_TYPE_EQUALS1 && token_type != TOKEN_TYPE_LBRACKET && token_type != TOKEN_TYPE_AS)
                         return syntax_error("Trying to assign to rvalue", lhs_sub_node->m_token->m_line_number);
                 }
 

@@ -44,6 +44,11 @@ Type_info binary_op_type_info_result(enum Binary_op op, Type_info lhs, Type_info
             case BINARY_OP_NONE:
                 break;
 
+            case BINARY_OP_AS:
+                if (lhs.m_dimensions == rhs.m_dimensions && (lhs.m_dimensions == 0 || lhs.m_tag == rhs.m_tag))
+                    result = rhs;
+                break;
+
             case BINARY_OP_ASSIGNMENT:
                 if (lhs.m_dimensions > 0 || rhs.m_dimensions > 0){
                     if (lhs.m_dimensions == rhs.m_dimensions && lhs.m_tag == rhs.m_tag)

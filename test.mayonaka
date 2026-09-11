@@ -140,7 +140,6 @@ print('\n');
 print("j: ");
 print(j);
 print('\n');
-/*/
 
 let s: str = "Hello";
 
@@ -154,3 +153,7 @@ print("s: " + s + '\n');
 print("slist: ");
 print(slist);
 print('\n');
+/*/
+
+let arr: [][]int = [[0,1,2],[3,4,5]];
+print(((((arr = [[6,7,8]]) as [][]int)[0] = [-1])[0] = 11) as int);

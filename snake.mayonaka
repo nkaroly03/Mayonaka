@@ -34,8 +34,7 @@ while (not stop){
     let obstacles_buf: [][]int = [];
     for (0..HEIGHT) |y|{
         for (0..WIDTH) |x|{
-            let temp: []int = [x,y];
-            push_back(obstacles_buf, temp);
+            push_back(obstacles_buf, [x, y] as []int);
         }
     }
     {
@@ -93,11 +92,7 @@ while (not stop){
                 break;
             
             if (snake_head_pos_x == apple[0] and snake_head_pos_y == apple[1]){
-                let new_snake_part: []int = [
-                    snake_parts_buf[len(snake_parts_buf) - 1][0],
-                    snake_parts_buf[len(snake_parts_buf) - 1][1]
-                ];
-                push_back(snake_parts_buf, new_snake_part);
+                push_back(snake_parts_buf, [snake_parts_buf[len(snake_parts_buf) - 1][0], snake_parts_buf[len(snake_parts_buf) - 1][1]] as []int);
 
                 if (len(snake_parts_buf) % 2 == 0)
                     obstacles_start_idx = obstacles_start_idx - 1;

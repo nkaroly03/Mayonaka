@@ -19,7 +19,7 @@ static bool token_type_is_atom(enum Token_type token_type){
     return token_type >= TOKEN_TYPE_ID && token_type <= TOKEN_TYPE_INIT_LIST;
 }
 static bool token_type_is_bin_op(enum Token_type token_type){
-    return token_type >= TOKEN_TYPE_EQUALS1 && token_type <= TOKEN_TYPE_OR;
+    return token_type >= TOKEN_TYPE_AS && token_type <= TOKEN_TYPE_OR;
 }
 
 typedef struct Binding_powers{
@@ -32,7 +32,9 @@ static Binding_powers token_type_binding_powers(enum Token_type token_type){
     #define bps_init(lhs_bp, rhs_bp) (Binding_powers){.lhs = lhs_bp, .rhs = rhs_bp}
 
     switch (token_type){
-        case TOKEN_TYPE_ASTERISK2:            return bps_init(121, 120);
+        case TOKEN_TYPE_ASTERISK2:            return bps_init(121, 120); 
+
+        case TOKEN_TYPE_AS:                   return bps_init(UNARY_RHS_BINDING_POWER + 1, UNARY_RHS_BINDING_POWER); 
 
         case TOKEN_TYPE_ASTERISK1:
         case TOKEN_TYPE_SLASH:
@@ -99,6 +101,50 @@ static AST_node* parser_state_ast_node_alloc(Parser_state *self, const Token *to
     return ast_node;
 }
 #define syntax_error(...) parser_state_syntax_error(self, "On line <" USIZE_PFMT ">: " __VA_ARGS__)
+
+static Parser_state_parse_result parser_state_parse_type(Parser_state *self, bool void_is_allowed){
+    if (self->token_idx >= self->tokens.m_size)
+        return syntax_error("No tokens are available", self->tokens.m_data[self->tokens.m_size - 1].m_line_number);
+
+    const Token *tok = &self->tokens.m_data[self->token_idx++];
+
+    Vec_base sub_nodes = vec_base_init(AST_node*);
+    AST_node *node = parser_state_ast_node_alloc(self, tok);
+    if (!node)
+        return OOM_ERROR;
+
+    switch (tok->m_type){
+        case TOKEN_TYPE_LBRACKET:{
+            if (self->token_idx >= self->tokens.m_size || (tok = &self->tokens.m_data[self->token_idx++])->m_type != TOKEN_TYPE_RBRACKET)
+                return syntax_error("<[> must be closed by <]>", tok->m_line_number);
+
+            Parser_state_parse_result parse_result = parser_state_parse_type(self, false);
+            if (parse_result.error != PARSE_ERROR_NONE)
+                return parse_result;
+
+            if (!vec_base_push_back(&sub_nodes, self->alloc, &parse_result.ast_node_ptr))
+                return OOM_ERROR;
+
+            parse_result.ast_node_ptr->m_parent = node;
+            break;
+        }
+        case TOKEN_TYPE_VOID:
+            if (!void_is_allowed)
+                return syntax_error("<void> is not allowed as a type in the current context", tok->m_line_number);
+        case TOKEN_TYPE_BOOL:
+        case TOKEN_TYPE_CHAR:
+        case TOKEN_TYPE_INT:
+        case TOKEN_TYPE_FLOAT:
+        case TOKEN_TYPE_STR:
+            break;
+        default:
+            return syntax_error("Found unknown or contextually invalid token <%s>", tok->m_line_number, str_base_data_const(&tok->m_id));
+    }
+
+    node->m_sub_nodes = (AST_node_ptr_slice){.m_size = sub_nodes.m_size, .m_data = sub_nodes.m_data};
+
+    return (Parser_state_parse_result){.ast_node_ptr = node, .error = PARSE_ERROR_NONE};
+}
 
 static Parser_state_parse_result parser_state_parse_arithm_expr(Parser_state *self, usize prev_rhs_bp){
     if (self->token_idx >= self->tokens.m_size)
@@ -247,7 +293,7 @@ static Parser_state_parse_result parser_state_parse_arithm_expr(Parser_state *se
 
                 ++self->token_idx;
 
-                rhs_result = parser_state_parse_arithm_expr(self, bps.rhs);
+                rhs_result = (op->m_type != TOKEN_TYPE_AS) ? parser_state_parse_arithm_expr(self, bps.rhs) : parser_state_parse_type(self, false);
                 if (rhs_result.error != PARSE_ERROR_NONE)
                     return rhs_result;
 
@@ -267,50 +313,6 @@ static Parser_state_parse_result parser_state_parse_arithm_expr(Parser_state *se
 
 end:
     return (Parser_state_parse_result){.ast_node_ptr = lhs, .error = PARSE_ERROR_NONE};
-}
-
-static Parser_state_parse_result parser_state_parse_type(Parser_state *self, bool void_is_allowed){
-    if (self->token_idx >= self->tokens.m_size)
-        return syntax_error("No tokens are available", self->tokens.m_data[self->tokens.m_size - 1].m_line_number);
-
-    const Token *tok = &self->tokens.m_data[self->token_idx++];
-
-    Vec_base sub_nodes = vec_base_init(AST_node*);
-    AST_node *node = parser_state_ast_node_alloc(self, tok);
-    if (!node)
-        return OOM_ERROR;
-
-    switch (tok->m_type){
-        case TOKEN_TYPE_LBRACKET:{
-            if (self->token_idx >= self->tokens.m_size || (tok = &self->tokens.m_data[self->token_idx++])->m_type != TOKEN_TYPE_RBRACKET)
-                return syntax_error("<[> must be closed by <]>", tok->m_line_number);
-
-            Parser_state_parse_result parse_result = parser_state_parse_type(self, false);
-            if (parse_result.error != PARSE_ERROR_NONE)
-                return parse_result;
-
-            if (!vec_base_push_back(&sub_nodes, self->alloc, &parse_result.ast_node_ptr))
-                return OOM_ERROR;
-
-            parse_result.ast_node_ptr->m_parent = node;
-            break;
-        }
-        case TOKEN_TYPE_VOID:
-            if (!void_is_allowed)
-                return syntax_error("<void> is not allowed as a type in the current context", tok->m_line_number);
-        case TOKEN_TYPE_BOOL:
-        case TOKEN_TYPE_CHAR:
-        case TOKEN_TYPE_INT:
-        case TOKEN_TYPE_FLOAT:
-        case TOKEN_TYPE_STR:
-            break;
-        default:
-            return syntax_error("Found unknown or contextually invalid token <%s>", tok->m_line_number, str_base_data_const(&tok->m_id));
-    }
-
-    node->m_sub_nodes = (AST_node_ptr_slice){.m_size = sub_nodes.m_size, .m_data = sub_nodes.m_data};
-
-    return (Parser_state_parse_result){.ast_node_ptr = node, .error = PARSE_ERROR_NONE};
 }
 
 static bool parser_state_for_to_while_tokens_push_back(Parser_state *self, Vec_base *for_to_while_tokens, const char *id, enum Token_type token_type, usize line_number){
@@ -358,10 +360,10 @@ static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
         case TOKEN_TYPE_INIT_LIST:
         case TOKEN_TYPE_LPAREN:
         case TOKEN_TYPE_LBRACKET:
-        case TOKEN_TYPE_PLUS:
-        case TOKEN_TYPE_MINUS:
         case TOKEN_TYPE_TILDE:
         case TOKEN_TYPE_NOT:
+        case TOKEN_TYPE_PLUS:
+        case TOKEN_TYPE_MINUS:
             --self->token_idx;
 
             parse_result = parser_state_parse_arithm_expr(self, 0);

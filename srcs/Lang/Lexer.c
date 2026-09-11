@@ -345,6 +345,7 @@ Lex_result lex(Arena *arena, const char *path){
             if      (keyword_match("argv"    )) keyword_match_token_push_back(TOKEN_TYPE_ARGV);
             else if (keyword_match("false"   )) keyword_match_token_push_back(TOKEN_TYPE_FALSE);
             else if (keyword_match("true"    )) keyword_match_token_push_back(TOKEN_TYPE_TRUE);
+            else if (keyword_match("as"      )) keyword_match_token_push_back(TOKEN_TYPE_AS);
             else if (keyword_match("and"     )) keyword_match_token_push_back(TOKEN_TYPE_AND);
             else if (keyword_match("or"      )) keyword_match_token_push_back(TOKEN_TYPE_OR);
             else if (keyword_match("not"     )) keyword_match_token_push_back(TOKEN_TYPE_NOT);

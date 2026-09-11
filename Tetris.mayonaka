@@ -16,7 +16,7 @@ let TETROMINO_ROTATION_IDX_90:  int = 1;
 let TETROMINO_ROTATION_IDX_180: int = 2;
 let TETROMINO_ROTATION_IDX_270: int = 3;
 
-let TETROMINO_SHAPE_SIDE_LENGTHS: []int = [2, 3, 3, 3, 3, 3, 4, 0];
+let TETROMINO_SHAPE_SIDE_LENGTHS: []int = [2, 3, 3, 3, 3, 3, 4];
 
 let TETROMINO_SHAPE_TABLES: []str = [
     "XX"
@@ -45,9 +45,7 @@ let TETROMINO_SHAPE_TABLES: []str = [
     "...."
     "XXXX"
     "...."
-    "....",
-
-    ""
+    "...."
 ];
 
 let TETROMINO_SHAPE_SYMBOLS: []str = [
