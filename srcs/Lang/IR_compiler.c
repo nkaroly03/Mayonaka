@@ -221,14 +221,13 @@ static bool IR_compiler_state_add_type_conversion_instruction(IR_compiler_state 
 static bool IR_compiler_state_pop_on_discarded_expression(IR_compiler_state *self, const AST_node *ast_node){
     if (ast_node->m_parent){
         const AST_node *parent = ast_node->m_parent;
-        switch (parent->m_token->m_type){
-            case TOKEN_TYPE_COLON:
+        enum Token_type parent_token_type = parent->m_token->m_type;
+        switch (parent_token_type){
             case TOKEN_TYPE_LBRACE:
-            case TOKEN_TYPE_ELSE:
                 break;
             case TOKEN_TYPE_IF:
             case TOKEN_TYPE_WHILE:
-                if (parent->m_sub_nodes.m_data[parent->m_sub_nodes.m_data[0]->m_token->m_type == TOKEN_TYPE_COLON] != ast_node)
+                if (parent->m_sub_nodes.m_data[parent_token_type == TOKEN_TYPE_WHILE] != ast_node)
                     break;
                 FALLTHROUGH;
             default:
@@ -526,14 +525,13 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
             }
             else if (ast_node->m_parent){
                 const AST_node *parent = ast_node->m_parent;
-                switch (parent->m_token->m_type){
-                    case TOKEN_TYPE_COLON:
+                enum Token_type parent_token_type = parent->m_token->m_type;
+                switch (parent_token_type){
                     case TOKEN_TYPE_LBRACE:
-                    case TOKEN_TYPE_ELSE:
                         break;
                     case TOKEN_TYPE_IF:
                     case TOKEN_TYPE_WHILE:
-                        if (parent->m_sub_nodes.m_data[parent->m_sub_nodes.m_data[0]->m_token->m_type == TOKEN_TYPE_COLON] != ast_node)
+                        if (parent->m_sub_nodes.m_data[parent_token_type == TOKEN_TYPE_WHILE] != ast_node)
                             break;
                         FALLTHROUGH;
                     default:
@@ -587,10 +585,11 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
             bool push_back_after_assignment = false;
             if (ast_node->m_parent){
                 const AST_node *parent = ast_node->m_parent;
-                switch (parent->m_token->m_type){
+                enum Token_type parent_token_type = parent->m_token->m_type;
+                switch (parent_token_type){
                     case TOKEN_TYPE_IF:
                     case TOKEN_TYPE_WHILE:
-                        if (parent->m_sub_nodes.m_data[parent->m_sub_nodes.m_data[0]->m_token->m_type == TOKEN_TYPE_COLON] != ast_node)
+                        if (parent->m_sub_nodes.m_data[parent_token_type == TOKEN_TYPE_WHILE] != ast_node)
                             break;
                         FALLTHROUGH;
                     case TOKEN_TYPE_LPAREN:
@@ -1020,19 +1019,19 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
         }
 
         case TOKEN_TYPE_IF:{
+            const AST_node *if_cond_node   = ast_node->m_sub_nodes.m_data[0];
+            const AST_node *if_body_node   = ast_node->m_sub_nodes.m_data[1];
+            const AST_node *else_body_node = ast_node->m_sub_nodes.m_data[2];
+
             char   if_end_label_str_buf[JMP_LABEL_BUFSIZE];
             char else_end_label_str_buf[JMP_LABEL_BUFSIZE];
 
             sprintf(if_end_label_str_buf, JMP_LABEL_FMT, self->label_counter++);
 
-            bool has_sub_nodes = (ast_node->m_sub_nodes.m_size > 1);
-            bool has_body = (has_sub_nodes && ast_node->m_sub_nodes.m_data[1]->m_token->m_type != TOKEN_TYPE_ELSE);
-            bool has_else = (has_sub_nodes && ast_node->m_sub_nodes.m_data[ast_node->m_sub_nodes.m_size - 1]->m_token->m_type == TOKEN_TYPE_ELSE);
-
-            if (has_else)
+            if (else_body_node)
                 sprintf(else_end_label_str_buf, JMP_LABEL_FMT, self->label_counter++);
 
-            IR_compiler_state_compile_result compile_result = IR_compiler_state_compile(self, ast_node->m_sub_nodes.m_data[0]);
+            IR_compiler_state_compile_result compile_result = IR_compiler_state_compile(self, if_cond_node);
             if (compile_result.error != COMPILE_ERROR_NONE)
                 return compile_result;
 
@@ -1044,33 +1043,28 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
 
             add_instruction("%s %s", op_code_to_str(OP_CODE_JMPZ), if_end_label_str_buf);
 
-            if (has_sub_nodes){
-                if (has_body){
+            if (if_body_node || else_body_node){
+                if (if_body_node){
                     if (!vec_base_push_back(&self->id_count_stack, self->alloc, &(Id_count){0}))
                         return OOM_ERROR;
-                    compile_result = IR_compiler_state_compile(self, ast_node->m_sub_nodes.m_data[1]);
+                    compile_result = IR_compiler_state_compile(self, if_body_node);
                     if (compile_result.error != COMPILE_ERROR_NONE)
                         return compile_result;
                     pop_ids_in_current_scope();
-                    if (!has_else && !str_base_append_fmt(&self->IR, self->alloc, "%s:\n", if_end_label_str_buf))
+                    if (!else_body_node && !str_base_append_fmt(&self->IR, self->alloc, "%s:\n", if_end_label_str_buf))
                         return OOM_ERROR;
                 }
 
-                if (has_else){
+                if (else_body_node){
                     add_instruction("%s %s", op_code_to_str(OP_CODE_JMP), else_end_label_str_buf);
 
-                    if (!str_base_append_fmt(&self->IR, self->alloc, "%s:\n", if_end_label_str_buf))
+                    if (!str_base_append_fmt(&self->IR, self->alloc, "%s:\n", if_end_label_str_buf) || !vec_base_push_back(&self->id_count_stack, self->alloc, &(Id_count){0}))
                         return OOM_ERROR;
 
-                    AST_node_ptr_slice else_node_sub_nodes = ast_node->m_sub_nodes.m_data[ast_node->m_sub_nodes.m_size - 1]->m_sub_nodes;
-                    if (else_node_sub_nodes.m_size > 0){
-                        if (!vec_base_push_back(&self->id_count_stack, self->alloc, &(Id_count){0}))
-                            return OOM_ERROR;
-                        compile_result = IR_compiler_state_compile(self, else_node_sub_nodes.m_data[0]);
-                        if (compile_result.error != COMPILE_ERROR_NONE)
-                            return compile_result;
-                        pop_ids_in_current_scope();
-                    }
+                    compile_result = IR_compiler_state_compile(self, else_body_node);
+                    if (compile_result.error != COMPILE_ERROR_NONE)
+                        return compile_result;
+                    pop_ids_in_current_scope();
 
                     if (!str_base_append_fmt(&self->IR, self->alloc, "%s:\n", else_end_label_str_buf))
                         return OOM_ERROR;
@@ -1082,27 +1076,23 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
         }
 
         case TOKEN_TYPE_WHILE:{
-            char    start_label_str_buf[JMP_LABEL_BUFSIZE];
+            const AST_node *while_label_node         = ast_node->m_sub_nodes.m_data[0];
+            const AST_node *while_cond_node          = ast_node->m_sub_nodes.m_data[1];
+            const AST_node *while_continue_expr_node = ast_node->m_sub_nodes.m_data[2];
+            const AST_node *while_body_node          = ast_node->m_sub_nodes.m_data[3];
+
+            char     cond_label_str_buf[JMP_LABEL_BUFSIZE];
             char    break_label_str_buf[JMP_LABEL_BUFSIZE];
             char continue_label_str_buf[JMP_LABEL_BUFSIZE];
 
-            sprintf(   start_label_str_buf, JMP_LABEL_FMT, self->label_counter++);
+            sprintf(    cond_label_str_buf, JMP_LABEL_FMT, self->label_counter++);
             sprintf(   break_label_str_buf, JMP_LABEL_FMT, self->label_counter++);
             sprintf(continue_label_str_buf, JMP_LABEL_FMT, self->label_counter++);
 
-            if (!str_base_append_fmt(&self->IR, self->alloc, "%s:\n", start_label_str_buf))
+            if (!str_base_append_fmt(&self->IR, self->alloc, "%s:\n", cond_label_str_buf))
                 return OOM_ERROR;
 
-            AST_node_ptr_slice while_node_sub_nodes = ast_node->m_sub_nodes;
-
-            const AST_node *while_label_id_node = (while_node_sub_nodes.m_data[0]->m_token->m_type == TOKEN_TYPE_COLON)
-                ? while_node_sub_nodes.m_data[0]->m_sub_nodes.m_data[0]
-                : NULL
-            ;
-            while_node_sub_nodes.m_size -= (while_label_id_node != NULL);
-            while_node_sub_nodes.m_data += (while_label_id_node != NULL);
-
-            IR_compiler_state_compile_result compile_result = IR_compiler_state_compile(self, while_node_sub_nodes.m_data[0]);
+            IR_compiler_state_compile_result compile_result = IR_compiler_state_compile(self, while_cond_node);
             if (compile_result.error != COMPILE_ERROR_NONE)
                 return compile_result;
 
@@ -1114,51 +1104,45 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
 
             add_instruction("%s %s", op_code_to_str(OP_CODE_JMPZ), break_label_str_buf);
 
-            bool has_continue_expr = false;
-            if (while_node_sub_nodes.m_size > 1){
-                has_continue_expr = (while_node_sub_nodes.m_data[1]->m_token->m_type == TOKEN_TYPE_COLON);
-                bool has_body = (while_node_sub_nodes.m_data[while_node_sub_nodes.m_size - 1]->m_token->m_type != TOKEN_TYPE_COLON);
-
-                if (has_body){
-                    Str_base while_label_id_str = {0};
-                    if (while_label_id_node)
-                        while_label_id_str = while_label_id_node->m_token->m_id;
-                    else if (!str_base_assign_fmt(&while_label_id_str, self->alloc, USIZE_PFMT, self->label_counter))
-                        return OOM_ERROR;
-                    enum Umap_insert_error insert_error = ordered_umap_base_push_back(
-                        &self->while_labels,
-                        self->alloc,
-                        &while_label_id_str,
-                        &(While_label_info){
-                            .break_label_str    = break_label_str_buf,
-                            .continue_label_str = continue_label_str_buf,
-                            .id_count_stack_idx = self->id_count_stack.m_size
-                        }
-                    ).error;
-                    switch (insert_error){
-                        case UMAP_INSERT_ERROR_NONE:
-                            break;
-                        case UMAP_INSERT_ERROR_OOM:
-                            return OOM_ERROR;
-                        case UMAP_INSERT_ERROR_ALREADY_INSERTED:
-                            return syntax_error("Identifier <%s> is already in use", while_label_id_node->m_token->m_line_number, str_base_data_const(&while_label_id_str));
-                    }
-                    if (!vec_base_push_back(&self->id_count_stack, self->alloc, &(Id_count){0}))
-                        return OOM_ERROR;
-                    compile_result = IR_compiler_state_compile(self, while_node_sub_nodes.m_data[while_node_sub_nodes.m_size - 1]);
-                    if (compile_result.error != COMPILE_ERROR_NONE)
-                        return compile_result;
-                    pop_ids_in_current_scope();
-                    ordered_umap_base_pop_back_discard(&self->while_labels, self->alloc);
+            Str_base while_label_id_str = {0};
+            if (while_label_node)
+                while_label_id_str = while_label_node->m_token->m_id;
+            else if (!str_base_assign_fmt(&while_label_id_str, self->alloc, USIZE_PFMT, self->label_counter))
+                return OOM_ERROR;
+            enum Umap_insert_error insert_error = ordered_umap_base_push_back(
+                &self->while_labels,
+                self->alloc,
+                &while_label_id_str,
+                &(While_label_info){
+                    .break_label_str    = break_label_str_buf,
+                    .continue_label_str = continue_label_str_buf,
+                    .id_count_stack_idx = self->id_count_stack.m_size
                 }
+            ).error;
+            switch (insert_error){
+                case UMAP_INSERT_ERROR_NONE:
+                    break;
+                case UMAP_INSERT_ERROR_OOM:
+                    return OOM_ERROR;
+                case UMAP_INSERT_ERROR_ALREADY_INSERTED:
+                    return syntax_error("Identifier <%s> is already in use", while_label_node->m_token->m_line_number, str_base_data_const(&while_label_id_str));
             }
+            if (while_body_node){
+                if (!vec_base_push_back(&self->id_count_stack, self->alloc, &(Id_count){0}))
+                    return OOM_ERROR;
+                compile_result = IR_compiler_state_compile(self, while_body_node);
+                if (compile_result.error != COMPILE_ERROR_NONE)
+                    return compile_result;
+                pop_ids_in_current_scope();
+            }
+            ordered_umap_base_pop_back_discard(&self->while_labels, self->alloc);
 
             if (!str_base_append_fmt(&self->IR, self->alloc, "%s:\n", continue_label_str_buf))
                 return OOM_ERROR;
-            if (has_continue_expr && (compile_result = IR_compiler_state_compile(self, while_node_sub_nodes.m_data[1]->m_sub_nodes.m_data[0])).error != COMPILE_ERROR_NONE)
+            if (while_continue_expr_node && (compile_result = IR_compiler_state_compile(self, while_continue_expr_node)).error != COMPILE_ERROR_NONE)
                 return compile_result;
 
-            add_instruction("%s %s", op_code_to_str(OP_CODE_JMP), start_label_str_buf);
+            add_instruction("%s %s", op_code_to_str(OP_CODE_JMP), cond_label_str_buf);
 
             if (!str_base_append_fmt(&self->IR, self->alloc, "%s:\n", break_label_str_buf))
                 return OOM_ERROR;
