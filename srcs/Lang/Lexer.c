@@ -241,10 +241,10 @@ Lex_result lex(Arena *arena, const char *path){
         else if (punct_match_starts_with("^" )) punct_match_token_push_back(TOKEN_TYPE_CARET);
         else if (punct_match_starts_with("~" )) punct_match_token_push_back(TOKEN_TYPE_TILDE);
         else if (punct_match_starts_with("==")) punct_match_token_push_back(TOKEN_TYPE_EQUALS2);
-        else if (punct_match_starts_with("!=")) punct_match_token_push_back(TOKEN_TYPE_NOT_EQUALS);
-        else if (punct_match_starts_with("<=")) punct_match_token_push_back(TOKEN_TYPE_LESS_THAN1_EQUALS);
+        else if (punct_match_starts_with("!=")) punct_match_token_push_back(TOKEN_TYPE_NOT_EQUALS1);
+        else if (punct_match_starts_with("<=")) punct_match_token_push_back(TOKEN_TYPE_LESS_THAN1_EQUALS1);
         else if (punct_match_starts_with("<" )) punct_match_token_push_back(TOKEN_TYPE_LESS_THAN1);
-        else if (punct_match_starts_with(">=")) punct_match_token_push_back(TOKEN_TYPE_GREATER_THAN1_EQUALS);
+        else if (punct_match_starts_with(">=")) punct_match_token_push_back(TOKEN_TYPE_GREATER_THAN1_EQUALS1);
         else if (punct_match_starts_with(">" )) punct_match_token_push_back(TOKEN_TYPE_GREATER_THAN1);
         else if (punct_match_starts_with("=" )) punct_match_token_push_back(TOKEN_TYPE_EQUALS1);
 

@@ -32,11 +32,9 @@ while (not stop){
         push_back(snake_field, SNAKE_FIELD_TYPE_IDX_NONE);
 
     let obstacles_buf: [][]int = [];
-    for (0..HEIGHT) |y|{
-        for (0..WIDTH) |x|{
+    for (0..HEIGHT) |y|
+        for (0..WIDTH) |x|
             push_back(obstacles_buf, [x, y] as []int);
-        }
-    }
     {
         let i: int = len(obstacles_buf);
         while (i > 1){
@@ -50,18 +48,9 @@ while (not stop){
     let obstacles_start_idx: int = len(obstacles_buf) - 3;
 
     let snake_parts_buf: [][]int = [
-        [
-            WIDTH_HALF + 1,
-            HEIGHT_HALF
-        ],
-        [
-            WIDTH_HALF,
-            HEIGHT_HALF
-        ],
-        [
-            WIDTH_HALF - 1,
-            HEIGHT_HALF
-        ]
+        [WIDTH_HALF + 1, HEIGHT_HALF],
+        [WIDTH_HALF    , HEIGHT_HALF],
+        [WIDTH_HALF - 1, HEIGHT_HALF]
     ];
 
     let move_state: int = MOVE_STATE_RIGHT;
@@ -77,7 +66,7 @@ while (not stop){
 
             let i: int = 1;
             while (not collision and i < len(snake_parts_buf)){
-                collision = snake_head_pos_x == snake_parts_buf[i][0] and snake_head_pos_y == snake_parts_buf[i][1];
+                collision = (snake_head_pos_x == snake_parts_buf[i][0] and snake_head_pos_y == snake_parts_buf[i][1]);
                 i = i + 1;
             }
             if (collision)
@@ -85,7 +74,7 @@ while (not stop){
 
             i = obstacles_start_idx;
             while (not collision and i < len(obstacles_buf)){
-                collision = snake_head_pos_x == obstacles_buf[i][0] and snake_head_pos_y == obstacles_buf[i][1];
+                collision = (snake_head_pos_x == obstacles_buf[i][0] and snake_head_pos_y == obstacles_buf[i][1]);
                 i = i + 1;
             }
             if (collision)

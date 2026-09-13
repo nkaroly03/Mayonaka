@@ -52,11 +52,10 @@ fn main() int {
     for (0..HEIGHT) |y|{
         let x: float = 0.0;
         while (x < WIDTH) : (x = x + STEP){
-            let sin: float = 0.985 ** x * sin(2.0 * PI * FREQUENCY * x / WIDTH);
+            let fx: float = 0.985 ** x * sin(2.0 * PI * FREQUENCY * x / WIDTH);
 
-            let int_cast: int = sin * HEIGHT / 2.0;
-            if (HEIGHT / 2 - y == int_cast)
-                buf[y * (WIDTH + 1) + (int_cast = x)] = '*';
+            if (HEIGHT / 2 - y == (fx * HEIGHT / 2.0) as int)
+                buf[y * (WIDTH + 1) + x as int] = '*';
         }
         buf[(y + 1) * (WIDTH + 1) - 1] = '\n';
     }

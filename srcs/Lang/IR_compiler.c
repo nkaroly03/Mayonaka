@@ -425,7 +425,6 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                 compile_result = IR_compiler_state_compile(self, ast_node->m_sub_nodes.m_data[i]);
                 if (compile_result.error != COMPILE_ERROR_NONE)
                     return compile_result;
-                add_type_conversion_instruction(*(Type_info*)vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1));
 
                 if (
                     !builtin_fn_tag_call(
@@ -439,6 +438,8 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                         return OOM_ERROR;
                     return syntax_error("Initializer list must only contain elements of type <%s>", ast_node->m_token->m_line_number, str_base_data(&type_info_str.result));
                 }
+
+                add_type_conversion_instruction(*(Type_info*)vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1));
 
                 vec_base_pop_back_discard(&self->type_info_stack);
                 vec_base_pop_back_discard(&self->type_info_stack);
@@ -601,11 +602,11 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                     case TOKEN_TYPE_MINUS:
                     case TOKEN_TYPE_LBRACKET:
                     case TOKEN_TYPE_EQUALS2:
-                    case TOKEN_TYPE_NOT_EQUALS:
+                    case TOKEN_TYPE_NOT_EQUALS1:
                     case TOKEN_TYPE_LESS_THAN1:
-                    case TOKEN_TYPE_LESS_THAN1_EQUALS:
+                    case TOKEN_TYPE_LESS_THAN1_EQUALS1:
                     case TOKEN_TYPE_GREATER_THAN1:
-                    case TOKEN_TYPE_GREATER_THAN1_EQUALS:
+                    case TOKEN_TYPE_GREATER_THAN1_EQUALS1:
                     case TOKEN_TYPE_ASTERISK1:
                     case TOKEN_TYPE_SLASH:
                     case TOKEN_TYPE_PERCENT:
@@ -764,22 +765,22 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
             break;
         }
 
-        case TOKEN_TYPE_LBRACKET:             bin_op = BINARY_OP_SUBSCRIPT; bin_op_code = OP_CODE_DEREF;   goto bin_op_case;
-        case TOKEN_TYPE_EQUALS2:              bin_op = BINARY_OP_CMP_EQ;    bin_op_code = OP_CODE_CMP_EQ;  goto bin_op_case;
-        case TOKEN_TYPE_NOT_EQUALS:           bin_op = BINARY_OP_CMP_NEQ;   bin_op_code = OP_CODE_CMP_NEQ; goto bin_op_case;
-        case TOKEN_TYPE_LESS_THAN1:           bin_op = BINARY_OP_CMP_LE;    bin_op_code = OP_CODE_CMP_LE;  goto bin_op_case;
-        case TOKEN_TYPE_LESS_THAN1_EQUALS:    bin_op = BINARY_OP_CMP_LEQ;   bin_op_code = OP_CODE_CMP_LEQ; goto bin_op_case;
-        case TOKEN_TYPE_GREATER_THAN1:        bin_op = BINARY_OP_CMP_GE;    bin_op_code = OP_CODE_CMP_GE;  goto bin_op_case;
-        case TOKEN_TYPE_GREATER_THAN1_EQUALS: bin_op = BINARY_OP_CMP_GEQ;   bin_op_code = OP_CODE_CMP_GEQ; goto bin_op_case;
-        case TOKEN_TYPE_ASTERISK1:            bin_op = BINARY_OP_MUL;       bin_op_code = OP_CODE_MUL;     goto bin_op_case;
-        case TOKEN_TYPE_SLASH:                bin_op = BINARY_OP_DIV;       bin_op_code = OP_CODE_DIV;     goto bin_op_case;
-        case TOKEN_TYPE_PERCENT:              bin_op = BINARY_OP_REM;       bin_op_code = OP_CODE_REM;     goto bin_op_case;
-        case TOKEN_TYPE_ASTERISK2:            bin_op = BINARY_OP_POW;       bin_op_code = OP_CODE_POW;     goto bin_op_case;
-        case TOKEN_TYPE_LESS_THAN2:           bin_op = BINARY_OP_SHL;       bin_op_code = OP_CODE_SHL;     goto bin_op_case;
-        case TOKEN_TYPE_GREATER_THAN2:        bin_op = BINARY_OP_SHR;       bin_op_code = OP_CODE_SHR;     goto bin_op_case;
-        case TOKEN_TYPE_AMPERSAND:            bin_op = BINARY_OP_BAND;      bin_op_code = OP_CODE_BAND;    goto bin_op_case;
-        case TOKEN_TYPE_PIPE:                 bin_op = BINARY_OP_BOR;       bin_op_code = OP_CODE_BOR;     goto bin_op_case;
-        case TOKEN_TYPE_CARET:                bin_op = BINARY_OP_XOR;       bin_op_code = OP_CODE_XOR;
+        case TOKEN_TYPE_LBRACKET:              bin_op = BINARY_OP_SUBSCRIPT; bin_op_code = OP_CODE_DEREF;   goto bin_op_case;
+        case TOKEN_TYPE_EQUALS2:               bin_op = BINARY_OP_CMP_EQ;    bin_op_code = OP_CODE_CMP_EQ;  goto bin_op_case;
+        case TOKEN_TYPE_NOT_EQUALS1:           bin_op = BINARY_OP_CMP_NEQ;   bin_op_code = OP_CODE_CMP_NEQ; goto bin_op_case;
+        case TOKEN_TYPE_LESS_THAN1:            bin_op = BINARY_OP_CMP_LE;    bin_op_code = OP_CODE_CMP_LE;  goto bin_op_case;
+        case TOKEN_TYPE_LESS_THAN1_EQUALS1:    bin_op = BINARY_OP_CMP_LEQ;   bin_op_code = OP_CODE_CMP_LEQ; goto bin_op_case;
+        case TOKEN_TYPE_GREATER_THAN1:         bin_op = BINARY_OP_CMP_GE;    bin_op_code = OP_CODE_CMP_GE;  goto bin_op_case;
+        case TOKEN_TYPE_GREATER_THAN1_EQUALS1: bin_op = BINARY_OP_CMP_GEQ;   bin_op_code = OP_CODE_CMP_GEQ; goto bin_op_case;
+        case TOKEN_TYPE_ASTERISK1:             bin_op = BINARY_OP_MUL;       bin_op_code = OP_CODE_MUL;     goto bin_op_case;
+        case TOKEN_TYPE_SLASH:                 bin_op = BINARY_OP_DIV;       bin_op_code = OP_CODE_DIV;     goto bin_op_case;
+        case TOKEN_TYPE_PERCENT:               bin_op = BINARY_OP_REM;       bin_op_code = OP_CODE_REM;     goto bin_op_case;
+        case TOKEN_TYPE_ASTERISK2:             bin_op = BINARY_OP_POW;       bin_op_code = OP_CODE_POW;     goto bin_op_case;
+        case TOKEN_TYPE_LESS_THAN2:            bin_op = BINARY_OP_SHL;       bin_op_code = OP_CODE_SHL;     goto bin_op_case;
+        case TOKEN_TYPE_GREATER_THAN2:         bin_op = BINARY_OP_SHR;       bin_op_code = OP_CODE_SHR;     goto bin_op_case;
+        case TOKEN_TYPE_AMPERSAND:             bin_op = BINARY_OP_BAND;      bin_op_code = OP_CODE_BAND;    goto bin_op_case;
+        case TOKEN_TYPE_PIPE:                  bin_op = BINARY_OP_BOR;       bin_op_code = OP_CODE_BOR;     goto bin_op_case;
+        case TOKEN_TYPE_CARET:                 bin_op = BINARY_OP_XOR;       bin_op_code = OP_CODE_XOR;
         bin_op_case:{
             const AST_node *lhs_node = ast_node->m_sub_nodes.m_data[0];
             const AST_node *rhs_node = ast_node->m_sub_nodes.m_data[1];
@@ -983,6 +984,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
             self->label_counter = fn_IR_compiler_state.label_counter;
             break;
         }
+
         case TOKEN_TYPE_LET:{
             const AST_node *id_node   = ast_node->m_sub_nodes.m_data[0];
             const AST_node *type_node = ast_node->m_sub_nodes.m_data[1];

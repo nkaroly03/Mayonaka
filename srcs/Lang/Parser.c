@@ -26,39 +26,39 @@ typedef struct Binding_powers{
     u8 lhs, rhs;
 } Binding_powers;
 
-static const u8 UNARY_RHS_BINDING_POWER = 110;
+static const u8 UNARY_RHS_BINDING_POWER = 120;
 
 static Binding_powers token_type_binding_powers(enum Token_type token_type){
     #define bps_init(lhs_bp, rhs_bp) (Binding_powers){.lhs = lhs_bp, .rhs = rhs_bp}
 
     switch (token_type){
-        case TOKEN_TYPE_ASTERISK2:            return bps_init(121, 120); 
+        case TOKEN_TYPE_ASTERISK2:             return bps_init(131, 130); 
 
-        case TOKEN_TYPE_AS:                   return bps_init(UNARY_RHS_BINDING_POWER + 1, UNARY_RHS_BINDING_POWER); 
+        case TOKEN_TYPE_AS:                    return bps_init(UNARY_RHS_BINDING_POWER + 1, UNARY_RHS_BINDING_POWER); 
 
         case TOKEN_TYPE_ASTERISK1:
         case TOKEN_TYPE_SLASH:
-        case TOKEN_TYPE_PERCENT:              return bps_init(100, 101);
+        case TOKEN_TYPE_PERCENT:               return bps_init(110, 111);
 
         case TOKEN_TYPE_PLUS:
-        case TOKEN_TYPE_MINUS:                return bps_init(90, 91);
+        case TOKEN_TYPE_MINUS:                 return bps_init(100, 101);
 
         case TOKEN_TYPE_LESS_THAN2:
-        case TOKEN_TYPE_GREATER_THAN2:        return bps_init(80, 81);
+        case TOKEN_TYPE_GREATER_THAN2:         return bps_init(90, 91);
 
-        case TOKEN_TYPE_EQUALS2:
-        case TOKEN_TYPE_NOT_EQUALS:
         case TOKEN_TYPE_LESS_THAN1:
-        case TOKEN_TYPE_LESS_THAN1_EQUALS:
+        case TOKEN_TYPE_LESS_THAN1_EQUALS1:
         case TOKEN_TYPE_GREATER_THAN1:
-        case TOKEN_TYPE_GREATER_THAN1_EQUALS: return bps_init(70, 71);
+        case TOKEN_TYPE_GREATER_THAN1_EQUALS1: return bps_init(80, 81);
+        case TOKEN_TYPE_EQUALS2:
+        case TOKEN_TYPE_NOT_EQUALS1:           return bps_init(70, 71);
 
-        case TOKEN_TYPE_AMPERSAND:            return bps_init(60, 61);
-        case TOKEN_TYPE_CARET:                return bps_init(50, 51);
-        case TOKEN_TYPE_PIPE:                 return bps_init(40, 41);
-        case TOKEN_TYPE_AND:                  return bps_init(30, 31);
-        case TOKEN_TYPE_OR:                   return bps_init(20, 21);
-        case TOKEN_TYPE_EQUALS1:              return bps_init(11, 10);
+        case TOKEN_TYPE_AMPERSAND:             return bps_init(60, 61);
+        case TOKEN_TYPE_CARET:                 return bps_init(50, 51);
+        case TOKEN_TYPE_PIPE:                  return bps_init(40, 41);
+        case TOKEN_TYPE_AND:                   return bps_init(30, 31);
+        case TOKEN_TYPE_OR:                    return bps_init(20, 21);
+        case TOKEN_TYPE_EQUALS1:               return bps_init(11, 10);
 
         default:
             fprintf(stderr, __FILE__ ":" tok_to_str(__LINE__) ": Not implemented");
@@ -94,7 +94,6 @@ static Parser_state_parse_result parser_state_syntax_error(Parser_state *self, c
 
 static AST_node* parser_state_ast_node_alloc(Parser_state *self, const Token *tok){
     AST_node *ast_node = allocator_alloc(self->alloc, AST_node, 1);
-
     if (ast_node)
         *ast_node = (AST_node){.m_parent = NULL, .m_sub_nodes = {.m_size = 0, .m_data = NULL}, .m_token = tok};
 
@@ -102,15 +101,28 @@ static AST_node* parser_state_ast_node_alloc(Parser_state *self, const Token *to
 }
 #define syntax_error(...) parser_state_syntax_error(self, "On line <" USIZE_PFMT ">: " __VA_ARGS__)
 
-static Parser_state_parse_result parser_state_parse_type(Parser_state *self, bool void_is_allowed){
+static bool parser_state_for_to_while_tokens_push_back(Parser_state *self, Vec_base *for_to_while_tokens, const char *id, enum Token_type token_type, usize line_number){
+    Str_base_result token_id = str_base_init_raw(self->alloc, id);
+    return token_id.success && vec_base_push_back(for_to_while_tokens, self->alloc, &(Token){.m_type = token_type, .m_id = token_id.result, .m_line_number = line_number});
+}
+
+static Parser_state_parse_result parser_state_parse_and_add_type_ast_sub_node(Parser_state *self, AST_node *parent, Vec_base *parent_sub_nodes, bool void_is_allowed);
+static Parser_state_parse_result parser_state_parse_and_add_arithm_expr_ast_sub_node(Parser_state *self, AST_node *parent, Vec_base *parent_sub_nodes, u8 prev_rhs_bp);
+static Parser_state_parse_result parser_state_parse_and_add_ast_sub_node(Parser_state *self, AST_node *parent, Vec_base *parent_sub_nodes);
+
+static Parser_state_parse_result parser_state_parse_type(Parser_state *self, bool void_is_allowed);
+static Parser_state_parse_result parser_state_parse_arithm_expr(Parser_state *self, u8 prev_rhs_bp);
+static Parser_state_parse_result parser_state_parse(Parser_state *self);
+
+Parser_state_parse_result parser_state_parse_type(Parser_state *self, bool void_is_allowed){
     if (self->token_idx >= self->tokens.m_size)
         return syntax_error("No tokens are available", self->tokens.m_data[self->tokens.m_size - 1].m_line_number);
 
     const Token *tok = &self->tokens.m_data[self->token_idx++];
 
-    Vec_base sub_nodes = vec_base_init(AST_node*);
-    AST_node *node = parser_state_ast_node_alloc(self, tok);
-    if (!node)
+    AST_node *type_node = parser_state_ast_node_alloc(self, tok);
+    Vec_base type_node_sub_nodes = vec_base_init(AST_node*);
+    if (!type_node)
         return OOM_ERROR;
 
     switch (tok->m_type){
@@ -118,19 +130,16 @@ static Parser_state_parse_result parser_state_parse_type(Parser_state *self, boo
             if (self->token_idx >= self->tokens.m_size || (tok = &self->tokens.m_data[self->token_idx++])->m_type != TOKEN_TYPE_RBRACKET)
                 return syntax_error("<[> must be closed by <]>", tok->m_line_number);
 
-            Parser_state_parse_result parse_result = parser_state_parse_type(self, false);
+            Parser_state_parse_result parse_result = parser_state_parse_and_add_type_ast_sub_node(self, type_node, &type_node_sub_nodes, false);
             if (parse_result.error != PARSE_ERROR_NONE)
                 return parse_result;
 
-            if (!vec_base_push_back(&sub_nodes, self->alloc, &parse_result.ast_node_ptr))
-                return OOM_ERROR;
-
-            parse_result.ast_node_ptr->m_parent = node;
             break;
         }
         case TOKEN_TYPE_VOID:
             if (!void_is_allowed)
                 return syntax_error("<void> is not allowed as a type in the current context", tok->m_line_number);
+            FALLTHROUGH;
         case TOKEN_TYPE_BOOL:
         case TOKEN_TYPE_CHAR:
         case TOKEN_TYPE_INT:
@@ -141,86 +150,62 @@ static Parser_state_parse_result parser_state_parse_type(Parser_state *self, boo
             return syntax_error("Found unknown or contextually invalid token <%s>", tok->m_line_number, str_base_data_const(&tok->m_id));
     }
 
-    node->m_sub_nodes = (AST_node_ptr_slice){.m_size = sub_nodes.m_size, .m_data = sub_nodes.m_data};
+    type_node->m_sub_nodes = (AST_node_ptr_slice){.m_size = type_node_sub_nodes.m_size, .m_data = type_node_sub_nodes.m_data};
 
-    return (Parser_state_parse_result){.ast_node_ptr = node, .error = PARSE_ERROR_NONE};
+    return (Parser_state_parse_result){.ast_node_ptr = type_node, .error = PARSE_ERROR_NONE};
 }
 
-static Parser_state_parse_result parser_state_parse_arithm_expr(Parser_state *self, usize prev_rhs_bp){
+Parser_state_parse_result parser_state_parse_arithm_expr(Parser_state *self, u8 prev_rhs_bp){
     if (self->token_idx >= self->tokens.m_size)
         return syntax_error("No tokens are available", self->tokens.m_data[self->tokens.m_size - 1].m_line_number);
 
-    AST_node *lhs;
-
     const Token *tok = &self->tokens.m_data[self->token_idx++];
 
-    if (token_type_is_atom(tok->m_type)){
-        lhs = parser_state_ast_node_alloc(self, tok);
-        if (!lhs)
-            return OOM_ERROR;
-    }
-    else if (tok->m_type == TOKEN_TYPE_LBRACKET){
+    AST_node *lhs = parser_state_ast_node_alloc(self, tok);
+    Vec_base lhs_sub_nodes = vec_base_init(AST_node*);
+    if (!lhs)
+        return OOM_ERROR;
+
+    if (tok->m_type == TOKEN_TYPE_LBRACKET){
         Token *list_tok = allocator_alloc(self->alloc, Token, 1);
-        if (!list_tok)
+        Str_base_result list_tok_id;
+        if (!list_tok || !(list_tok_id = str_base_init_raw(self->alloc, "[]")).success)
             return OOM_ERROR;
-
-        Str_base_result list_tok_id = str_base_init_raw(self->alloc, "[]");
-        if (!list_tok_id.success)
-            return OOM_ERROR;
-
         *list_tok = (Token){.m_type = TOKEN_TYPE_INIT_LIST, .m_id = list_tok_id.result, .m_line_number = tok->m_line_number};
 
-        lhs = parser_state_ast_node_alloc(self, list_tok);
-        if (!lhs)
-            return OOM_ERROR;
-
-        Vec_base sub_nodes = vec_base_init(AST_node*);
+        lhs->m_token = list_tok;
 
         --self->token_idx;
         while (self->tokens.m_data[++self->token_idx].m_type != TOKEN_TYPE_RBRACKET){
-            Parser_state_parse_result rhs_result = parser_state_parse_arithm_expr(self, 0);
+            Parser_state_parse_result rhs_result = parser_state_parse_and_add_arithm_expr_ast_sub_node(self, lhs, &lhs_sub_nodes, 0);
             if (rhs_result.error != PARSE_ERROR_NONE)
                 return rhs_result;
-
-            if (!vec_base_push_back(&sub_nodes, self->alloc, &rhs_result.ast_node_ptr))
-                return OOM_ERROR;
-
-            rhs_result.ast_node_ptr->m_parent = lhs;
-
             self->token_idx -= (self->tokens.m_data[self->token_idx].m_type != TOKEN_TYPE_COMMA);
         }
         ++self->token_idx;
 
-        lhs->m_sub_nodes = (AST_node_ptr_slice){.m_size = sub_nodes.m_size, .m_data = sub_nodes.m_data};
+        lhs->m_sub_nodes = (AST_node_ptr_slice){.m_size = lhs_sub_nodes.m_size, .m_data = lhs_sub_nodes.m_data};
     }
     else if (tok->m_type == TOKEN_TYPE_LPAREN){
         Parser_state_parse_result temp = parser_state_parse_arithm_expr(self, 0);
         if (temp.error != PARSE_ERROR_NONE)
             return temp;
-
         lhs = temp.ast_node_ptr;
 
         tok = &self->tokens.m_data[self->token_idx++];
         if (tok->m_type != TOKEN_TYPE_RPAREN)
             return syntax_error("Expected <)>", tok->m_line_number);
     }
-    else{
+    else if (!token_type_is_atom(tok->m_type)){
         switch (tok->m_type){
             case TOKEN_TYPE_PLUS:
             case TOKEN_TYPE_MINUS:
             case TOKEN_TYPE_TILDE:
             case TOKEN_TYPE_NOT:{
-                Parser_state_parse_result unary_rhs = parser_state_parse_arithm_expr(self, UNARY_RHS_BINDING_POWER);
+                Parser_state_parse_result unary_rhs = parser_state_parse_and_add_arithm_expr_ast_sub_node(self, lhs, &lhs_sub_nodes, UNARY_RHS_BINDING_POWER);
                 if (unary_rhs.error != PARSE_ERROR_NONE)
                     return unary_rhs;
-
-                Vec_base sub_nodes = vec_base_init(AST_node*);
-                lhs = parser_state_ast_node_alloc(self, tok);
-                if (!lhs || !vec_base_push_back(&sub_nodes, self->alloc, &unary_rhs.ast_node_ptr))
-                    return OOM_ERROR;
-
-                lhs->m_sub_nodes = (AST_node_ptr_slice){.m_size = sub_nodes.m_size, .m_data = sub_nodes.m_data};
-                unary_rhs.ast_node_ptr->m_parent = lhs;
+                lhs->m_sub_nodes = (AST_node_ptr_slice){.m_size = lhs_sub_nodes.m_size, .m_data = lhs_sub_nodes.m_data};
                 break;
             }
             default:
@@ -233,11 +218,14 @@ static Parser_state_parse_result parser_state_parse_arithm_expr(Parser_state *se
             return syntax_error("No tokens are available", self->tokens.m_data[self->tokens.m_size - 1].m_line_number);
 
         Parser_state_parse_result rhs_result;
-        AST_node *new_lhs;
-
-        Vec_base sub_nodes = vec_base_init(AST_node*);
 
         const Token *op = &self->tokens.m_data[self->token_idx];
+
+        AST_node *op_node = parser_state_ast_node_alloc(self, op);
+        Vec_base op_node_sub_nodes = vec_base_init(AST_node*);
+        if (!op_node)
+            return OOM_ERROR;
+
         switch (op->m_type){
             case TOKEN_TYPE_COMMA:
             case TOKEN_TYPE_SEMICOLON:
@@ -245,44 +233,30 @@ static Parser_state_parse_result parser_state_parse_arithm_expr(Parser_state *se
             case TOKEN_TYPE_RBRACKET:
             case TOKEN_TYPE_DOT2:
                 goto end;
-            case TOKEN_TYPE_LBRACKET:
+
+            case TOKEN_TYPE_LBRACKET:{
                 ++self->token_idx;
 
                 rhs_result = parser_state_parse_arithm_expr(self, 0);
-                if (rhs_result.error != PARSE_ERROR_NONE)
-                    return rhs_result;
 
-                new_lhs = parser_state_ast_node_alloc(self, op);
-                if (!new_lhs || !vec_base_push_back(&sub_nodes, self->alloc, &lhs) || !vec_base_push_back(&sub_nodes, self->alloc, &rhs_result.ast_node_ptr))
-                    return OOM_ERROR;
-
-                op = &self->tokens.m_data[self->token_idx++];
-                if (op->m_type != TOKEN_TYPE_RBRACKET)
-                    return syntax_error("<[> must be closed by <]>", op->m_line_number);
-
-                rhs_result.ast_node_ptr->m_parent = new_lhs;
+                const Token *temp = &self->tokens.m_data[self->token_idx++];
+                if (temp->m_type != TOKEN_TYPE_RBRACKET)
+                    return syntax_error("<[> must be closed by <]>", temp->m_line_number);
                 break;
-            case TOKEN_TYPE_LPAREN:
-                new_lhs = parser_state_ast_node_alloc(self, op);
-                if (!new_lhs || !vec_base_push_back(&sub_nodes, self->alloc, &lhs))
-                    return OOM_ERROR;
-                
-                lhs->m_parent = new_lhs;
+            }
 
+            case TOKEN_TYPE_LPAREN:
+                if (!vec_base_push_back(&op_node_sub_nodes, self->alloc, &lhs))
+                    return OOM_ERROR;
                 while (self->tokens.m_data[++self->token_idx].m_type != TOKEN_TYPE_RPAREN){
-                    rhs_result = parser_state_parse_arithm_expr(self, 0);
+                    rhs_result = parser_state_parse_and_add_arithm_expr_ast_sub_node(self, op_node, &op_node_sub_nodes, 0);
                     if (rhs_result.error != PARSE_ERROR_NONE)
                         return rhs_result;
-
-                    if (!vec_base_push_back(&sub_nodes, self->alloc, &rhs_result.ast_node_ptr))
-                        return OOM_ERROR;
-
-                    rhs_result.ast_node_ptr->m_parent = new_lhs;
-
                     self->token_idx -= (self->tokens.m_data[self->token_idx].m_type != TOKEN_TYPE_COMMA);
                 }
                 ++self->token_idx;
                 break;
+
             default:{
                 if (!token_type_is_bin_op(op->m_type))
                     return syntax_error("Found invalid token <%s>", op->m_line_number, str_base_data_const(&op->m_id));
@@ -294,41 +268,67 @@ static Parser_state_parse_result parser_state_parse_arithm_expr(Parser_state *se
                 ++self->token_idx;
 
                 rhs_result = (op->m_type != TOKEN_TYPE_AS) ? parser_state_parse_arithm_expr(self, bps.rhs) : parser_state_parse_type(self, false);
-                if (rhs_result.error != PARSE_ERROR_NONE)
-                    return rhs_result;
-
-                new_lhs = parser_state_ast_node_alloc(self, op);
-                if (!new_lhs || !vec_base_push_back(&sub_nodes, self->alloc, &lhs) || !vec_base_push_back(&sub_nodes, self->alloc, &rhs_result.ast_node_ptr))
-                    return OOM_ERROR;
-
-                rhs_result.ast_node_ptr->m_parent = new_lhs;
                 break;
             }
         }
 
-        lhs->m_parent = new_lhs;
-        lhs = new_lhs;
-        lhs->m_sub_nodes = (AST_node_ptr_slice){.m_size = sub_nodes.m_size, .m_data = sub_nodes.m_data};
+        if (op->m_type != TOKEN_TYPE_LPAREN){
+            if (rhs_result.error != PARSE_ERROR_NONE)
+                return rhs_result;
+            if (!vec_base_push_back(&op_node_sub_nodes, self->alloc, &lhs) || !vec_base_push_back(&op_node_sub_nodes, self->alloc, &rhs_result.ast_node_ptr))
+                return OOM_ERROR;
+            rhs_result.ast_node_ptr->m_parent = op_node;
+        }
+
+        lhs->m_parent = op_node;
+        lhs = op_node;
+        lhs->m_sub_nodes = (AST_node_ptr_slice){.m_size = op_node_sub_nodes.m_size, .m_data = op_node_sub_nodes.m_data};
     }
 
 end:
     return (Parser_state_parse_result){.ast_node_ptr = lhs, .error = PARSE_ERROR_NONE};
 }
 
-static bool parser_state_for_to_while_tokens_push_back(Parser_state *self, Vec_base *for_to_while_tokens, const char *id, enum Token_type token_type, usize line_number){
-    Str_base_result token_id = str_base_init_raw(self->alloc, id);
-    return token_id.success && vec_base_push_back(for_to_while_tokens, self->alloc, &(Token){.m_type = token_type, .m_id = token_id.result, .m_line_number = line_number});
+Parser_state_parse_result parser_state_parse_and_add_type_ast_sub_node(Parser_state *self, AST_node *parent, Vec_base *parent_sub_nodes, bool void_is_allowed){
+    Parser_state_parse_result result = parser_state_parse_type(self, void_is_allowed);
+    if (result.error == PARSE_ERROR_NONE){
+        if (!vec_base_push_back(parent_sub_nodes, self->alloc, &result.ast_node_ptr))
+            return OOM_ERROR;
+        result.ast_node_ptr->m_parent = parent;
+    }
+    return result;
+}
+Parser_state_parse_result parser_state_parse_and_add_arithm_expr_ast_sub_node(Parser_state *self, AST_node *parent, Vec_base *parent_sub_nodes, u8 prev_rhs_bp){
+    Parser_state_parse_result result = parser_state_parse_arithm_expr(self, prev_rhs_bp);
+    if (result.error == PARSE_ERROR_NONE){
+        if (!vec_base_push_back(parent_sub_nodes, self->alloc, &result.ast_node_ptr))
+            return OOM_ERROR;
+        result.ast_node_ptr->m_parent = parent;
+    }
+    return result;
+}
+Parser_state_parse_result parser_state_parse_and_add_ast_sub_node(Parser_state *self, AST_node *parent, Vec_base *parent_sub_nodes){
+    Parser_state_parse_result result = parser_state_parse(self);
+    if (result.error == PARSE_ERROR_NONE){
+        if (!vec_base_push_back(parent_sub_nodes, self->alloc, &result.ast_node_ptr))
+            return OOM_ERROR;
+        result.ast_node_ptr->m_parent = parent;
+    }
+    return result;
 }
 
-static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
+Parser_state_parse_result parser_state_parse(Parser_state *self){
     Parser_state_parse_result parse_result;
 
     const Token *loop_label_tok_ptr = NULL;
 
-    AST_node *node;
-    Vec_base sub_nodes = vec_base_init(AST_node*);
-
     const Token *tok = &self->tokens.m_data[self->token_idx++];
+    
+    AST_node *node = parser_state_ast_node_alloc(self, tok);
+    Vec_base node_sub_nodes = vec_base_init(AST_node*);
+    if (!node)
+        return OOM_ERROR;
+
     switch (tok->m_type){
         case TOKEN_TYPE_ID:{
             if (self->token_idx >= self->tokens.m_size)
@@ -369,158 +369,113 @@ static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
             parse_result = parser_state_parse_arithm_expr(self, 0);
             if (parse_result.error != PARSE_ERROR_NONE)
                 return parse_result;
+            node = parse_result.ast_node_ptr;
 
             if (self->token_idx >= self->tokens.m_size || (tok = &self->tokens.m_data[self->token_idx++])->m_type != TOKEN_TYPE_SEMICOLON)
                 return syntax_error("Statement must end with <;>", tok->m_line_number);
-
-            node = parse_result.ast_node_ptr;
             break;
 
         case TOKEN_TYPE_LBRACE:
-            node = parser_state_ast_node_alloc(self, tok);
-            if (!node)
-                return OOM_ERROR;
-
             while (self->tokens.m_data[self->token_idx].m_type != TOKEN_TYPE_RBRACE){
-                parse_result = parser_state_parse_expr(self);
+                parse_result = parser_state_parse_and_add_ast_sub_node(self, node, &node_sub_nodes);
                 if (parse_result.error != PARSE_ERROR_NONE)
                     return parse_result;
-
-                if (!vec_base_push_back(&sub_nodes, self->alloc, &parse_result.ast_node_ptr))
-                    return OOM_ERROR;
-
-                parse_result.ast_node_ptr->m_parent = node;
             }
             ++self->token_idx;
-
-            node->m_sub_nodes = (AST_node_ptr_slice){.m_size = sub_nodes.m_size, .m_data = sub_nodes.m_data};
+            node->m_sub_nodes = (AST_node_ptr_slice){.m_size = node_sub_nodes.m_size, .m_data = node_sub_nodes.m_data};
             break;
         
         case TOKEN_TYPE_FN:{
-            node = parser_state_ast_node_alloc(self, tok);
-            if (!node)
-                return OOM_ERROR;
-
             if (self->token_idx >= self->tokens.m_size || (tok = &self->tokens.m_data[self->token_idx++])->m_type != TOKEN_TYPE_ID)
                 return syntax_error("<fn> must be followed by an identifier in function definition", tok->m_line_number);
 
             AST_node *id_node = parser_state_ast_node_alloc(self, tok);
-            if (!id_node || !vec_base_push_back(&sub_nodes, self->alloc, &id_node))
+            if (!id_node || !vec_base_push_back(&node_sub_nodes, self->alloc, &id_node))
                 return OOM_ERROR;
-
             id_node->m_parent = node;
 
             if (self->token_idx >= self->tokens.m_size || (tok = &self->tokens.m_data[self->token_idx++])->m_type != TOKEN_TYPE_LPAREN)
                 return syntax_error("<%s> must be followed by <(> in function definition", tok->m_line_number, str_base_data_const(&id_node->m_token->m_id));
 
-            for (const Token *tok_temp; (tok_temp = &self->tokens.m_data[self->token_idx])->m_type != TOKEN_TYPE_RPAREN;){
-                if (tok_temp->m_type != TOKEN_TYPE_ID)
-                    return syntax_error("<%s> must be followed by an identifier in function definition", tok_temp->m_line_number, str_base_data_const(&tok->m_id));
+            for (const Token *fn_arg_tok_it; (fn_arg_tok_it = &self->tokens.m_data[self->token_idx])->m_type != TOKEN_TYPE_RPAREN;){
+                if (fn_arg_tok_it->m_type != TOKEN_TYPE_ID)
+                    return syntax_error("<%s> must be followed by an identifier in function definition", fn_arg_tok_it->m_line_number, str_base_data_const(&tok->m_id));
 
-                tok = tok_temp;
+                tok = fn_arg_tok_it;
 
-                Vec_base id_node_sub_nodes = vec_base_init(AST_node*);
                 id_node = parser_state_ast_node_alloc(self, tok);
-                if (!id_node || !vec_base_push_back(&sub_nodes, self->alloc, &id_node))
+                Vec_base id_node_sub_nodes = vec_base_init(AST_node*);
+                if (!id_node || !vec_base_push_back(&node_sub_nodes, self->alloc, &id_node))
                     return OOM_ERROR;
 
-                tok_temp = &self->tokens.m_data[++self->token_idx];
-                if (tok_temp->m_type != TOKEN_TYPE_COLON)
-                    return syntax_error("<%s> must be followed by <:> in function definition", tok_temp->m_line_number, str_base_data_const(&tok->m_id));
+                fn_arg_tok_it = &self->tokens.m_data[++self->token_idx];
+                if (fn_arg_tok_it->m_type != TOKEN_TYPE_COLON)
+                    return syntax_error("<%s> must be followed by <:> in function definition", fn_arg_tok_it->m_line_number, str_base_data_const(&tok->m_id));
 
                 ++self->token_idx;
 
-                parse_result = parser_state_parse_type(self, false);
+                parse_result = parser_state_parse_and_add_type_ast_sub_node(self, id_node, &id_node_sub_nodes, false);
                 if (parse_result.error != PARSE_ERROR_NONE)
                     return parse_result;
-
-                parse_result.ast_node_ptr->m_parent = id_node;
-
-                if (!vec_base_push_back(&id_node_sub_nodes, self->alloc, &parse_result.ast_node_ptr))
-                    return OOM_ERROR;
-
-                id_node->m_parent = node;
-                id_node->m_sub_nodes = (AST_node_ptr_slice){.m_size = id_node_sub_nodes.m_size, .m_data = id_node_sub_nodes.m_data};
 
                 tok = &self->tokens.m_data[self->token_idx];
                 if (tok->m_type != TOKEN_TYPE_COMMA && tok->m_type != TOKEN_TYPE_RPAREN)
                     return syntax_error("<,> must be used as a separator in the arguments of a function in function definition", tok->m_line_number);
 
+                id_node->m_parent = node;
+                id_node->m_sub_nodes = (AST_node_ptr_slice){.m_size = id_node_sub_nodes.m_size, .m_data = id_node_sub_nodes.m_data};
+
                 self->token_idx += (tok->m_type == TOKEN_TYPE_COMMA);
             }
             ++self->token_idx;
 
-            parse_result = parser_state_parse_type(self, true);
+            parse_result = parser_state_parse_and_add_type_ast_sub_node(self, node, &node_sub_nodes, true);
             if (parse_result.error != PARSE_ERROR_NONE)
                 return parse_result;
-
-            if (!vec_base_push_back(&sub_nodes, self->alloc, &parse_result.ast_node_ptr))
-                return OOM_ERROR;
-
-            parse_result.ast_node_ptr->m_parent = node;
 
             tok = &self->tokens.m_data[self->tokens.m_size - 1];
             if (self->token_idx >= self->tokens.m_size || (tok = &self->tokens.m_data[self->token_idx])->m_type != TOKEN_TYPE_LBRACE)
                 return syntax_error("Return type must be followed by <{> in function definition", tok->m_line_number);
 
-            parse_result = parser_state_parse_expr(self);
+            parse_result = parser_state_parse_and_add_ast_sub_node(self, node, &node_sub_nodes);
             if (parse_result.error != PARSE_ERROR_NONE)
                 return parse_result;
 
-            parse_result.ast_node_ptr->m_parent = node;
-
-            if (!vec_base_push_back(&sub_nodes, self->alloc, &parse_result.ast_node_ptr))
-                return OOM_ERROR;
-
-            node->m_sub_nodes = (AST_node_ptr_slice){.m_size = sub_nodes.m_size, .m_data = sub_nodes.m_data};
+            node->m_sub_nodes = (AST_node_ptr_slice){.m_size = node_sub_nodes.m_size, .m_data = node_sub_nodes.m_data};
             break;
         }
-        case TOKEN_TYPE_LET:{
-            node = parser_state_ast_node_alloc(self, tok);
-            if (!node)
-                return OOM_ERROR;
 
+        case TOKEN_TYPE_LET:{
             if (self->token_idx >= self->tokens.m_size || (tok = &self->tokens.m_data[self->token_idx++])->m_type != TOKEN_TYPE_ID)
                 return syntax_error("<let> must be followed by an identifier", tok->m_line_number);
 
             AST_node *id_node = parser_state_ast_node_alloc(self, tok);
-            if (!id_node || !vec_base_push_back(&sub_nodes, self->alloc, &id_node))
+            if (!id_node || !vec_base_push_back(&node_sub_nodes, self->alloc, &id_node))
                 return OOM_ERROR;
-
             id_node->m_parent = node;
 
-            const Token *tok_temp;
-            if (self->token_idx >= self->tokens.m_size || (tok_temp = &self->tokens.m_data[self->token_idx++])->m_type != TOKEN_TYPE_COLON)
+            const Token *temp;
+            if (self->token_idx >= self->tokens.m_size || (temp = &self->tokens.m_data[self->token_idx++])->m_type != TOKEN_TYPE_COLON)
                 return syntax_error("<%s> must be followed by <:>", tok->m_line_number, str_base_data_const(&tok->m_id));
-            tok = tok_temp;
+            tok = temp;
 
-            parse_result = parser_state_parse_type(self, false);
+            parse_result = parser_state_parse_and_add_type_ast_sub_node(self, node, &node_sub_nodes, false);
             if (parse_result.error != PARSE_ERROR_NONE)
                 return parse_result;
-
-            parse_result.ast_node_ptr->m_parent = node;
-
-            if (!vec_base_push_back(&sub_nodes, self->alloc, &parse_result.ast_node_ptr))
-                return OOM_ERROR;
 
             tok = &self->tokens.m_data[self->tokens.m_size - 1];
             if (self->token_idx >= self->tokens.m_size || (tok = &self->tokens.m_data[self->token_idx++])->m_type != TOKEN_TYPE_EQUALS1)
                 return syntax_error("Type must be followed by <=>", tok->m_line_number);
 
-            parse_result = parser_state_parse_arithm_expr(self, 0);
+            parse_result = parser_state_parse_and_add_arithm_expr_ast_sub_node(self, node, &node_sub_nodes, 0);
             if (parse_result.error != PARSE_ERROR_NONE)
                 return parse_result;
-
-            parse_result.ast_node_ptr->m_parent = node;
-
-            if (!vec_base_push_back(&sub_nodes, self->alloc, &parse_result.ast_node_ptr))
-                return OOM_ERROR;
 
             tok = &self->tokens.m_data[self->tokens.m_size - 1];
             if (self->token_idx >= self->tokens.m_size || (tok = &self->tokens.m_data[self->token_idx++])->m_type != TOKEN_TYPE_SEMICOLON)
                 return syntax_error("<let> statement must end with <;>", tok->m_line_number);
 
-            node->m_sub_nodes = (AST_node_ptr_slice){.m_size = sub_nodes.m_size, .m_data = sub_nodes.m_data};
+            node->m_sub_nodes = (AST_node_ptr_slice){.m_size = node_sub_nodes.m_size, .m_data = node_sub_nodes.m_data};
             break;
         }
 
@@ -530,118 +485,88 @@ static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
             if (self->token_idx >= self->tokens.m_size || self->tokens.m_data[self->token_idx++].m_type != TOKEN_TYPE_LPAREN)
                 return syntax_error("<%s> must be followed by <(>", tok->m_line_number, str_base_data_const(&tok->m_id));
 
-            node = parser_state_ast_node_alloc(self, tok);
-            if (!node)
-                return OOM_ERROR;
-
             if (loop_label_tok_ptr){
-                AST_node *loop_label_id_node = parser_state_ast_node_alloc(self, loop_label_tok_ptr);
                 AST_node *colon_node = parser_state_ast_node_alloc(self, &loop_label_tok_ptr[1]);
                 Vec_base colon_node_sub_nodes = vec_base_init(AST_node*);
+                AST_node *loop_label_id_node;
                 if (
-                    !loop_label_id_node ||
                     !colon_node ||
-                    !vec_base_push_back(&colon_node_sub_nodes, self->alloc, &loop_label_id_node) ||
-                    !vec_base_push_back(&sub_nodes, self->alloc, &colon_node)
+                    !vec_base_push_back(&node_sub_nodes, self->alloc, &colon_node) ||
+                    !(loop_label_id_node = parser_state_ast_node_alloc(self, loop_label_tok_ptr)) ||
+                    !vec_base_push_back(&colon_node_sub_nodes, self->alloc, &loop_label_id_node)
                 )
                     return OOM_ERROR;
-                loop_label_id_node->m_parent = colon_node;
                 colon_node->m_parent = node;
                 colon_node->m_sub_nodes = (AST_node_ptr_slice){.m_size = colon_node_sub_nodes.m_size, .m_data = colon_node_sub_nodes.m_data};
+                loop_label_id_node->m_parent = colon_node;
             }
 
-            parse_result = parser_state_parse_arithm_expr(self, 0);
+            parse_result = parser_state_parse_and_add_arithm_expr_ast_sub_node(self, node, &node_sub_nodes, 0);
             if (parse_result.error != PARSE_ERROR_NONE)
                 return parse_result;
 
-            parse_result.ast_node_ptr->m_parent = node;
-
-            const Token *tok_temp = &self->tokens.m_data[self->token_idx++];
-            if (tok_temp->m_type != TOKEN_TYPE_RPAREN)
-                return syntax_error("<%s> statement's conditional expression must be closed by <)>", tok_temp->m_line_number, str_base_data_const(&tok->m_id));
-
-            if (!vec_base_push_back(&sub_nodes, self->alloc, &parse_result.ast_node_ptr))
-                return OOM_ERROR;
+            const Token *temp = &self->tokens.m_data[self->token_idx++];
+            if (temp->m_type != TOKEN_TYPE_RPAREN)
+                return syntax_error("<%s> statement's conditional expression must be closed by <)>", temp->m_line_number, str_base_data_const(&tok->m_id));
 
             if (self->token_idx >= self->tokens.m_size){
                 if (tok->m_type == TOKEN_TYPE_WHILE)
-                    return syntax_error("<while> statement is missing body or continue expression", tok_temp->m_line_number);
-                return syntax_error("<if> statement is missing body", tok_temp->m_line_number);
+                    return syntax_error("<while> statement is missing body or continue expression", temp->m_line_number);
+                return syntax_error("<if> statement is missing body", temp->m_line_number);
             }
 
-            if (tok->m_type == TOKEN_TYPE_WHILE && (tok_temp = &self->tokens.m_data[self->token_idx])->m_type == TOKEN_TYPE_COLON){
-                const Token *colon_token = tok_temp;
+            if (tok->m_type == TOKEN_TYPE_WHILE && (temp = &self->tokens.m_data[self->token_idx])->m_type == TOKEN_TYPE_COLON){
+                const Token *colon_token = temp;
 
-                if (++self->token_idx >= self->tokens.m_size || (tok_temp = &self->tokens.m_data[self->token_idx++])->m_type != TOKEN_TYPE_LPAREN)
-                    return syntax_error("<:> must be followed by <(> in continue expression", tok_temp->m_line_number);
-
-                parse_result = (self->tokens.m_data[self->token_idx].m_type == TOKEN_TYPE_LBRACE) ? parser_state_parse_expr(self): parser_state_parse_arithm_expr(self, 0);
-                if (parse_result.error != PARSE_ERROR_NONE)
-                    return parse_result;
-
-                tok_temp = &self->tokens.m_data[self->token_idx++];
-                if (tok_temp->m_type != TOKEN_TYPE_RPAREN)
-                    return syntax_error("<while> loop's continue expression must be closed by <)>", tok_temp->m_line_number);
+                if (++self->token_idx >= self->tokens.m_size || (temp = &self->tokens.m_data[self->token_idx++])->m_type != TOKEN_TYPE_LPAREN)
+                    return syntax_error("<:> must be followed by <(> in continue expression", temp->m_line_number);
 
                 AST_node *colon_node = parser_state_ast_node_alloc(self, colon_token);
                 Vec_base colon_node_sub_nodes = vec_base_init(AST_node*);
-
-                if (
-                    !colon_node ||
-                    !vec_base_push_back(&colon_node_sub_nodes, self->alloc, &parse_result.ast_node_ptr) ||
-                    !vec_base_push_back(&sub_nodes, self->alloc, &colon_node)
-                )
+                if (!colon_node)
                     return OOM_ERROR;
 
-                parse_result.ast_node_ptr->m_parent = colon_node;
-                colon_node->m_parent = node;
-                colon_node->m_sub_nodes = (AST_node_ptr_slice){.m_size = colon_node_sub_nodes.m_size, .m_data = colon_node_sub_nodes.m_data};
-
-                if (self->token_idx >= self->tokens.m_size)
-                    return syntax_error("<while> statement is missing body", tok_temp->m_line_number);
-            }
-
-            if (self->tokens.m_data[self->token_idx].m_type != TOKEN_TYPE_SEMICOLON){
-                parse_result = parser_state_parse_expr(self);
+                parse_result = (self->tokens.m_data[self->token_idx].m_type == TOKEN_TYPE_LBRACE) ? parser_state_parse(self): parser_state_parse_arithm_expr(self, 0);
                 if (parse_result.error != PARSE_ERROR_NONE)
                     return parse_result;
-
-                if (!vec_base_push_back(&sub_nodes, self->alloc, &parse_result.ast_node_ptr))
+                if (!vec_base_push_back(&colon_node_sub_nodes, self->alloc, &parse_result.ast_node_ptr) || !vec_base_push_back(&node_sub_nodes, self->alloc, &colon_node))
                     return OOM_ERROR;
+                parse_result.ast_node_ptr->m_parent = colon_node;
 
-                parse_result.ast_node_ptr->m_parent = node;
+                temp = &self->tokens.m_data[self->token_idx++];
+                if (temp->m_type != TOKEN_TYPE_RPAREN)
+                    return syntax_error("<while> loop's continue expression must be closed by <)>", temp->m_line_number);
+                if (self->token_idx >= self->tokens.m_size)
+                    return syntax_error("<while> statement is missing body", temp->m_line_number);
+
+                colon_node->m_parent = node;
+                colon_node->m_sub_nodes = (AST_node_ptr_slice){.m_size = colon_node_sub_nodes.m_size, .m_data = colon_node_sub_nodes.m_data};
             }
-            else
+
+            if (self->tokens.m_data[self->token_idx].m_type == TOKEN_TYPE_SEMICOLON)
                 ++self->token_idx;
+            else if ((parse_result = parser_state_parse_and_add_ast_sub_node(self, node, &node_sub_nodes)).error != PARSE_ERROR_NONE)
+                return parse_result;
 
             if (tok->m_type != TOKEN_TYPE_WHILE && self->token_idx < self->tokens.m_size && (tok = &self->tokens.m_data[self->token_idx])->m_type == TOKEN_TYPE_ELSE){
                 if (++self->token_idx >= self->tokens.m_size)
                     return syntax_error("<else> statement is missing body", tok->m_line_number);
 
-                Vec_base else_sub_nodes = vec_base_init(AST_node*);
                 AST_node *else_node = parser_state_ast_node_alloc(self, tok);
-                if (!else_node || !vec_base_push_back(&sub_nodes, self->alloc, &else_node))
+                Vec_base else_node_sub_nodes = vec_base_init(AST_node*);
+                if (!else_node || !vec_base_push_back(&node_sub_nodes, self->alloc, &else_node))
                     return OOM_ERROR;
 
-                else_node->m_parent = node;
-
-                if (self->tokens.m_data[self->token_idx].m_type != TOKEN_TYPE_SEMICOLON){
-                    parse_result = parser_state_parse_expr(self);
-                    if (parse_result.error != PARSE_ERROR_NONE)
-                        return parse_result;
-
-                    if (!vec_base_push_back(&else_sub_nodes, self->alloc, &parse_result.ast_node_ptr))
-                        return OOM_ERROR;
-
-                    parse_result.ast_node_ptr->m_parent = else_node;
-                }
-                else
+                if (self->tokens.m_data[self->token_idx].m_type == TOKEN_TYPE_SEMICOLON)
                     ++self->token_idx;
+                else if ((parse_result = parser_state_parse_and_add_ast_sub_node(self, else_node, &else_node_sub_nodes)).error != PARSE_ERROR_NONE)
+                    return parse_result;
 
-                else_node->m_sub_nodes = (AST_node_ptr_slice){.m_size = else_sub_nodes.m_size, .m_data = else_sub_nodes.m_data};
+                else_node->m_parent = node;
+                else_node->m_sub_nodes = (AST_node_ptr_slice){.m_size = else_node_sub_nodes.m_size, .m_data = else_node_sub_nodes.m_data};
             }
 
-            node->m_sub_nodes = (AST_node_ptr_slice){.m_size = sub_nodes.m_size, .m_data = sub_nodes.m_data};
+            node->m_sub_nodes = (AST_node_ptr_slice){.m_size = node_sub_nodes.m_size, .m_data = node_sub_nodes.m_data};
             break;
         }
 
@@ -672,33 +597,27 @@ static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
             
             usize for_end_expr_end_pos = self->token_idx++;
 
+            const Token *for_capture_tok = tok;
+
             if (
                 self->token_idx >= self->tokens.m_size || (tok = &self->tokens.m_data[self->token_idx++])->m_type != TOKEN_TYPE_PIPE ||
-                self->token_idx >= self->tokens.m_size || (tok = &self->tokens.m_data[self->token_idx++])->m_type != TOKEN_TYPE_ID
+                self->token_idx >= self->tokens.m_size || (tok = for_capture_tok = &self->tokens.m_data[self->token_idx++])->m_type != TOKEN_TYPE_ID ||
+                self->token_idx >= self->tokens.m_size || (tok = &self->tokens.m_data[self->token_idx++])->m_type != TOKEN_TYPE_PIPE
             )
-                return syntax_error("<for> statement's range expression must be followed by a capture expression <|identifier|>", tok->m_line_number);
-
-            AST_node *for_capture_node = parser_state_ast_node_alloc(self, tok);
-            if (!for_capture_node)
-                return OOM_ERROR;
-
-            if (self->token_idx >= self->tokens.m_size || (tok = &self->tokens.m_data[self->token_idx++])->m_type != TOKEN_TYPE_PIPE)
                 return syntax_error("<for> statement's range expression must be followed by a capture expression <|identifier|>", tok->m_line_number);
 
             if (self->token_idx >= self->tokens.m_size)
                 return syntax_error("<for> statement is missing body", tok->m_line_number);
 
             usize for_body_start_pos = self->token_idx;
+
             bool for_body_empty = (self->tokens.m_data[for_body_start_pos].m_type == TOKEN_TYPE_SEMICOLON);
-            if (!for_body_empty){
-                parse_result = parser_state_parse_expr(self);
-                if (parse_result.error != PARSE_ERROR_NONE)
-                    return parse_result;
-            }
+            if (!for_body_empty && (parse_result = parser_state_parse(self)).error != PARSE_ERROR_NONE)
+                return parse_result;
 
             self->token_idx += for_body_empty;
 
-            const char *capture_id = str_base_data_const(&for_capture_node->m_token->m_id);
+            const char *capture_id = str_base_data_const(&for_capture_tok->m_id);
 
             Str_base_result start_var_id = str_base_init_fmt(self->alloc, "$%s_start", capture_id);
             if (!start_var_id.success)
@@ -710,7 +629,7 @@ static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
                 return OOM_ERROR;
             char *end_var = str_base_data(&end_var_id.result);
 
-            usize for_capture_node_line_number = for_capture_node->m_token->m_line_number;
+            usize for_capture_node_line_number = for_capture_tok->m_line_number;
 
             Vec_base for_to_while_tokens = vec_base_init(Token);
             #define for_to_while_push_back(id, token_type) \
@@ -775,13 +694,12 @@ static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
             self->token_idx = 0;
             self->tokens = (Token_slice){.m_size = for_to_while_tokens.m_size, .m_data = for_to_while_tokens.m_data};
 
-            parse_result = parser_state_parse_expr(self);
+            parse_result = parser_state_parse(self);
+            if (parse_result.error != PARSE_ERROR_NONE)
+                return parse_result;
 
             self->token_idx = current_token_idx;
             self->tokens = current_token_slice;
-
-            if (parse_result.error != PARSE_ERROR_NONE)
-                return parse_result;
 
             node = parse_result.ast_node_ptr;
             break;
@@ -792,26 +710,20 @@ static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
             if (self->token_idx >= self->tokens.m_size)
                 return syntax_error("No tokens are available", tok->m_line_number);
 
-            node = parser_state_ast_node_alloc(self, tok);
-            if (!node)
-                return OOM_ERROR;
-
-            const Token *tok_temp = &self->tokens.m_data[self->token_idx++];
-            if (tok_temp->m_type != TOKEN_TYPE_SEMICOLON){
-                if (tok_temp->m_type != TOKEN_TYPE_ID)
+            const Token *temp = &self->tokens.m_data[self->token_idx++];
+            if (temp->m_type != TOKEN_TYPE_SEMICOLON){
+                if (temp->m_type != TOKEN_TYPE_ID)
                     return syntax_error("<%s> must be followed by an identifier", tok->m_line_number, str_base_data_const(&tok->m_id));
-
                 if (self->token_idx >= self->tokens.m_size || self->tokens.m_data[self->token_idx++].m_type != TOKEN_TYPE_SEMICOLON)
-                    return syntax_error("<%s> must be followed by <;>", tok_temp->m_line_number, str_base_data_const(&tok_temp->m_id));
+                    return syntax_error("<%s> must be followed by <;>", temp->m_line_number, str_base_data_const(&temp->m_id));
 
-                AST_node *break_continue_id_node = parser_state_ast_node_alloc(self, tok_temp);
-                if (!break_continue_id_node || !vec_base_push_back(&sub_nodes, self->alloc, &break_continue_id_node))
+                AST_node *break_continue_id_node = parser_state_ast_node_alloc(self, temp);
+                if (!break_continue_id_node || !vec_base_push_back(&node_sub_nodes, self->alloc, &break_continue_id_node))
                     return OOM_ERROR;
-
                 break_continue_id_node->m_parent = node;
             }
 
-            node->m_sub_nodes = (AST_node_ptr_slice){.m_size = sub_nodes.m_size, .m_data = sub_nodes.m_data};
+            node->m_sub_nodes = (AST_node_ptr_slice){.m_size = node_sub_nodes.m_size, .m_data = node_sub_nodes.m_data};
             break;
         }
 
@@ -819,24 +731,16 @@ static Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
             if (self->token_idx >= self->tokens.m_size)
                 return syntax_error("<return> must be followed by a <;> or an arithmetic expression", tok->m_line_number);
 
-            node = parser_state_ast_node_alloc(self, tok);
-            if (!node)
-                return OOM_ERROR;
-
-            if (self->tokens.m_data[self->token_idx].m_type != TOKEN_TYPE_SEMICOLON){
-                parse_result = parser_state_parse_arithm_expr(self, 0);
-                if (parse_result.error != PARSE_ERROR_NONE)
-                    return parse_result;
-
-                if (!vec_base_push_back(&sub_nodes, self->alloc, &parse_result.ast_node_ptr))
-                    return OOM_ERROR;
-
-                parse_result.ast_node_ptr->m_parent = node;
-            }
-            node->m_sub_nodes = (AST_node_ptr_slice){.m_size = sub_nodes.m_size, .m_data = sub_nodes.m_data};
+            if (
+                self->tokens.m_data[self->token_idx].m_type != TOKEN_TYPE_SEMICOLON &&
+                (parse_result = parser_state_parse_and_add_arithm_expr_ast_sub_node(self, node, &node_sub_nodes, 0)).error != PARSE_ERROR_NONE
+            )
+                return parse_result;
 
             if (self->token_idx >= self->tokens.m_size || self->tokens.m_data[self->token_idx++].m_type != TOKEN_TYPE_SEMICOLON)
                 return syntax_error("<return> statement must end with <;>", tok->m_line_number);
+
+            node->m_sub_nodes = (AST_node_ptr_slice){.m_size = node_sub_nodes.m_size, .m_data = node_sub_nodes.m_data};
             break;
 
         default:
@@ -901,7 +805,7 @@ Parse_result parse(Arena *arena, Token_slice tokens){
     while (state.token_idx < state.tokens.m_size){
         const Token *tok = &state.tokens.m_data[state.token_idx];
         if (tok->m_type != TOKEN_TYPE_SEMICOLON){
-            Parser_state_parse_result ast_node = parser_state_parse_expr(&state);
+            Parser_state_parse_result ast_node = parser_state_parse(&state);
             if (ast_node.error != PARSE_ERROR_NONE)
                 return (Parse_result){.error_info = ast_node.error_info, .error = ast_node.error};
             if (!vec_base_push_back(&state.ast_node_ptrs, state.alloc, &ast_node.ast_node_ptr))
