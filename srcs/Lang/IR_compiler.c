@@ -34,12 +34,18 @@ static const char *TYPE_INFO_TAG_SYMBOLS[] = {
 
 static Type_info ast_node_to_type_info(const AST_node *type_node){
     Type_info result = {0};
-    while (type_node->m_token->m_type == TOKEN_TYPE_LBRACKET){
+    while (type_node->m_type == AST_NODE_TYPE_TYPE_LIST){
         type_node = type_node->m_sub_nodes.m_data[0];
         ++result.m_dimensions;
     }
-    result.m_tag = (enum Type_info_tag)(TYPE_INFO_TAG_VOID + (type_node->m_token->m_type - TOKEN_TYPE_VOID));
+    result.m_tag = (enum Type_info_tag)(TYPE_INFO_TAG_VOID + (type_node->m_type - AST_NODE_TYPE_TYPE_VOID));
     return result;
+}
+
+static const AST_node* ast_node_find_fn_node(const AST_node *ast_node){
+    while (ast_node && ast_node->m_type != AST_NODE_TYPE_DECL_FN)
+        ast_node = ast_node->m_parent;
+    return ast_node;
 }
 
 static Str_base_result type_info_to_str_base(Type_info type_info, Allocator alloc){
@@ -221,13 +227,13 @@ static bool IR_compiler_state_add_type_conversion_instruction(IR_compiler_state 
 static bool IR_compiler_state_pop_on_discarded_expression(IR_compiler_state *self, const AST_node *ast_node){
     if (ast_node->m_parent){
         const AST_node *parent = ast_node->m_parent;
-        enum Token_type parent_token_type = parent->m_token->m_type;
+        enum AST_node_type parent_token_type = parent->m_type;
         switch (parent_token_type){
-            case TOKEN_TYPE_LBRACE:
+            case AST_NODE_TYPE_STATEMENT_BLOCK:
                 break;
-            case TOKEN_TYPE_IF:
-            case TOKEN_TYPE_WHILE:
-                if (parent->m_sub_nodes.m_data[parent_token_type == TOKEN_TYPE_WHILE] != ast_node)
+            case AST_NODE_TYPE_STATEMENT_IF:
+            case AST_NODE_TYPE_STATEMENT_WHILE:
+                if (parent->m_sub_nodes.m_data[parent_token_type == AST_NODE_TYPE_STATEMENT_WHILE] != ast_node)
                     break;
                 FALLTHROUGH;
             default:
@@ -246,7 +252,7 @@ static bool IR_compiler_state_pop_on_discarded_expression(IR_compiler_state *sel
     } while (0)
 
 static IR_compiler_state_compile_result IR_compiler_state_push_back_var_id(IR_compiler_state *self, const AST_node *id_node, Type_info id_type_info){
-    assert(id_node->m_parent->m_token->m_type == TOKEN_TYPE_FN || id_node->m_parent->m_token->m_type == TOKEN_TYPE_LET);
+    assert(id_node->m_parent->m_type == AST_NODE_TYPE_DECL_FN || id_node->m_parent->m_type == AST_NODE_TYPE_DECL_VAR);
     assert(self->var_ids.m_keys.m_size == self->type_info_stack.m_size - 1);
 
     enum Umap_insert_error insert_error = ordered_umap_base_push_back(
@@ -256,7 +262,7 @@ static IR_compiler_state_compile_result IR_compiler_state_push_back_var_id(IR_co
         &(Var_id_info){
             .stack_idx = self->var_ids.m_keys.m_size,
             .type_info = id_type_info,
-            .is_global = (id_node->m_parent->m_token->m_type == TOKEN_TYPE_LET && !id_node->m_parent->m_parent)
+            .is_global = (id_node->m_parent->m_type == AST_NODE_TYPE_DECL_VAR && !id_node->m_parent->m_parent)
         }
     ).error;
 
@@ -300,13 +306,13 @@ static IR_compiler_state_compile_result IR_compiler_state_init_list_type_info_fr
 
     const AST_node *parent = init_list_node->m_parent;
 
-    switch (parent->m_token->m_type){
-        case TOKEN_TYPE_INIT_LIST:
+    switch (parent->m_type){
+        case AST_NODE_TYPE_ATOM_INIT_LIST:
             (void)IR_compiler_state_init_list_type_info_from_context(self, parent, out_init_list_type_info);
             if (--out_init_list_type_info->m_dimensions == 0)
                 return syntax_error("Initializer list has an incorrect number of dimensions", init_list_node->m_token->m_line_number);
             break;
-        case TOKEN_TYPE_LPAREN:{
+        case AST_NODE_TYPE_FN_CALL:{
             usize i = 1;
             while (parent->m_sub_nodes.m_data[i] != init_list_node)
                 ++i;
@@ -317,29 +323,27 @@ static IR_compiler_state_compile_result IR_compiler_state_init_list_type_info_fr
             )->arg_type_infos.m_data[i - 1];
             break;
         }
-        case TOKEN_TYPE_EQUALS1:{
+        case AST_NODE_TYPE_BINARY_OP_ASSIGN:{
             usize i = 0;
             const AST_node *id_node = parent->m_sub_nodes.m_data[0];
-            while (id_node->m_token->m_type != TOKEN_TYPE_ID){
-                i += (id_node->m_token->m_type == TOKEN_TYPE_LBRACKET);
+            while (id_node->m_type != AST_NODE_TYPE_ATOM_ID){
+                i += (id_node->m_type == AST_NODE_TYPE_BINARY_OP_SUBSCRIPT);
                 id_node = id_node->m_sub_nodes.m_data[0];
             }
             *out_init_list_type_info = ((Var_id_info*)ordered_umap_base_at_key(&self->var_ids, &id_node->m_token->m_id).m_value)->type_info;
             out_init_list_type_info->m_dimensions -= i;
             break;
         }
-        case TOKEN_TYPE_AS:
+        case AST_NODE_TYPE_BINARY_OP_AS:
             *out_init_list_type_info = ast_node_to_type_info(parent->m_sub_nodes.m_data[1]);
             if (out_init_list_type_info->m_dimensions == 0)
                 return syntax_error("Casting initializer list to non-list type in <as> expression", init_list_node->m_token->m_line_number);
             break;
-        case TOKEN_TYPE_LET:
+        case AST_NODE_TYPE_DECL_VAR:
             *out_init_list_type_info = ast_node_to_type_info(parent->m_sub_nodes.m_data[1]);
             break;
-        case TOKEN_TYPE_RETURN:{
-            const AST_node *fn_node = parent->m_parent;
-            while (fn_node && fn_node->m_token->m_type != TOKEN_TYPE_FN)
-                fn_node = fn_node->m_parent;
+        case AST_NODE_TYPE_STATEMENT_RETURN:{
+            const AST_node *fn_node = ast_node_find_fn_node(parent->m_parent);
             if (!fn_node)
                 return syntax_error("Returning an initializer list is only allowed inside a user-defined function", init_list_node->m_token->m_line_number);
             *out_init_list_type_info = ((Fn_id_info*)ordered_umap_base_at_key(self->fn_ids_ptr, &fn_node->m_sub_nodes.m_data[0]->m_token->m_id).m_value)->return_type_info;
@@ -362,8 +366,8 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
     enum Binary_op bin_op;
     enum Op_code bin_op_code;
 
-    switch (ast_node->m_token->m_type){
-        case TOKEN_TYPE_ID:{
+    switch (ast_node->m_type){
+        case AST_NODE_TYPE_ATOM_ID:{
             Var_id_info *var_id_info_ptr = ordered_umap_base_at_key(&self->var_ids, &ast_node->m_token->m_id).m_value;
             if (!var_id_info_ptr)
                 return syntax_error("Use of undeclared identifier <%s>", ast_node->m_token->m_line_number, str_base_data_const(&ast_node->m_token->m_id));
@@ -376,33 +380,33 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
             pop_on_discarded_expression(ast_node);
             break;
         }
-        case TOKEN_TYPE_ARGV:
+        case AST_NODE_TYPE_ATOM_ARGV:
             if (!vec_base_push_back(&self->type_info_stack, self->alloc, &(Type_info){.m_tag = TYPE_INFO_TAG_STR, .m_dimensions = 1}))
                 return OOM_ERROR;
             add_instruction("%s %s", op_code_to_str(OP_CODE_PUSH), str_base_data_const(&ast_node->m_token->m_id));
             pop_on_discarded_expression(ast_node);
             break;
-        case TOKEN_TYPE_FALSE:
-        case TOKEN_TYPE_TRUE:
+        case AST_NODE_TYPE_ATOM_FALSE:
+        case AST_NODE_TYPE_ATOM_TRUE:
             if (!vec_base_push_back(&self->type_info_stack, self->alloc, &(Type_info){.m_tag = TYPE_INFO_TAG_BOOL, .m_dimensions = 0}))
                 return OOM_ERROR;
             add_instruction("%s %s", op_code_to_str(OP_CODE_PUSH), str_base_data_const(&ast_node->m_token->m_id));
             pop_on_discarded_expression(ast_node);
             break;
-        case TOKEN_TYPE_CHAR_LIT:
-        case TOKEN_TYPE_INT_LIT:
-        case TOKEN_TYPE_FLOAT_LIT:
-        case TOKEN_TYPE_STR_LIT:
+        case AST_NODE_TYPE_ATOM_CHAR_LIT:
+        case AST_NODE_TYPE_ATOM_INT_LIT:
+        case AST_NODE_TYPE_ATOM_FLOAT_LIT:
+        case AST_NODE_TYPE_ATOM_STR_LIT:
             if (!vec_base_push_back(
                 &self->type_info_stack,
                 self->alloc,
-                &(Type_info){.m_tag = (enum Type_info_tag)(TYPE_INFO_TAG_CHAR + (ast_node->m_token->m_type - TOKEN_TYPE_CHAR_LIT)), .m_dimensions = 0}
+                &(Type_info){.m_tag = (enum Type_info_tag)(TYPE_INFO_TAG_CHAR + (ast_node->m_type - AST_NODE_TYPE_ATOM_CHAR_LIT)), .m_dimensions = 0}
             ))
                 return OOM_ERROR;
             add_instruction("%s %s", op_code_to_str(OP_CODE_PUSH), str_base_data_const(&ast_node->m_token->m_id));
             pop_on_discarded_expression(ast_node);
             break;
-        case TOKEN_TYPE_INIT_LIST:{
+        case AST_NODE_TYPE_ATOM_INIT_LIST:{
             if (!ast_node->m_parent)
                 return syntax_error("Initializer list's type is unknown in the current context", ast_node->m_token->m_line_number);
 
@@ -447,7 +451,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
             break;
         }
 
-        case TOKEN_TYPE_LPAREN:{
+        case AST_NODE_TYPE_FN_CALL:{
             const char *fn_id = str_base_data_const(&ast_node->m_sub_nodes.m_data[0]->m_token->m_id);
             AST_node_ptr_slice fn_arg_nodes = {.m_size = ast_node->m_sub_nodes.m_size - 1, .m_data = &ast_node->m_sub_nodes.m_data[1]};
 
@@ -475,7 +479,6 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                         Str_base_result type_info_list_str = type_info_slice_to_str_base(arg_type_infos, self->alloc);
                         if (!type_info_list_str.success)
                             return OOM_ERROR;
-
                         return syntax_error(
                             "Builtin function <%s> is not callable with types <%s>",
                             ast_node->m_token->m_line_number,
@@ -525,13 +528,13 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
             }
             else if (ast_node->m_parent){
                 const AST_node *parent = ast_node->m_parent;
-                enum Token_type parent_token_type = parent->m_token->m_type;
+                enum AST_node_type parent_token_type = parent->m_type;
                 switch (parent_token_type){
-                    case TOKEN_TYPE_LBRACE:
+                    case AST_NODE_TYPE_STATEMENT_BLOCK:
                         break;
-                    case TOKEN_TYPE_IF:
-                    case TOKEN_TYPE_WHILE:
-                        if (parent->m_sub_nodes.m_data[parent_token_type == TOKEN_TYPE_WHILE] != ast_node)
+                    case AST_NODE_TYPE_STATEMENT_IF:
+                    case AST_NODE_TYPE_STATEMENT_WHILE:
+                        if (parent->m_sub_nodes.m_data[parent_token_type == AST_NODE_TYPE_STATEMENT_WHILE] != ast_node)
                             break;
                         FALLTHROUGH;
                     default:
@@ -546,7 +549,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
             break;
         }
 
-        case TOKEN_TYPE_LBRACE:
+        case AST_NODE_TYPE_STATEMENT_BLOCK:
             if (!vec_base_push_back(&self->id_count_stack, self->alloc, &(Id_count){0}))
                 return OOM_ERROR;
             for (usize i = 0; i < ast_node->m_sub_nodes.m_size; ++i){
@@ -557,7 +560,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
             pop_ids_in_current_scope();
             break;
 
-        case TOKEN_TYPE_AS:{
+        case AST_NODE_TYPE_BINARY_OP_AS:{
             const AST_node *lhs_node = ast_node->m_sub_nodes.m_data[0];
             const AST_node *rhs_node = ast_node->m_sub_nodes.m_data[1];
 
@@ -578,47 +581,49 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
             break;
         }
 
-        case TOKEN_TYPE_EQUALS1:{
+        case AST_NODE_TYPE_BINARY_OP_ASSIGN:{
             const AST_node *lhs_node = ast_node->m_sub_nodes.m_data[0];
             const AST_node *rhs_node = ast_node->m_sub_nodes.m_data[1];
 
             bool push_back_after_assignment = false;
             if (ast_node->m_parent){
                 const AST_node *parent = ast_node->m_parent;
-                enum Token_type parent_token_type = parent->m_token->m_type;
+                enum AST_node_type parent_token_type = parent->m_type;
                 switch (parent_token_type){
-                    case TOKEN_TYPE_IF:
-                    case TOKEN_TYPE_WHILE:
-                        if (parent->m_sub_nodes.m_data[parent_token_type == TOKEN_TYPE_WHILE] != ast_node)
+                    case AST_NODE_TYPE_STATEMENT_IF:
+                    case AST_NODE_TYPE_STATEMENT_WHILE:
+                        if (parent->m_sub_nodes.m_data[parent_token_type == AST_NODE_TYPE_STATEMENT_WHILE] != ast_node)
                             break;
                         FALLTHROUGH;
-                    case TOKEN_TYPE_LPAREN:
-                    case TOKEN_TYPE_TILDE:
-                    case TOKEN_TYPE_NOT:
-                    case TOKEN_TYPE_AS:
-                    case TOKEN_TYPE_EQUALS1:
-                    case TOKEN_TYPE_PLUS:
-                    case TOKEN_TYPE_MINUS:
-                    case TOKEN_TYPE_LBRACKET:
-                    case TOKEN_TYPE_EQUALS2:
-                    case TOKEN_TYPE_NOT_EQUALS1:
-                    case TOKEN_TYPE_LESS_THAN1:
-                    case TOKEN_TYPE_LESS_THAN1_EQUALS1:
-                    case TOKEN_TYPE_GREATER_THAN1:
-                    case TOKEN_TYPE_GREATER_THAN1_EQUALS1:
-                    case TOKEN_TYPE_ASTERISK1:
-                    case TOKEN_TYPE_SLASH:
-                    case TOKEN_TYPE_PERCENT:
-                    case TOKEN_TYPE_ASTERISK2:
-                    case TOKEN_TYPE_LESS_THAN2:
-                    case TOKEN_TYPE_GREATER_THAN2:
-                    case TOKEN_TYPE_AMPERSAND:
-                    case TOKEN_TYPE_PIPE:
-                    case TOKEN_TYPE_CARET:
-                    case TOKEN_TYPE_AND:
-                    case TOKEN_TYPE_OR:
-                    case TOKEN_TYPE_LET:
-                    case TOKEN_TYPE_RETURN:
+                    case AST_NODE_TYPE_FN_CALL:
+                    case AST_NODE_TYPE_UNARY_OP_PLUS:
+                    case AST_NODE_TYPE_UNARY_OP_MINUS:
+                    case AST_NODE_TYPE_UNARY_OP_BNEG:
+                    case AST_NODE_TYPE_UNARY_OP_NOT:
+                    case AST_NODE_TYPE_BINARY_OP_SUBSCRIPT:
+                    case AST_NODE_TYPE_BINARY_OP_POW:
+                    case AST_NODE_TYPE_BINARY_OP_AS:
+                    case AST_NODE_TYPE_BINARY_OP_MUL:
+                    case AST_NODE_TYPE_BINARY_OP_DIV:
+                    case AST_NODE_TYPE_BINARY_OP_REM:
+                    case AST_NODE_TYPE_BINARY_OP_ADD:
+                    case AST_NODE_TYPE_BINARY_OP_SUB:
+                    case AST_NODE_TYPE_BINARY_OP_SHL:
+                    case AST_NODE_TYPE_BINARY_OP_SHR:
+                    case AST_NODE_TYPE_BINARY_OP_CMP_LE:
+                    case AST_NODE_TYPE_BINARY_OP_CMP_LEQ:
+                    case AST_NODE_TYPE_BINARY_OP_CMP_GE:
+                    case AST_NODE_TYPE_BINARY_OP_CMP_GEQ:
+                    case AST_NODE_TYPE_BINARY_OP_CMP_EQ:
+                    case AST_NODE_TYPE_BINARY_OP_CMP_NEQ:
+                    case AST_NODE_TYPE_BINARY_OP_BAND:
+                    case AST_NODE_TYPE_BINARY_OP_XOR:
+                    case AST_NODE_TYPE_BINARY_OP_BOR:
+                    case AST_NODE_TYPE_BINARY_OP_AND:
+                    case AST_NODE_TYPE_BINARY_OP_OR:
+                    case AST_NODE_TYPE_BINARY_OP_ASSIGN:
+                    case AST_NODE_TYPE_DECL_VAR:
+                    case AST_NODE_TYPE_STATEMENT_RETURN:
                         push_back_after_assignment = true;
                         break;
                     default:
@@ -626,11 +631,11 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                 }
             }
 
-            if (lhs_node->m_token->m_type != TOKEN_TYPE_LBRACKET){
+            if (lhs_node->m_type != AST_NODE_TYPE_BINARY_OP_SUBSCRIPT){
                 // TODO?: change argv to be mutable
-                if (lhs_node->m_token->m_type == TOKEN_TYPE_ARGV)
+                if (lhs_node->m_type == AST_NODE_TYPE_ATOM_ARGV)
                     return syntax_error("<argv> is immutable", lhs_node->m_token->m_line_number);
-                if (lhs_node->m_token->m_type != TOKEN_TYPE_ID)
+                if (lhs_node->m_type != AST_NODE_TYPE_ATOM_ID)
                     return syntax_error("Trying to assign to rvalue", lhs_node->m_token->m_line_number);
 
                 Var_id_info *var_id_info_ptr = ordered_umap_base_at_key(&self->var_ids, &lhs_node->m_token->m_id).m_value;
@@ -659,13 +664,13 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
             else{
                 for (
                     const AST_node *lhs_sub_node = lhs_node->m_sub_nodes.m_data[0];
-                    lhs_sub_node->m_token->m_type != TOKEN_TYPE_ID;
+                    lhs_sub_node->m_type != AST_NODE_TYPE_ATOM_ID;
                     lhs_sub_node = lhs_sub_node->m_sub_nodes.m_data[0]
                 ){
-                    enum Token_type token_type = lhs_sub_node->m_token->m_type;
-                    if (token_type == TOKEN_TYPE_ARGV)
+                    enum AST_node_type ast_node_type = lhs_sub_node->m_type;
+                    if (ast_node_type == AST_NODE_TYPE_ATOM_ARGV)
                         return syntax_error("<argv> is immutable", lhs_sub_node->m_token->m_line_number);
-                    if (token_type != TOKEN_TYPE_EQUALS1 && token_type != TOKEN_TYPE_LBRACKET && token_type != TOKEN_TYPE_AS)
+                    if (ast_node_type != AST_NODE_TYPE_BINARY_OP_ASSIGN && ast_node_type != AST_NODE_TYPE_BINARY_OP_SUBSCRIPT && ast_node_type != AST_NODE_TYPE_BINARY_OP_AS)
                         return syntax_error("Trying to assign to rvalue", lhs_sub_node->m_token->m_line_number);
                 }
 
@@ -718,27 +723,10 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
             break;
         }
 
-        case TOKEN_TYPE_PLUS:
-        case TOKEN_TYPE_MINUS:
-            if (ast_node->m_sub_nodes.m_size > 1){
-                if (ast_node->m_token->m_type == TOKEN_TYPE_PLUS){
-                    bin_op      = BINARY_OP_ADD;
-                    bin_op_code = OP_CODE_ADD;
-                }
-                else{
-                    bin_op      = BINARY_OP_SUB;
-                    bin_op_code = OP_CODE_SUB;
-                }
-                goto bin_op_case;
-            }
-            else{
-                un_op = (ast_node->m_token->m_type == TOKEN_TYPE_PLUS) ? UNARY_OP_PLUS : UNARY_OP_MINUS;
-                goto un_op_case;
-            }
-            break;
-
-        case TOKEN_TYPE_TILDE: un_op = UNARY_OP_BNEG; goto un_op_case;
-        case TOKEN_TYPE_NOT:   un_op = UNARY_OP_NOT;
+        case AST_NODE_TYPE_UNARY_OP_PLUS:  un_op = UNARY_OP_PLUS;  goto un_op_case;
+        case AST_NODE_TYPE_UNARY_OP_MINUS: un_op = UNARY_OP_MINUS; goto un_op_case;
+        case AST_NODE_TYPE_UNARY_OP_BNEG:  un_op = UNARY_OP_BNEG;  goto un_op_case;
+        case AST_NODE_TYPE_UNARY_OP_NOT:   un_op = UNARY_OP_NOT;
         un_op_case:{
             IR_compiler_state_compile_result compile_result = IR_compiler_state_compile(self, ast_node->m_sub_nodes.m_data[0]);
             if (compile_result.error != COMPILE_ERROR_NONE)
@@ -764,22 +752,24 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
             break;
         }
 
-        case TOKEN_TYPE_LBRACKET:              bin_op = BINARY_OP_SUBSCRIPT; bin_op_code = OP_CODE_DEREF;   goto bin_op_case;
-        case TOKEN_TYPE_EQUALS2:               bin_op = BINARY_OP_CMP_EQ;    bin_op_code = OP_CODE_CMP_EQ;  goto bin_op_case;
-        case TOKEN_TYPE_NOT_EQUALS1:           bin_op = BINARY_OP_CMP_NEQ;   bin_op_code = OP_CODE_CMP_NEQ; goto bin_op_case;
-        case TOKEN_TYPE_LESS_THAN1:            bin_op = BINARY_OP_CMP_LE;    bin_op_code = OP_CODE_CMP_LE;  goto bin_op_case;
-        case TOKEN_TYPE_LESS_THAN1_EQUALS1:    bin_op = BINARY_OP_CMP_LEQ;   bin_op_code = OP_CODE_CMP_LEQ; goto bin_op_case;
-        case TOKEN_TYPE_GREATER_THAN1:         bin_op = BINARY_OP_CMP_GE;    bin_op_code = OP_CODE_CMP_GE;  goto bin_op_case;
-        case TOKEN_TYPE_GREATER_THAN1_EQUALS1: bin_op = BINARY_OP_CMP_GEQ;   bin_op_code = OP_CODE_CMP_GEQ; goto bin_op_case;
-        case TOKEN_TYPE_ASTERISK1:             bin_op = BINARY_OP_MUL;       bin_op_code = OP_CODE_MUL;     goto bin_op_case;
-        case TOKEN_TYPE_SLASH:                 bin_op = BINARY_OP_DIV;       bin_op_code = OP_CODE_DIV;     goto bin_op_case;
-        case TOKEN_TYPE_PERCENT:               bin_op = BINARY_OP_REM;       bin_op_code = OP_CODE_REM;     goto bin_op_case;
-        case TOKEN_TYPE_ASTERISK2:             bin_op = BINARY_OP_POW;       bin_op_code = OP_CODE_POW;     goto bin_op_case;
-        case TOKEN_TYPE_LESS_THAN2:            bin_op = BINARY_OP_SHL;       bin_op_code = OP_CODE_SHL;     goto bin_op_case;
-        case TOKEN_TYPE_GREATER_THAN2:         bin_op = BINARY_OP_SHR;       bin_op_code = OP_CODE_SHR;     goto bin_op_case;
-        case TOKEN_TYPE_AMPERSAND:             bin_op = BINARY_OP_BAND;      bin_op_code = OP_CODE_BAND;    goto bin_op_case;
-        case TOKEN_TYPE_PIPE:                  bin_op = BINARY_OP_BOR;       bin_op_code = OP_CODE_BOR;     goto bin_op_case;
-        case TOKEN_TYPE_CARET:                 bin_op = BINARY_OP_XOR;       bin_op_code = OP_CODE_XOR;
+        case AST_NODE_TYPE_BINARY_OP_SUBSCRIPT: bin_op = BINARY_OP_SUBSCRIPT; bin_op_code = OP_CODE_DEREF;   goto bin_op_case;
+        case AST_NODE_TYPE_BINARY_OP_POW:       bin_op = BINARY_OP_POW;       bin_op_code = OP_CODE_POW;     goto bin_op_case;
+        case AST_NODE_TYPE_BINARY_OP_MUL:       bin_op = BINARY_OP_MUL;       bin_op_code = OP_CODE_MUL;     goto bin_op_case;
+        case AST_NODE_TYPE_BINARY_OP_DIV:       bin_op = BINARY_OP_DIV;       bin_op_code = OP_CODE_DIV;     goto bin_op_case;
+        case AST_NODE_TYPE_BINARY_OP_REM:       bin_op = BINARY_OP_REM;       bin_op_code = OP_CODE_REM;     goto bin_op_case;
+        case AST_NODE_TYPE_BINARY_OP_ADD:       bin_op = BINARY_OP_ADD;       bin_op_code = OP_CODE_ADD;     goto bin_op_case;
+        case AST_NODE_TYPE_BINARY_OP_SUB:       bin_op = BINARY_OP_SUB;       bin_op_code = OP_CODE_SUB;     goto bin_op_case;
+        case AST_NODE_TYPE_BINARY_OP_SHL:       bin_op = BINARY_OP_SHL;       bin_op_code = OP_CODE_SHL;     goto bin_op_case;
+        case AST_NODE_TYPE_BINARY_OP_SHR:       bin_op = BINARY_OP_SHR;       bin_op_code = OP_CODE_SHR;     goto bin_op_case;
+        case AST_NODE_TYPE_BINARY_OP_CMP_LE:    bin_op = BINARY_OP_CMP_LE;    bin_op_code = OP_CODE_CMP_LE;  goto bin_op_case;
+        case AST_NODE_TYPE_BINARY_OP_CMP_LEQ:   bin_op = BINARY_OP_CMP_LEQ;   bin_op_code = OP_CODE_CMP_LEQ; goto bin_op_case;
+        case AST_NODE_TYPE_BINARY_OP_CMP_GE:    bin_op = BINARY_OP_CMP_GE;    bin_op_code = OP_CODE_CMP_GE;  goto bin_op_case;
+        case AST_NODE_TYPE_BINARY_OP_CMP_GEQ:   bin_op = BINARY_OP_CMP_GEQ;   bin_op_code = OP_CODE_CMP_GEQ; goto bin_op_case;
+        case AST_NODE_TYPE_BINARY_OP_CMP_EQ:    bin_op = BINARY_OP_CMP_EQ;    bin_op_code = OP_CODE_CMP_EQ;  goto bin_op_case;
+        case AST_NODE_TYPE_BINARY_OP_CMP_NEQ:   bin_op = BINARY_OP_CMP_NEQ;   bin_op_code = OP_CODE_CMP_NEQ; goto bin_op_case;
+        case AST_NODE_TYPE_BINARY_OP_BAND:      bin_op = BINARY_OP_BAND;      bin_op_code = OP_CODE_BAND;    goto bin_op_case;
+        case AST_NODE_TYPE_BINARY_OP_XOR:       bin_op = BINARY_OP_XOR;       bin_op_code = OP_CODE_XOR;     goto bin_op_case;
+        case AST_NODE_TYPE_BINARY_OP_BOR:       bin_op = BINARY_OP_BOR;       bin_op_code = OP_CODE_BOR;
         bin_op_case:{
             const AST_node *lhs_node = ast_node->m_sub_nodes.m_data[0];
             const AST_node *rhs_node = ast_node->m_sub_nodes.m_data[1];
@@ -807,8 +797,8 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
             break;
         }
 
-        case TOKEN_TYPE_AND:
-        case TOKEN_TYPE_OR:{
+        case AST_NODE_TYPE_BINARY_OP_AND:
+        case AST_NODE_TYPE_BINARY_OP_OR:{
             const AST_node *lhs_node = ast_node->m_sub_nodes.m_data[0];
             const AST_node *rhs_node = ast_node->m_sub_nodes.m_data[1];
 
@@ -827,7 +817,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
             if (!vec_base_push_back(&self->type_info_stack, self->alloc, &lhs_type_info))
                 return OOM_ERROR;
             add_instruction("%s " SP_SYMBOL "[-1]", op_code_to_str(OP_CODE_PUSH));
-            if (ast_node->m_token->m_type == TOKEN_TYPE_OR)
+            if (ast_node->m_type == AST_NODE_TYPE_BINARY_OP_OR)
                 add_instruction("%s", op_code_to_str(OP_CODE_NEG));
             vec_base_pop_back_discard(&self->type_info_stack);
             add_instruction("%s %s", op_code_to_str(OP_CODE_JMPZ), and_or_label_str_buf);
@@ -855,7 +845,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
             break;
         }
         
-        case TOKEN_TYPE_FN:{
+        case AST_NODE_TYPE_DECL_FN:{
             const AST_node *fn_id_node          = ast_node->m_sub_nodes.m_data[0];
             AST_node_ptr_slice fn_arg_nodes     = {.m_size = ast_node->m_sub_nodes.m_size - 3, .m_data = &ast_node->m_sub_nodes.m_data[1]};
             const AST_node *fn_return_type_node = ast_node->m_sub_nodes.m_data[ast_node->m_sub_nodes.m_size - 2];
@@ -936,7 +926,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
             if (fn_id_info.return_type_info.m_tag != TYPE_INFO_TAG_VOID){
                 if (
                     fn_body_node->m_sub_nodes.m_size == 0 ||
-                    (fn_body_last_node = fn_body_node->m_sub_nodes.m_data[fn_body_node->m_sub_nodes.m_size - 1])->m_token->m_type != TOKEN_TYPE_RETURN ||
+                    (fn_body_last_node = fn_body_node->m_sub_nodes.m_data[fn_body_node->m_sub_nodes.m_size - 1])->m_type != AST_NODE_TYPE_STATEMENT_RETURN ||
                     fn_body_last_node->m_sub_nodes.m_size == 0
                 ){
                     return syntax_error(
@@ -947,7 +937,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
             }
             else if (
                 fn_body_node->m_sub_nodes.m_size > 0 &&
-                (fn_body_last_node = fn_body_node->m_sub_nodes.m_data[fn_body_node->m_sub_nodes.m_size - 1])->m_token->m_type == TOKEN_TYPE_RETURN &&
+                (fn_body_last_node = fn_body_node->m_sub_nodes.m_data[fn_body_node->m_sub_nodes.m_size - 1])->m_type == AST_NODE_TYPE_STATEMENT_RETURN &&
                 fn_body_last_node->m_sub_nodes.m_size > 0
             )
                 return syntax_error("Function with return type <void> returning non-void", fn_body_last_node->m_token->m_line_number);
@@ -959,7 +949,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
             if (
                 fn_id_info.return_type_info.m_tag == TYPE_INFO_TAG_VOID && (
                     fn_body_node->m_sub_nodes.m_size == 0 ||
-                    fn_body_node->m_sub_nodes.m_data[fn_body_node->m_sub_nodes.m_size - 1]->m_token->m_type != TOKEN_TYPE_RETURN
+                    fn_body_node->m_sub_nodes.m_data[fn_body_node->m_sub_nodes.m_size - 1]->m_type != AST_NODE_TYPE_STATEMENT_RETURN
                 )
             ){
                 usize fn_IR_compiler_state_type_info_stack_size = fn_IR_compiler_state.type_info_stack.m_size;
@@ -984,7 +974,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
             break;
         }
 
-        case TOKEN_TYPE_LET:{
+        case AST_NODE_TYPE_DECL_VAR:{
             const AST_node *id_node   = ast_node->m_sub_nodes.m_data[0];
             const AST_node *type_node = ast_node->m_sub_nodes.m_data[1];
             const AST_node *expr_node = ast_node->m_sub_nodes.m_data[2];
@@ -1018,7 +1008,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
             break;
         }
 
-        case TOKEN_TYPE_IF:{
+        case AST_NODE_TYPE_STATEMENT_IF:{
             const AST_node *if_cond_node   = ast_node->m_sub_nodes.m_data[0];
             const AST_node *if_body_node   = ast_node->m_sub_nodes.m_data[1];
             const AST_node *else_body_node = ast_node->m_sub_nodes.m_data[2];
@@ -1075,7 +1065,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
             break;
         }
 
-        case TOKEN_TYPE_WHILE:{
+        case AST_NODE_TYPE_STATEMENT_WHILE:{
             const AST_node *while_label_node         = ast_node->m_sub_nodes.m_data[0];
             const AST_node *while_cond_node          = ast_node->m_sub_nodes.m_data[1];
             const AST_node *while_continue_expr_node = ast_node->m_sub_nodes.m_data[2];
@@ -1149,8 +1139,8 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
             break;
         }
 
-        case TOKEN_TYPE_BREAK:
-        case TOKEN_TYPE_CONTINUE:{
+        case AST_NODE_TYPE_STATEMENT_BREAK:
+        case AST_NODE_TYPE_STATEMENT_CONTINUE:{
             if (self->while_labels.m_keys.m_size == 0)
                 return syntax_error("<%s> must be used inside a loop", ast_node->m_token->m_line_number, str_base_data_const(&ast_node->m_token->m_id));
             While_label_info *while_label_info_ptr = ((ast_node->m_sub_nodes.m_size > 0)
@@ -1170,16 +1160,13 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
             add_instruction(
                 "%s %s",
                 op_code_to_str(OP_CODE_JMP),
-                (ast_node->m_token->m_type == TOKEN_TYPE_BREAK) ? while_label_info_ptr->break_label_str : while_label_info_ptr->continue_label_str
+                (ast_node->m_type == AST_NODE_TYPE_STATEMENT_BREAK) ? while_label_info_ptr->break_label_str : while_label_info_ptr->continue_label_str
             );
             self->type_info_stack.m_size = type_info_stack_size;
             break;
         }
-        case TOKEN_TYPE_RETURN:{
-            const AST_node *fn_node = ast_node->m_parent;
-            while (fn_node && fn_node->m_token->m_type != TOKEN_TYPE_FN)
-                fn_node = fn_node->m_parent;
-
+        case AST_NODE_TYPE_STATEMENT_RETURN:{
+            const AST_node *fn_node = ast_node_find_fn_node(ast_node->m_parent);
             if (!fn_node){
                 if (ast_node->m_sub_nodes.m_size != 1)
                     return syntax_error("The program must return a non-void value on exit", ast_node->m_token->m_line_number);
@@ -1226,7 +1213,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
         }
 
         default:
-            fprintf(stderr, __FILE__ ":" tok_to_str(__LINE__) ": Not implemented");
+            fprintf(stderr, __FILE__ ":" tok_to_str(__LINE__) ": Not implemented\n");
             abort();
     }
 
@@ -1305,7 +1292,7 @@ IR_compile_result IR_compile(Arena *arena, AST_node_ptr_slice ast_nodes){
 
     if (
         !IR_compiler_state_pop_ids_in_current_scope(&state) || (
-            (ast_nodes.m_size == 0 || ast_nodes.m_data[ast_nodes.m_size - 1]->m_token->m_type != TOKEN_TYPE_RETURN) && (
+            (ast_nodes.m_size == 0 || ast_nodes.m_data[ast_nodes.m_size - 1]->m_type != AST_NODE_TYPE_STATEMENT_RETURN) && (
                 !vec_base_push_back(&state.type_info_stack, state.alloc, &(Type_info){.m_tag = TYPE_INFO_TAG_INT, .m_dimensions = 0}) ||
                 !IR_compiler_state_add_instruction(&state, "%s 0", op_code_to_str(OP_CODE_PUSH)) || (
                     vec_base_pop_back_discard(&state.type_info_stack),

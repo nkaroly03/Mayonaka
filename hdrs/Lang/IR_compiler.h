@@ -34,30 +34,27 @@ enum Op_code{
     OP_CODE_NEG,
     OP_CODE_BNEG,
 
-    OP_CODE_MOV,
-    OP_CODE_MOV_DEREF,
-
     OP_CODE_DEREF,
-
-    OP_CODE_CMP_EQ,
-    OP_CODE_CMP_NEQ,
+    OP_CODE_POW,
+    OP_CODE_MUL,
+    OP_CODE_DIV,
+    OP_CODE_REM,
+    OP_CODE_ADD,
+    OP_CODE_SUB,
+    OP_CODE_SHL,
+    OP_CODE_SHR,
     OP_CODE_CMP_LE,
     OP_CODE_CMP_LEQ,
     OP_CODE_CMP_GE,
     OP_CODE_CMP_GEQ,
-
-    OP_CODE_ADD,
-    OP_CODE_SUB,
-    OP_CODE_MUL,
-    OP_CODE_DIV,
-    OP_CODE_REM,
-    OP_CODE_POW,
-
-    OP_CODE_SHL,
-    OP_CODE_SHR,
+    OP_CODE_CMP_EQ,
+    OP_CODE_CMP_NEQ,
     OP_CODE_BAND,
+    OP_CODE_XOR,
     OP_CODE_BOR,
-    OP_CODE_XOR
+
+    OP_CODE_MOV,
+    OP_CODE_MOV_DEREF
 };
 
 const char* op_code_to_str(enum Op_code op_code);
