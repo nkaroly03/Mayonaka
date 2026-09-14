@@ -25,7 +25,7 @@ let MOVE_STATE_RIGHT: int = 3;
 
 let stop: bool = false;
 while (not stop){
-    print("\x1b[?25l\x1b[2J\x1b[H");
+    print(stdout(), "\x1b[?25l\x1b[2J\x1b[H", false);
 
     let snake_field: []int = [];
     for (0..WIDTH * HEIGHT) |_|
@@ -120,8 +120,7 @@ while (not stop){
                 table = table + '#';
             table = table + '\n';
 
-            print(table);
-            print("\x1b[H");
+            print(stdout(), table as str + "\x1b[H", true);
         }
 
         {
@@ -176,7 +175,7 @@ while (not stop){
         nsleep(50000000);
     }
 
-    print("\x1b[0m\x1b[?25h\x1b[2JDo you wish to restart? (y/n): ");
+    print(stdout(), "\x1b[0m\x1b[?25h\x1b[2JDo you wish to restart? (y/n): ", true);
 
     while (true){
         let keypress: char = poll_keypress();

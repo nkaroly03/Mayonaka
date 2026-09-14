@@ -480,25 +480,46 @@ void primitive_deinit(const Primitive *self, Allocator alloc){
     }
 }
 
-void primitive_print(const Primitive *self){
+Primitive_print_result primitive_print(const Primitive *self, FILE *file, bool to_flush){
     assert(self && "<self> is never null");
+    assert(file && "<file> is not nullable");
+
+    i64 chars_written = 0;
 
     switch (self->m_tag){
-        case PRIMITIVE_TAG_BOOL:  printf("%s", (self->m_bool_data) ? "true" : "false");             break;
-        case PRIMITIVE_TAG_CHAR:  printf("%c", (char)self->m_char_data);                            break;
-        case PRIMITIVE_TAG_INT:   printf(I64_PFMT, self->m_int_data);                               break;
-        case PRIMITIVE_TAG_FLOAT: printf("%lf", self->m_float_data);                                break;
-        case PRIMITIVE_TAG_STR:   printf("%s", str_base_data_const(&self->m_str_data_ptr->m_data)); break;
+        case PRIMITIVE_TAG_BOOL:  chars_written = fprintf(file, "%s", (self->m_bool_data) ? "true" : "false");             break;
+        case PRIMITIVE_TAG_CHAR:  chars_written = fprintf(file, "%c", (char)self->m_char_data);                            break;
+        case PRIMITIVE_TAG_INT:   chars_written = fprintf(file, I64_PFMT, self->m_int_data);                               break;
+        case PRIMITIVE_TAG_FLOAT: chars_written = fprintf(file, "%lf", self->m_float_data);                                break;
+        case PRIMITIVE_TAG_STR:   chars_written = fprintf(file, "%s", str_base_data_const(&self->m_str_data_ptr->m_data)); break;
         case PRIMITIVE_TAG_LIST:
-            putchar('[');
+            if (fputc('[', file) == EOF)
+                goto print_error;
+            ++chars_written;
             vec_base_for_each(self->m_list_data_ptr->m_data, it){
-                primitive_print(it);
-                putchar(',');
+                Primitive_print_result print_result = primitive_print(it, file, to_flush);
+                if (print_result.error != PRIMITIVE_PRINT_ERROR_NONE)
+                    return print_result;
+                chars_written += print_result.result;
+                if (fputc(',', file) == EOF)
+                    goto print_error;
+                ++chars_written;
             }
-            putchar(']');
+            if (fputc(']', file) == EOF)
+                goto print_error;
+            ++chars_written;
             break;
     }
-    fflush(stdout);
+
+    if (chars_written < 0){
+    print_error:
+        return (Primitive_print_result){.error = PRIMITIVE_PRINT_ERROR_PRINT};
+    }
+
+    if (to_flush && fflush(file) == EOF)
+        return (Primitive_print_result){.error = PRIMITIVE_PRINT_ERROR_FLUSH};
+
+    return (Primitive_print_result){.result = chars_written, .error = PRIMITIVE_PRINT_ERROR_NONE};
 }
 
 Primitive_op_result primitive_to_bool(Primitive *self, Allocator alloc){

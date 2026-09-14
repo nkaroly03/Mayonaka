@@ -16,9 +16,10 @@
 #endif // _WIN32
 
 #include "../../hdrs/Allocator/Allocator.h"
+#include "../../hdrs/Data_structure/Ordered_umap_base.h"
 #include "../../hdrs/Data_structure/Str_base.h"
-#include "../../hdrs/Random/Xoshiro256.h"
 #include "../../hdrs/Data_structure/Vec_base.h"
+#include "../../hdrs/Random/Xoshiro256.h"
 #include "../../hdrs/Utils/Num.h"
 #include "../../hdrs/Utils/Utils.h"
 
@@ -30,12 +31,26 @@
 
 // ------------------------------------------------------------------------------------------------
 
+enum File_info_open_mode{
+    FILE_INFO_OPEN_MODE_READ,
+    FILE_INFO_OPEN_MODE_READ_EXT,
+    FILE_INFO_OPEN_MODE_WRITE,
+    FILE_INFO_OPEN_MODE_WRITE_EXT,
+    FILE_INFO_OPEN_MODE_APPEND,
+    FILE_INFO_OPEN_MODE_APPEND_EXT
+};
+
+typedef struct File_info{
+    enum File_info_open_mode open_mode;
+} File_info;
+
 typedef struct Interpreter_state{
     Allocator alloc;
     Xoshiro256 rand;
     Primitive argv;
     U8_slice bytecode;
     usize pc;
+    Ordered_umap_base file_infos;
     Vec_base data_stack;
     Vec_base return_address_stack;
 } Interpreter_state;
@@ -48,6 +63,14 @@ static void interpreter_state_deinit(Interpreter_state *self){
         primitive_deinit(&popped, self->alloc);
     }
     vec_base_deinit(&self->data_stack, self->alloc);
+    while (self->file_infos.m_keys.m_size > 0){
+        usize key;
+        ordered_umap_base_pop_back_to(&self->file_infos, self->alloc, &key, &(File_info){0});
+        FILE *file = (FILE*)key;
+        if (file != stdin && file != stdout && file != stderr)
+            fclose(file);
+    }
+    ordered_umap_base_deinit(&self->file_infos, self->alloc);
     primitive_deinit(&self->argv, self->alloc);
 }
 
@@ -272,36 +295,93 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                             return runtime_error(strerror(errno));
                         break;
                     }
+                    case BUILTIN_FN_TAG_STDIN:
+                    case BUILTIN_FN_TAG_STDOUT:
+                    case BUILTIN_FN_TAG_STDERR:{
+                        FILE *std_file;
+                        switch (bfn_tag){
+                            case BUILTIN_FN_TAG_STDIN:  std_file = stdin;  break;
+                            case BUILTIN_FN_TAG_STDOUT: std_file = stdout; break;
+                            case BUILTIN_FN_TAG_STDERR: std_file = stderr; break;
+                            default:                    unreachable();
+                        }
+                        if (!vec_base_push_back(&self->data_stack, self->alloc, &(Primitive){.m_tag = PRIMITIVE_TAG_INT, .m_int_data = (i64)((usize)std_file)}))
+                            return oom_error();
+                        break;
+                    }
                     case BUILTIN_FN_TAG_PRINT:{
-                        if (self->data_stack.m_size < 1)
+                        if (self->data_stack.m_size < 3)
                             return builtin_fn_arg_count_error(bfn_tag_str);
-                        Primitive to_print;
-                        vec_base_pop_back_to(&self->data_stack, &to_print);
-                        primitive_print(&to_print);
-                        primitive_deinit(&to_print, self->alloc);
+
+                        Primitive *file     = vec_base_at(&self->data_stack, self->data_stack.m_size - 3);
+                        Primitive *to_print = vec_base_at(&self->data_stack, self->data_stack.m_size - 2);
+                        Primitive *to_flush = vec_base_at(&self->data_stack, self->data_stack.m_size - 1);
+
+                        if (file->m_tag != PRIMITIVE_TAG_INT)
+                            return runtime_error("Builtin function <%s> called on non-int type as its 1st argument", bfn_tag_str);
+                        if (to_flush->m_tag != PRIMITIVE_TAG_BOOL)
+                            return runtime_error("Builtin function <%s> called on non-bool type as its 3rd argument", bfn_tag_str);
+
+                        usize file_as_usize = (usize)file->m_int_data;
+
+                        File_info *file_info = ordered_umap_base_at_key(&self->file_infos, &file_as_usize).m_value;
+                        if (!file_info)
+                            return runtime_error("Builtin function <%s> called on bad file ptr", bfn_tag_str);
+                        if (file_info->open_mode == FILE_INFO_OPEN_MODE_READ)
+                            return runtime_error("Builtin function <%s> called on file ptr opened for reading only", bfn_tag_str);
+
+                        Primitive_print_result print_result = primitive_print(to_print, (FILE*)file_as_usize, to_flush->m_bool_data);
+                        switch (print_result.error){
+                            case PRIMITIVE_PRINT_ERROR_NONE:
+                                break;
+                            case PRIMITIVE_PRINT_ERROR_PRINT:
+                            case PRIMITIVE_PRINT_ERROR_FLUSH:
+                                fprintf(stderr, __FILE__ ":" tok_to_str(__LINE__) ": Not implemented\n");
+                                abort();
+                        }
+
+                        primitive_deinit(to_flush, self->alloc);
+                        primitive_deinit(to_print, self->alloc);
+                        primitive_deinit(file, self->alloc);
+                        vec_base_pop_back_discard(&self->data_stack);
+                        vec_base_pop_back_discard(&self->data_stack);
+
+                        *file = (Primitive){.m_tag = PRIMITIVE_TAG_INT, .m_int_data = print_result.result};
                         break;
                     }
                     case BUILTIN_FN_TAG_SCAN:{
                         if (self->data_stack.m_size < 1)
                             return builtin_fn_arg_count_error(bfn_tag_str);
 
-                        Primitive *to_print = vec_base_at(&self->data_stack, self->data_stack.m_size - 1);
-                        primitive_print(to_print);
+                        Primitive *file = vec_base_at(&self->data_stack, self->data_stack.m_size - 1);
+                        if (file->m_tag != PRIMITIVE_TAG_INT)
+                            return runtime_error("Builtin function <%s> called on non-int type as its 1st argument", bfn_tag_str);
+
+                        usize file_as_usize = (usize)file->m_int_data;
+
+                        File_info *file_info = ordered_umap_base_at_key(&self->file_infos, &file_as_usize).m_value;
+                        if (!file_info)
+                            return runtime_error("Builtin function <%s> called on bad file ptr", bfn_tag_str);
+                        if (file_info->open_mode == FILE_INFO_OPEN_MODE_WRITE || file_info->open_mode == FILE_INFO_OPEN_MODE_APPEND)
+                            return runtime_error("Builtin function <%s> called on file ptr opened for writing only", bfn_tag_str);
+
+                        FILE *file_ptr = (FILE*)file_as_usize;
 
                         Str_base str_result = {0};
 #ifdef _WIN32
-                        enum Str_getline_error getline_result = str_base_getline(&str_result, self->alloc, stdin);
+                        enum Str_getline_error getline_result = str_base_getline(&str_result, self->alloc, file_ptr);
 #else
                         struct termios old_settings, new_settings = (tcgetattr(0, &old_settings), old_settings);
                         new_settings.c_lflag |= (tcflag_t)ECHO;
                         tcsetattr(0, TCSANOW, &new_settings);
-                        enum Str_getline_error getline_result = str_base_getline(&str_result, self->alloc, stdin);
+                        enum Str_getline_error getline_result = str_base_getline(&str_result, self->alloc, file_ptr);
                         tcsetattr(0, TCSANOW, &old_settings);
 #endif // _WIN32
                         switch (getline_result){
                             case STR_GETLINE_ERROR_NONE:
                                 break;
                             case STR_GETLINE_ERROR_FEOF:
+                                // TODO: reimplement after implementing errno
                                 if (str_base_push_back(&str_result, self->alloc, '\n'))
                                     break;
                                 FALLTHROUGH;
@@ -309,8 +389,9 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                                 str_base_deinit(&str_result, self->alloc);
                                 return oom_error();
                             case STR_GETLINE_ERROR_FERROR:
-                                str_base_deinit(&str_result, self->alloc);
-                                return runtime_error("<ferror> on stdin");
+                                // TODO: reimplement after implementing errno
+                                fprintf(stderr, __FILE__ ":" tok_to_str(__LINE__) ": Not implemented\n");
+                                abort();
                         }
 
                         Primitive scanned = {.m_tag = PRIMITIVE_TAG_STR, .m_str_data_ptr = allocator_alloc(self->alloc, Primitive_str_data, 1)};
@@ -320,8 +401,8 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                         }
                         *scanned.m_str_data_ptr = (Primitive_str_data){.m_ref_count = 1, .m_data = str_result};
 
-                        primitive_deinit(to_print, self->alloc);
-                        *to_print = scanned;
+                        primitive_deinit(file, self->alloc);
+                        *file = scanned;
                         break;
                     }
                     case BUILTIN_FN_TAG_POLL_KEYPRESS:{
@@ -632,6 +713,7 @@ Interpreter_run_result interpreter_run(Allocator alloc, U8_slice bytecode, int a
         .argv                 = {.m_tag = PRIMITIVE_TAG_LIST, .m_list_data_ptr = allocator_alloc(alloc, Primitive_list_data, 1)},
         .bytecode             = bytecode,
         .pc                   = 0,
+        .file_infos           = ordered_umap_base_init(usize, File_info),
         .data_stack           = vec_base_init(Primitive),
         .return_address_stack = vec_base_init(usize)
     };
@@ -651,6 +733,15 @@ Interpreter_run_result interpreter_run(Allocator alloc, U8_slice bytecode, int a
             return interpreter_state_oom_error(&state);
         }
     }
+
+    static_assert(sizeof(i64) == sizeof(usize), "");
+
+    if (
+        ordered_umap_base_push_back(&state.file_infos, state.alloc, &(usize){(usize)stdin }, &(File_info){.open_mode = FILE_INFO_OPEN_MODE_READ }).error == UMAP_INSERT_ERROR_OOM ||
+        ordered_umap_base_push_back(&state.file_infos, state.alloc, &(usize){(usize)stdout}, &(File_info){.open_mode = FILE_INFO_OPEN_MODE_WRITE}).error == UMAP_INSERT_ERROR_OOM ||
+        ordered_umap_base_push_back(&state.file_infos, state.alloc, &(usize){(usize)stderr}, &(File_info){.open_mode = FILE_INFO_OPEN_MODE_WRITE}).error == UMAP_INSERT_ERROR_OOM
+    )
+        return interpreter_state_oom_error(&state);
 
 #ifdef _WIN32
     return interpreter_state_run(&state);

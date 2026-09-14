@@ -158,3 +158,5 @@ let arr: [][]str = [["Hello"], ["World"]];
 ((arr = [["Ok", "Test"]])[0][0] = "Foo")[0] = 'A';
 print(arr);
 /*/
+
+print(stdout(), "Test\n", true);

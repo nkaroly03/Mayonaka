@@ -20,7 +20,7 @@ typedef struct AST_node_ptr_slice{
     const AST_node *const *m_data;
 } AST_node_ptr_slice;
 
-void ast_node_ptr_slice_print(AST_node_ptr_slice ast_node_ptr_slice, FILE *file);
+i64 ast_node_ptr_slice_print(AST_node_ptr_slice ast_node_ptr_slice, FILE *file);
 
 enum AST_node_type{
     AST_NODE_TYPE_ATOM_ID,

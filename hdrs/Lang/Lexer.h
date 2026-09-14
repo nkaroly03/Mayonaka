@@ -91,7 +91,7 @@ typedef struct Token_slice{
     const Token *m_data;
 } Token_slice;
 
-void token_slice_print(Token_slice tokens_slice, FILE *file);
+i64 token_slice_print(Token_slice tokens_slice, FILE *file);
 
 enum Lex_error{
     LEX_ERROR_NONE,

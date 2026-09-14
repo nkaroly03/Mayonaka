@@ -876,41 +876,61 @@ static const char* ast_node_type_to_str(enum AST_node_type ast_node_type){
     unreachable();
 }
 
-static void ast_node_print(const AST_node *self, FILE *file, usize indent){
-    for (usize i = 0; i < indent; ++i)
-        fputc(' ', file);
+static i64 ast_node_print(const AST_node *self, FILE *file, int indent){
+    i64 chars_written = 0, temp;
+
+    temp = fprintf(file, "%*s", indent, "");
+    if (temp < 0)
+        return temp;
+    chars_written += temp;
+
     if (self){
         const char *ast_node_type_str = ast_node_type_to_str(self->m_type);
 
-        fprintf(file, "<%s>\n", ast_node_type_str);
-
-        for (usize i = 0; i < indent + 2; ++i)
-            fputc(' ', file);
-        fprintf(file, "<id>%s</id>\n", str_base_data_const(&self->m_token->m_id));
-
-        for (usize i = 0; i < indent + 2; ++i)
-            fputc(' ', file);
-        fprintf(file, "<line_number>" USIZE_PFMT "</line_number>\n", self->m_token->m_line_number);
+        temp = fprintf(
+            file,
+            "<%s>\n"
+            "%*s<id>%s</id>\n"
+            "%*s<line_number>" USIZE_PFMT "</line_number>\n",
+            ast_node_type_str,
+            indent + 2, "", str_base_data_const(&self->m_token->m_id),
+            indent + 2, "", self->m_token->m_line_number
+        );
+        if (temp < 0)
+            return temp;
+        chars_written += temp;
 
         if (self->m_sub_nodes.m_size > 0){
-            for (usize i = 0; i < indent + 2; ++i)
-                fputc(' ', file);
-            fprintf(stderr, "<sub_nodes>\n");
+            temp = fprintf(file, "%*s<sub_nodes>\n", indent + 2, "");
+            if (temp < 0)
+                return temp;
+            chars_written += temp;
 
-            for (usize i = 0; i < self->m_sub_nodes.m_size; ++i)
-                ast_node_print(self->m_sub_nodes.m_data[i], file, indent + 4);
+            for (usize i = 0; i < self->m_sub_nodes.m_size; ++i){
+                temp = ast_node_print(self->m_sub_nodes.m_data[i], file, indent + 4);
+                if (temp < 0)
+                    return temp;
+            }
 
-            for (usize i = 0; i < indent + 2; ++i)
-                fputc(' ', file);
-            fprintf(stderr, "</sub_nodes>\n");
+            temp = fprintf(file, "%*s</sub_nodes>\n", indent + 2, "");
+            if (temp < 0)
+                return temp;
+            chars_written += temp;
         }
 
-        for (usize i = 0; i < indent; ++i)
-            fputc(' ', file);
-        fprintf(file, "</%s>\n", ast_node_type_str);
+        temp = fprintf(file, "%*s</%s>\n", indent, "", ast_node_type_str);
+        if (temp < 0)
+            return temp;
+        chars_written += temp;
     }
-    else
-        fprintf(file, "null\n");
+    else{
+        temp = fprintf(file, "null\n");
+        if (temp < 0)
+            return temp;
+        chars_written += temp;
+    }
+    
+    return chars_written;
 }
 
 #ifndef NDEBUG
@@ -935,11 +955,19 @@ static bool token_slice_is_valid(Token_slice tokens){
 
 // ------------------------------------------------------------------------------------------------
 
-void ast_node_ptr_slice_print(AST_node_ptr_slice ast_node_ptr_slice, FILE *file){
+i64 ast_node_ptr_slice_print(AST_node_ptr_slice ast_node_ptr_slice, FILE *file){
     assert(file && "<file> is not nullable");
 
-    for (usize i = 0; i < ast_node_ptr_slice.m_size; ++i)
-        ast_node_print(ast_node_ptr_slice.m_data[i], file, 0);
+    i64 result = 0;
+
+    for (usize i = 0; i < ast_node_ptr_slice.m_size; ++i){
+        i64 temp = ast_node_print(ast_node_ptr_slice.m_data[i], file, 0);
+        if (temp < 0)
+            return temp;
+        result += temp;
+    }
+
+    return result;
 }
 
 Parse_result parse(Arena *arena, Token_slice tokens){

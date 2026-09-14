@@ -60,7 +60,7 @@ fn main() int {
         buf[(y + 1) * (WIDTH + 1) - 1] = '\n';
     }
 
-    print(buf);
+    print(stdout(), buf, true);
 
     return 0;
 }

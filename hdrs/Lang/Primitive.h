@@ -6,6 +6,7 @@ extern "C"{
 #endif
 
 #include <stdbool.h>
+#include <stdio.h>
 
 #include "../Allocator/Allocator.h"
 #include "../Data_structure/Str_base.h"
@@ -48,7 +49,6 @@ enum Primitive_op_error{
     PRIMITIVE_OP_ERROR_OOM,
     PRIMITIVE_OP_ERROR_RUNTIME
 };
-
 typedef struct Primitive_op_result{
     enum Primitive_op_error error;
     const char *error_info;
@@ -56,7 +56,18 @@ typedef struct Primitive_op_result{
 
 void primitive_deinit(const Primitive *self, Allocator alloc);
 
-void primitive_print(const Primitive *self);
+enum Primitive_print_error{
+    PRIMITIVE_PRINT_ERROR_NONE,
+    PRIMITIVE_PRINT_ERROR_PRINT,
+    PRIMITIVE_PRINT_ERROR_FLUSH
+};
+
+typedef struct Primitive_print_result{
+    i64 result;
+    enum Primitive_print_error error;
+} Primitive_print_result;
+
+Primitive_print_result primitive_print(const Primitive *self, FILE *file, bool to_flush);
 
 Primitive_op_result primitive_to_bool (Primitive *self, Allocator alloc);
 Primitive_op_result primitive_to_char (Primitive *self, Allocator alloc);

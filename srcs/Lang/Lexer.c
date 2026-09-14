@@ -142,13 +142,20 @@ static const char* token_type_to_str(enum Token_type token_type){
 
 // ------------------------------------------------------------------------------------------------
 
-void token_slice_print(Token_slice tokens_slice, FILE *file){
+i64 token_slice_print(Token_slice tokens_slice, FILE *file){
     assert(file && "<file> is not nullable");
+
+    i64 chars_written = 0;
 
     for (usize i = 0; i < tokens_slice.m_size; ++i){
         const Token *t = &tokens_slice.m_data[i];
-        fprintf(file, "{.type = %s, .id = %s, .line_number = " USIZE_PFMT "}\n", token_type_to_str(t->m_type), str_base_data_const(&t->m_id), t->m_line_number);
+        int temp = fprintf(file, "{.type = %s, .id = %s, .line_number = " USIZE_PFMT "}\n", token_type_to_str(t->m_type), str_base_data_const(&t->m_id), t->m_line_number);
+        if (temp < 0)
+            return temp;
+        chars_written += temp;
     }
+
+    return chars_written;
 }
 
 Lex_result lex(Arena *arena, const char *path){

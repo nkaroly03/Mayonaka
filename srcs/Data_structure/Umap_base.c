@@ -306,7 +306,8 @@ void umap_base_clear(Umap_base *self, Allocator alloc){
             }
         }
         self->m_size = 0;
-        memset(self->m_buckets, 0, sizeof(*self->m_buckets) * self->m_bucket_count);
+        for (usize i = 0; i < self->m_bucket_count; ++i)
+            self->m_buckets[i].m_next = NULL;
     }
 }
 
@@ -320,7 +321,9 @@ bool umap_base_rehash(Umap_base *self, Allocator alloc, usize new_bucket_capacit
         if (success){
             Snode_offsets offsets = umap_base_snode_offsets(self);
 
-            memset(new_buckets, 0, sizeof(*new_buckets) * new_bucket_capacity);
+            for (usize i = 0; i < new_bucket_capacity; ++i)
+                new_buckets[i].m_next = NULL;
+
             for (usize i = 0; i < self->m_bucket_count; ++i){
                 Snode *current = self->m_buckets[i].m_next, *next;
                 while (current){

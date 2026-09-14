@@ -179,7 +179,7 @@ fn main() void {
     restart: while (true){
         fn to_upper(c: char) char { return c - (c >= 'a' and c <= 'z') * ('a' - 'A'); }
 
-        print("\x1b[?25l\x1b[2J\x1b[H");
+        print(stdout(), "\x1b[?25l\x1b[2J\x1b[H", false);
 
         let current_tetromino: []int = tetromino_init();
         let next_tetromino:    []int = tetromino_init();
@@ -279,7 +279,7 @@ fn main() void {
             for (0..TETRIS_WIDTH + 2) |_|
                 table = table + '#';
 
-            print("next:\n" + next_tetromino_table + "\x1b[0m\n" + table + "\x1b[H");
+            print(stdout(), "next:\n" + next_tetromino_table + "\x1b[0m\n" + table + "\x1b[H", true);
 
             if (reached_end){
                 current_tetromino = next_tetromino;
@@ -294,7 +294,7 @@ fn main() void {
             nsleep(25000000);
         }
 
-        print("\x1b[?25h\x1b[0m\x1b[2JDo you wish to restart? (y/n):");
+        print(stdout(), "\x1b[?25h\x1b[0m\x1b[2JDo you wish to restart? (y/n):", true);
 
         while (true){
             let keypress: char = to_upper(poll_keypress());
