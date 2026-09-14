@@ -77,6 +77,69 @@ static bool lexer_state_token_push_back(Lexer_state *self, enum Token_type type,
     return temp.success && vec_base_push_back(&self->tokens, self->alloc, &(Token){.m_type = type, .m_id = temp.result, .m_line_number = self->line_number});
 }
 
+static const char* token_type_to_str(enum Token_type token_type){
+    #define generate_case(token_type_id) case token_type_id: return #token_type_id;
+    switch (token_type){
+        generate_case(TOKEN_TYPE_ID)
+        generate_case(TOKEN_TYPE_ARGV)
+        generate_case(TOKEN_TYPE_FALSE)
+        generate_case(TOKEN_TYPE_TRUE)
+        generate_case(TOKEN_TYPE_CHAR_LIT)
+        generate_case(TOKEN_TYPE_INT_LIT)
+        generate_case(TOKEN_TYPE_FLOAT_LIT)
+        generate_case(TOKEN_TYPE_STR_LIT)
+        generate_case(TOKEN_TYPE_COMMA)
+        generate_case(TOKEN_TYPE_COLON)
+        generate_case(TOKEN_TYPE_SEMICOLON)
+        generate_case(TOKEN_TYPE_LPAREN)
+        generate_case(TOKEN_TYPE_RPAREN)
+        generate_case(TOKEN_TYPE_LBRACKET)
+        generate_case(TOKEN_TYPE_RBRACKET)
+        generate_case(TOKEN_TYPE_LBRACE)
+        generate_case(TOKEN_TYPE_RBRACE)
+        generate_case(TOKEN_TYPE_TILDE)
+        generate_case(TOKEN_TYPE_NOT)
+        generate_case(TOKEN_TYPE_DOT2)
+        generate_case(TOKEN_TYPE_AS)
+        generate_case(TOKEN_TYPE_EQUALS1)
+        generate_case(TOKEN_TYPE_EQUALS2)
+        generate_case(TOKEN_TYPE_NOT_EQUALS1)
+        generate_case(TOKEN_TYPE_LESS_THAN1)
+        generate_case(TOKEN_TYPE_LESS_THAN1_EQUALS1)
+        generate_case(TOKEN_TYPE_GREATER_THAN1)
+        generate_case(TOKEN_TYPE_GREATER_THAN1_EQUALS1)
+        generate_case(TOKEN_TYPE_PLUS)
+        generate_case(TOKEN_TYPE_MINUS)
+        generate_case(TOKEN_TYPE_ASTERISK1)
+        generate_case(TOKEN_TYPE_SLASH)
+        generate_case(TOKEN_TYPE_PERCENT)
+        generate_case(TOKEN_TYPE_ASTERISK2)
+        generate_case(TOKEN_TYPE_LESS_THAN2)
+        generate_case(TOKEN_TYPE_GREATER_THAN2)
+        generate_case(TOKEN_TYPE_AMPERSAND)
+        generate_case(TOKEN_TYPE_PIPE)
+        generate_case(TOKEN_TYPE_CARET)
+        generate_case(TOKEN_TYPE_AND)
+        generate_case(TOKEN_TYPE_OR)
+        generate_case(TOKEN_TYPE_FN)
+        generate_case(TOKEN_TYPE_LET)
+        generate_case(TOKEN_TYPE_VOID)
+        generate_case(TOKEN_TYPE_BOOL)
+        generate_case(TOKEN_TYPE_CHAR)
+        generate_case(TOKEN_TYPE_INT)
+        generate_case(TOKEN_TYPE_FLOAT)
+        generate_case(TOKEN_TYPE_STR)
+        generate_case(TOKEN_TYPE_IF)
+        generate_case(TOKEN_TYPE_ELSE)
+        generate_case(TOKEN_TYPE_WHILE)
+        generate_case(TOKEN_TYPE_FOR)
+        generate_case(TOKEN_TYPE_BREAK)
+        generate_case(TOKEN_TYPE_CONTINUE)
+        generate_case(TOKEN_TYPE_RETURN)
+    }
+    unreachable();
+}
+
 // ------------------------------------------------------------------------------------------------
 
 void token_slice_print(Token_slice tokens_slice, FILE *file){
@@ -84,7 +147,7 @@ void token_slice_print(Token_slice tokens_slice, FILE *file){
 
     for (usize i = 0; i < tokens_slice.m_size; ++i){
         const Token *t = &tokens_slice.m_data[i];
-        fprintf(file, "{.type = %2d, .id = %s, .line_number = " USIZE_PFMT "}\n", t->m_type, str_base_data_const(&t->m_id), t->m_line_number);
+        fprintf(file, "{.type = %s, .id = %s, .line_number = " USIZE_PFMT "}\n", token_type_to_str(t->m_type), str_base_data_const(&t->m_id), t->m_line_number);
     }
 }
 
