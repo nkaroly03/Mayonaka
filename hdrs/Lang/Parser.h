@@ -24,7 +24,6 @@ i64 ast_node_ptr_slice_print(AST_node_ptr_slice ast_node_ptr_slice, FILE *file);
 
 enum AST_node_type{
     AST_NODE_TYPE_ATOM_ID,
-    AST_NODE_TYPE_ATOM_ARGV,
     AST_NODE_TYPE_ATOM_FALSE,
     AST_NODE_TYPE_ATOM_TRUE,
     AST_NODE_TYPE_ATOM_CHAR_LIT,

@@ -47,7 +47,9 @@ typedef struct File_info{
 typedef struct Interpreter_state{
     Allocator alloc;
     Xoshiro256 rand;
-    Primitive argv;
+    int argc;
+    const char *const *argv;
+    i64 errno_val;
     U8_slice bytecode;
     usize pc;
     Ordered_umap_base file_infos;
@@ -71,7 +73,6 @@ static void interpreter_state_deinit(Interpreter_state *self){
             fclose(file);
     }
     ordered_umap_base_deinit(&self->file_infos, self->alloc);
-    primitive_deinit(&self->argv, self->alloc);
 }
 
 static Interpreter_run_result interpreter_state_oom_error(Interpreter_state *self){
@@ -162,11 +163,6 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                         }
                         break;
                     }
-                    case OP_CODE_ARG_TAG_ARGV:
-                        if (!vec_base_push_back(&self->data_stack, self->alloc, &self->argv))
-                            return oom_error();
-                        ++self->argv.m_list_data_ptr->m_ref_count;
-                        break;
                     case OP_CODE_ARG_TAG_BOOL:
                         if (!vec_base_push_back(&self->data_stack, self->alloc, &(Primitive){.m_tag = PRIMITIVE_TAG_BOOL, .m_bool_data = (bool)self->bytecode.m_data[new_pc++]}))
                             return oom_error();
@@ -269,11 +265,45 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                         new_pc = call_offset;
                         break;
                     }
+                    case BUILTIN_FN_TAG_GET_ARGV:{
+                        Primitive argv = {.m_tag = PRIMITIVE_TAG_LIST, .m_list_data_ptr = allocator_alloc(self->alloc, Primitive_list_data, 1)};
+                        if (!argv.m_list_data_ptr)
+                            return oom_error();
+                        *argv.m_list_data_ptr = (Primitive_list_data){.m_ref_count = 1, .m_data = vec_base_init(Primitive)};
+
+                        for (int i = 0; i < self->argc; ++i){
+                            Primitive temp = {.m_tag = PRIMITIVE_TAG_STR, .m_str_data_ptr = allocator_alloc(self->alloc, Primitive_str_data, 1)};
+                            if (!temp.m_str_data_ptr){
+                                primitive_deinit(&argv, self->alloc);
+                                return oom_error();
+                            }
+                            *temp.m_str_data_ptr = (Primitive_str_data){.m_ref_count = 1, .m_data = {0}};
+
+                            if (
+                                !str_base_assign_raw(&temp.m_str_data_ptr->m_data, self->alloc, self->argv[i]) ||
+                                !vec_base_push_back(&argv.m_list_data_ptr->m_data, self->alloc, &temp)
+                            ){
+                                primitive_deinit(&argv, self->alloc);
+                                primitive_deinit(&temp, self->alloc);
+                                return oom_error();
+                            }
+                        }
+
+                        if (!vec_base_push_back(&self->data_stack, self->alloc, &argv)){
+                            primitive_deinit(&argv, self->alloc);
+                            return oom_error();
+                        }
+                        break;
+                    }
                     case BUILTIN_FN_TAG_EXIT:{
                         if (self->data_stack.m_size < 1)
                             return builtin_fn_arg_count_error(bfn_tag_str);
                         Primitive exit_val;
                         vec_base_pop_back_to(&self->data_stack, &exit_val);
+                        if (exit_val.m_tag != PRIMITIVE_TAG_INT){
+                            primitive_deinit(&exit_val, self->alloc);
+                            return runtime_error("Builtin function <%s> must be called with type <int> as its argument", bfn_tag_str);
+                        }
                         interpreter_state_deinit(self);
                         return (Interpreter_run_result){.result = exit_val, .error = INTERPRETER_RUN_ERROR_NONE};
                     }
@@ -281,31 +311,41 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                         if (self->data_stack.m_size < 1)
                             return builtin_fn_arg_count_error(bfn_tag_str);
                         Primitive *sleep_for = vec_base_at(&self->data_stack, self->data_stack.m_size - 1);
-                        i64 sleep_for_val;
-                        switch (sleep_for->m_tag){
-                            case PRIMITIVE_TAG_BOOL:  sleep_for_val = sleep_for->m_bool_data;       break;
-                            case PRIMITIVE_TAG_CHAR:  sleep_for_val = sleep_for->m_char_data;       break;
-                            case PRIMITIVE_TAG_INT:   sleep_for_val = sleep_for->m_int_data;        break;
-                            case PRIMITIVE_TAG_FLOAT: sleep_for_val = (i64)sleep_for->m_float_data; break;
-                            default:                  return runtime_error("Builtin function <%s> called on non-numeric type", bfn_tag_str);
-                        }
+                        if (sleep_for->m_tag != PRIMITIVE_TAG_INT)
+                            return runtime_error("Builtin function <%s> must be called with type <int> as its argument", bfn_tag_str);
+                        lldiv_t res = lldiv(sleep_for->m_int_data, 1000000000);
+                        if (errno = 0, nanosleep(&(struct timespec){.tv_sec = (time_t)res.quot, .tv_nsec = (i32)res.rem}, NULL) != 0)
+                            return runtime_error(strerror(errno));
                         primitive_deinit(sleep_for, self->alloc);
                         vec_base_pop_back_discard(&self->data_stack);
-                        if (errno = 0, nanosleep(&(struct timespec){.tv_sec = (time_t)(sleep_for_val / 1000000000), .tv_nsec = (i32)(sleep_for_val % 1000000000)}, NULL) != 0)
-                            return runtime_error(strerror(errno));
+                        break;
+                    }
+                    case BUILTIN_FN_TAG_GET_ERRNO:
+                        if (!vec_base_push_back(&self->data_stack, self->alloc, &(Primitive){.m_tag = PRIMITIVE_TAG_INT, .m_int_data = self->errno_val}))
+                            return oom_error();
+                        break;
+                    case BUILTIN_FN_TAG_SET_ERRNO:{
+                        if (self->data_stack.m_size < 1)
+                            return builtin_fn_arg_count_error(bfn_tag_str);
+                        Primitive *to_set = vec_base_at(&self->data_stack, self->data_stack.m_size - 1);
+                        if (to_set->m_tag != PRIMITIVE_TAG_INT)
+                            return runtime_error("Builtin function <%s> must be called with type <int> as its argument", bfn_tag_str);
+                        self->errno_val = to_set->m_int_data;
+                        primitive_deinit(to_set, self->alloc);
+                        vec_base_pop_back_discard(&self->data_stack);
                         break;
                     }
                     case BUILTIN_FN_TAG_STDIN:
                     case BUILTIN_FN_TAG_STDOUT:
                     case BUILTIN_FN_TAG_STDERR:{
-                        FILE *std_file;
+                        FILE *file_ptr;
                         switch (bfn_tag){
-                            case BUILTIN_FN_TAG_STDIN:  std_file = stdin;  break;
-                            case BUILTIN_FN_TAG_STDOUT: std_file = stdout; break;
-                            case BUILTIN_FN_TAG_STDERR: std_file = stderr; break;
+                            case BUILTIN_FN_TAG_STDIN:  file_ptr = stdin;  break;
+                            case BUILTIN_FN_TAG_STDOUT: file_ptr = stdout; break;
+                            case BUILTIN_FN_TAG_STDERR: file_ptr = stderr; break;
                             default:                    unreachable();
                         }
-                        if (!vec_base_push_back(&self->data_stack, self->alloc, &(Primitive){.m_tag = PRIMITIVE_TAG_INT, .m_int_data = (i64)((usize)std_file)}))
+                        if (!vec_base_push_back(&self->data_stack, self->alloc, &(Primitive){.m_tag = PRIMITIVE_TAG_INT, .m_int_data = (i64)((usize)file_ptr)}))
                             return oom_error();
                         break;
                     }
@@ -318,9 +358,9 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                         Primitive *to_flush = vec_base_at(&self->data_stack, self->data_stack.m_size - 1);
 
                         if (file->m_tag != PRIMITIVE_TAG_INT)
-                            return runtime_error("Builtin function <%s> called on non-int type as its 1st argument", bfn_tag_str);
+                            return runtime_error("Builtin function <%s> must be called with type <int> as its 1st argument", bfn_tag_str);
                         if (to_flush->m_tag != PRIMITIVE_TAG_BOOL)
-                            return runtime_error("Builtin function <%s> called on non-bool type as its 3rd argument", bfn_tag_str);
+                            return runtime_error("Builtin function <%s> must be called with type <bool> as its 3rd argument", bfn_tag_str);
 
                         usize file_as_usize = (usize)file->m_int_data;
 
@@ -355,7 +395,7 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
 
                         Primitive *file = vec_base_at(&self->data_stack, self->data_stack.m_size - 1);
                         if (file->m_tag != PRIMITIVE_TAG_INT)
-                            return runtime_error("Builtin function <%s> called on non-int type as its 1st argument", bfn_tag_str);
+                            return runtime_error("Builtin function <%s> must be called with type <int> as its argument", bfn_tag_str);
 
                         usize file_as_usize = (usize)file->m_int_data;
 
@@ -427,6 +467,10 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                             return oom_error();
                         break;
                     }
+                    case BUILTIN_FN_TAG_RAND:
+                        if (!vec_base_push_back(&self->data_stack, self->alloc, &(Primitive){.m_tag = PRIMITIVE_TAG_INT, .m_int_data = (i64)xoshiro256_next(&self->rand)}))
+                            return oom_error();
+                        break;
                     case BUILTIN_FN_TAG_LEN:{
                         if (self->data_stack.m_size < 1)
                             return builtin_fn_arg_count_error(bfn_tag_str);
@@ -437,24 +481,20 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                         switch (list_like->m_tag){
                             case PRIMITIVE_TAG_STR:  len.m_int_data = (i64)str_base_size(&list_like->m_str_data_ptr->m_data); break;
                             case PRIMITIVE_TAG_LIST: len.m_int_data = (i64)list_like->m_list_data_ptr->m_data.m_size;         break;
-                            default:                 return runtime_error("Builtin function <%s> called on a numeric type", bfn_tag_str);
+                            default:                 return runtime_error("Builtin function <%s> must be called with type <str> or <list> as its argument", bfn_tag_str);
                         }
                         primitive_deinit(list_like, self->alloc);
 
                         *list_like = len;
                         break;
                     }
-                    case BUILTIN_FN_TAG_RAND:
-                        if (!vec_base_push_back(&self->data_stack, self->alloc, &(Primitive){.m_tag = PRIMITIVE_TAG_INT, .m_int_data = (i64)xoshiro256_next(&self->rand)}))
-                            return oom_error();
-                        break;
                     case BUILTIN_FN_TAG_PUSH_BACK:{
                         if (self->data_stack.m_size < 2)
                             return builtin_fn_arg_count_error(bfn_tag_str);
 
                         Primitive *list = vec_base_at(&self->data_stack, self->data_stack.m_size - 2);
                         if (list->m_tag != PRIMITIVE_TAG_LIST)
-                            return runtime_error("<%s> called on non-list type", bfn_tag_str);
+                            return runtime_error("Builtin function <%s> must be called with type <list> as its 1st argument", bfn_tag_str);
 
                         if (!vec_base_push_back(&list->m_list_data_ptr->m_data, self->alloc, vec_base_at(&self->data_stack, self->data_stack.m_size - 1)))
                             return oom_error();
@@ -470,10 +510,10 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
 
                         Primitive *list = vec_base_at(&self->data_stack, self->data_stack.m_size - 1);
                         if (list->m_tag != PRIMITIVE_TAG_LIST)
-                            return runtime_error("<%s> called on non-list type", bfn_tag_str);
+                            return runtime_error("Builtin function <%s> must be called with type <list> as its 1st argument", bfn_tag_str);
 
                         if (list->m_list_data_ptr->m_data.m_size == 0)
-                            return runtime_error("<%s> called on empty list", bfn_tag_str);
+                            return runtime_error("Builtin function <%s> called on empty list", bfn_tag_str);
 
                         Primitive popped;
                         vec_base_pop_back_to(&list->m_list_data_ptr->m_data, &popped);
@@ -710,29 +750,15 @@ Interpreter_run_result interpreter_run(Allocator alloc, U8_slice bytecode, int a
     Interpreter_state state = {
         .alloc                = alloc,
         .rand                 = xoshiro256_init((u64)time(NULL)),
-        .argv                 = {.m_tag = PRIMITIVE_TAG_LIST, .m_list_data_ptr = allocator_alloc(alloc, Primitive_list_data, 1)},
+        .argc                 = argc,
+        .argv                 = argv,
+        .errno_val            = 0,
         .bytecode             = bytecode,
         .pc                   = 0,
         .file_infos           = ordered_umap_base_init(usize, File_info),
         .data_stack           = vec_base_init(Primitive),
         .return_address_stack = vec_base_init(usize)
     };
-
-    if (!state.argv.m_list_data_ptr)
-        return (Interpreter_run_result){.error = INTERPRETER_RUN_ERROR_OOM};
-
-    *state.argv.m_list_data_ptr = (Primitive_list_data){.m_ref_count = 1, .m_data = vec_base_init(Primitive)};
-
-    for (int i = 0; i < argc; ++i){
-        Primitive temp = {.m_tag = PRIMITIVE_TAG_STR, .m_str_data_ptr = allocator_alloc(state.alloc, Primitive_str_data, 1)};
-        if (!temp.m_str_data_ptr)
-            return interpreter_state_oom_error(&state);
-        *temp.m_str_data_ptr = (Primitive_str_data){.m_ref_count = 1, .m_data = {0}};
-        if (!str_base_assign_raw(&temp.m_str_data_ptr->m_data, state.alloc, argv[i]) || !vec_base_push_back(&state.argv.m_list_data_ptr->m_data, state.alloc, &temp)){
-            primitive_deinit(&temp, state.alloc);
-            return interpreter_state_oom_error(&state);
-        }
-    }
 
     static_assert(sizeof(i64) == sizeof(usize), "");
 

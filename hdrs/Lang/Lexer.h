@@ -13,7 +13,6 @@ extern "C"{
 
 enum Token_type{
     TOKEN_TYPE_ID,
-    TOKEN_TYPE_ARGV,
     TOKEN_TYPE_FALSE,
     TOKEN_TYPE_TRUE,
     TOKEN_TYPE_CHAR_LIT,
@@ -79,6 +78,8 @@ enum Token_type{
 
     TOKEN_TYPE_RETURN
 };
+
+const char* token_type_to_str(enum Token_type token_type);
 
 typedef struct Token{
     enum Token_type m_type;

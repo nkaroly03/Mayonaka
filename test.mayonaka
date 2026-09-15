@@ -159,4 +159,11 @@ let arr: [][]str = [["Hello"], ["World"]];
 print(arr);
 /*/
 
-print(stdout(), "Test\n", true);
+let argv: []str = get_argv();
+print(stdout(), argv, true);
+print(stdout(), '\n', false);
+
+set_errno(3);
+print(stdout(), "errno: " + get_errno() as str + '\n', true);
+
+return 0;

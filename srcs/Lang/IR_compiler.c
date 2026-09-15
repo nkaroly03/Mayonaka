@@ -382,12 +382,6 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
             pop_on_discarded_expression(ast_node);
             break;
         }
-        case AST_NODE_TYPE_ATOM_ARGV:
-            if (!vec_base_push_back(&self->type_info_stack, self->alloc, &(Type_info){.m_tag = TYPE_INFO_TAG_STR, .m_dimensions = 1}))
-                return OOM_ERROR;
-            add_instruction("%s %s", op_code_to_str(OP_CODE_PUSH), str_base_data_const(&ast_node->m_token->m_id));
-            pop_on_discarded_expression(ast_node);
-            break;
         case AST_NODE_TYPE_ATOM_FALSE:
         case AST_NODE_TYPE_ATOM_TRUE:
             if (!vec_base_push_back(&self->type_info_stack, self->alloc, &(Type_info){.m_tag = TYPE_INFO_TAG_BOOL, .m_dimensions = 0}))
@@ -647,9 +641,6 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
             }
 
             if (lhs_node->m_type != AST_NODE_TYPE_BINARY_OP_SUBSCRIPT){
-                // TODO?: change argv to be mutable
-                if (lhs_node->m_type == AST_NODE_TYPE_ATOM_ARGV)
-                    return syntax_error("<argv> is immutable", lhs_node->m_token->m_line_number);
                 if (lhs_node->m_type != AST_NODE_TYPE_ATOM_ID)
                     return syntax_error("Trying to assign to rvalue", lhs_node->m_token->m_line_number);
 
@@ -683,8 +674,6 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                     lhs_sub_node = lhs_sub_node->m_sub_nodes.m_data[0]
                 ){
                     enum AST_node_type ast_node_type = lhs_sub_node->m_type;
-                    if (ast_node_type == AST_NODE_TYPE_ATOM_ARGV)
-                        return syntax_error("<argv> is immutable", lhs_sub_node->m_token->m_line_number);
                     if (ast_node_type != AST_NODE_TYPE_BINARY_OP_ASSIGN && ast_node_type != AST_NODE_TYPE_BINARY_OP_SUBSCRIPT && ast_node_type != AST_NODE_TYPE_BINARY_OP_AS)
                         return syntax_error("Trying to assign to rvalue", lhs_sub_node->m_token->m_line_number);
                 }

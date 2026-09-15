@@ -75,7 +75,6 @@ int main(const int argc, const char *const *const argv){
     fprintf(stderr, "------------------------------------------------------------------------------------------------\n");
 
     IR_compile_result IR_compile_result = IR_compile(&arena, parse_result.ast_nodes);
-
     switch (IR_compile_result.error){
         case COMPILE_ERROR_NONE:   break;
         case COMPILE_ERROR_OOM:    goto oom_error;

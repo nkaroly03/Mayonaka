@@ -77,70 +77,125 @@ static bool lexer_state_token_push_back(Lexer_state *self, enum Token_type type,
     return temp.success && vec_base_push_back(&self->tokens, self->alloc, &(Token){.m_type = type, .m_id = temp.result, .m_line_number = self->line_number});
 }
 
-static const char* token_type_to_str(enum Token_type token_type){
-    #define generate_case(token_type_id) case token_type_id: return #token_type_id;
+static const char* token_type_enum_to_str(enum Token_type token_type){
+    #define generate_case(token_type_id) case token_type_id: return #token_type_id
     switch (token_type){
-        generate_case(TOKEN_TYPE_ID)
-        generate_case(TOKEN_TYPE_ARGV)
-        generate_case(TOKEN_TYPE_FALSE)
-        generate_case(TOKEN_TYPE_TRUE)
-        generate_case(TOKEN_TYPE_CHAR_LIT)
-        generate_case(TOKEN_TYPE_INT_LIT)
-        generate_case(TOKEN_TYPE_FLOAT_LIT)
-        generate_case(TOKEN_TYPE_STR_LIT)
-        generate_case(TOKEN_TYPE_COMMA)
-        generate_case(TOKEN_TYPE_COLON)
-        generate_case(TOKEN_TYPE_SEMICOLON)
-        generate_case(TOKEN_TYPE_LPAREN)
-        generate_case(TOKEN_TYPE_RPAREN)
-        generate_case(TOKEN_TYPE_LBRACKET)
-        generate_case(TOKEN_TYPE_RBRACKET)
-        generate_case(TOKEN_TYPE_LBRACE)
-        generate_case(TOKEN_TYPE_RBRACE)
-        generate_case(TOKEN_TYPE_TILDE)
-        generate_case(TOKEN_TYPE_NOT)
-        generate_case(TOKEN_TYPE_DOT2)
-        generate_case(TOKEN_TYPE_AS)
-        generate_case(TOKEN_TYPE_EQUALS1)
-        generate_case(TOKEN_TYPE_EQUALS2)
-        generate_case(TOKEN_TYPE_NOT_EQUALS1)
-        generate_case(TOKEN_TYPE_LESS_THAN1)
-        generate_case(TOKEN_TYPE_LESS_THAN1_EQUALS1)
-        generate_case(TOKEN_TYPE_GREATER_THAN1)
-        generate_case(TOKEN_TYPE_GREATER_THAN1_EQUALS1)
-        generate_case(TOKEN_TYPE_PLUS)
-        generate_case(TOKEN_TYPE_MINUS)
-        generate_case(TOKEN_TYPE_ASTERISK1)
-        generate_case(TOKEN_TYPE_SLASH)
-        generate_case(TOKEN_TYPE_PERCENT)
-        generate_case(TOKEN_TYPE_ASTERISK2)
-        generate_case(TOKEN_TYPE_LESS_THAN2)
-        generate_case(TOKEN_TYPE_GREATER_THAN2)
-        generate_case(TOKEN_TYPE_AMPERSAND)
-        generate_case(TOKEN_TYPE_PIPE)
-        generate_case(TOKEN_TYPE_CARET)
-        generate_case(TOKEN_TYPE_AND)
-        generate_case(TOKEN_TYPE_OR)
-        generate_case(TOKEN_TYPE_FN)
-        generate_case(TOKEN_TYPE_LET)
-        generate_case(TOKEN_TYPE_VOID)
-        generate_case(TOKEN_TYPE_BOOL)
-        generate_case(TOKEN_TYPE_CHAR)
-        generate_case(TOKEN_TYPE_INT)
-        generate_case(TOKEN_TYPE_FLOAT)
-        generate_case(TOKEN_TYPE_STR)
-        generate_case(TOKEN_TYPE_IF)
-        generate_case(TOKEN_TYPE_ELSE)
-        generate_case(TOKEN_TYPE_WHILE)
-        generate_case(TOKEN_TYPE_FOR)
-        generate_case(TOKEN_TYPE_BREAK)
-        generate_case(TOKEN_TYPE_CONTINUE)
-        generate_case(TOKEN_TYPE_RETURN)
+        generate_case(TOKEN_TYPE_ID);
+        generate_case(TOKEN_TYPE_FALSE);
+        generate_case(TOKEN_TYPE_TRUE);
+        generate_case(TOKEN_TYPE_CHAR_LIT);
+        generate_case(TOKEN_TYPE_INT_LIT);
+        generate_case(TOKEN_TYPE_FLOAT_LIT);
+        generate_case(TOKEN_TYPE_STR_LIT);
+        generate_case(TOKEN_TYPE_COMMA);
+        generate_case(TOKEN_TYPE_COLON);
+        generate_case(TOKEN_TYPE_SEMICOLON);
+        generate_case(TOKEN_TYPE_LPAREN);
+        generate_case(TOKEN_TYPE_RPAREN);
+        generate_case(TOKEN_TYPE_LBRACKET);
+        generate_case(TOKEN_TYPE_RBRACKET);
+        generate_case(TOKEN_TYPE_LBRACE);
+        generate_case(TOKEN_TYPE_RBRACE);
+        generate_case(TOKEN_TYPE_TILDE);
+        generate_case(TOKEN_TYPE_NOT);
+        generate_case(TOKEN_TYPE_DOT2);
+        generate_case(TOKEN_TYPE_AS);
+        generate_case(TOKEN_TYPE_EQUALS1);
+        generate_case(TOKEN_TYPE_EQUALS2);
+        generate_case(TOKEN_TYPE_NOT_EQUALS1);
+        generate_case(TOKEN_TYPE_LESS_THAN1);
+        generate_case(TOKEN_TYPE_LESS_THAN1_EQUALS1);
+        generate_case(TOKEN_TYPE_GREATER_THAN1);
+        generate_case(TOKEN_TYPE_GREATER_THAN1_EQUALS1);
+        generate_case(TOKEN_TYPE_PLUS);
+        generate_case(TOKEN_TYPE_MINUS);
+        generate_case(TOKEN_TYPE_ASTERISK1);
+        generate_case(TOKEN_TYPE_SLASH);
+        generate_case(TOKEN_TYPE_PERCENT);
+        generate_case(TOKEN_TYPE_ASTERISK2);
+        generate_case(TOKEN_TYPE_LESS_THAN2);
+        generate_case(TOKEN_TYPE_GREATER_THAN2);
+        generate_case(TOKEN_TYPE_AMPERSAND);
+        generate_case(TOKEN_TYPE_PIPE);
+        generate_case(TOKEN_TYPE_CARET);
+        generate_case(TOKEN_TYPE_AND);
+        generate_case(TOKEN_TYPE_OR);
+        generate_case(TOKEN_TYPE_FN);
+        generate_case(TOKEN_TYPE_LET);
+        generate_case(TOKEN_TYPE_VOID);
+        generate_case(TOKEN_TYPE_BOOL);
+        generate_case(TOKEN_TYPE_CHAR);
+        generate_case(TOKEN_TYPE_INT);
+        generate_case(TOKEN_TYPE_FLOAT);
+        generate_case(TOKEN_TYPE_STR);
+        generate_case(TOKEN_TYPE_IF);
+        generate_case(TOKEN_TYPE_ELSE);
+        generate_case(TOKEN_TYPE_WHILE);
+        generate_case(TOKEN_TYPE_FOR);
+        generate_case(TOKEN_TYPE_BREAK);
+        generate_case(TOKEN_TYPE_CONTINUE);
+        generate_case(TOKEN_TYPE_RETURN);
     }
     unreachable();
 }
 
 // ------------------------------------------------------------------------------------------------
+
+const char* token_type_to_str(enum Token_type token_type){
+    switch (token_type){
+        case TOKEN_TYPE_FALSE:                 return "false";
+        case TOKEN_TYPE_TRUE:                  return "true";
+        case TOKEN_TYPE_COMMA:                 return ",";
+        case TOKEN_TYPE_COLON:                 return ":";
+        case TOKEN_TYPE_SEMICOLON:             return ";";
+        case TOKEN_TYPE_LPAREN:                return "(";
+        case TOKEN_TYPE_RPAREN:                return ")";
+        case TOKEN_TYPE_LBRACKET:              return "[";
+        case TOKEN_TYPE_RBRACKET:              return "]";
+        case TOKEN_TYPE_LBRACE:                return "{";
+        case TOKEN_TYPE_RBRACE:                return "}";
+        case TOKEN_TYPE_TILDE:                 return "~";
+        case TOKEN_TYPE_NOT:                   return "not";
+        case TOKEN_TYPE_DOT2:                  return "..";
+        case TOKEN_TYPE_AS:                    return "as";
+        case TOKEN_TYPE_EQUALS1:               return "=";
+        case TOKEN_TYPE_EQUALS2:               return "==";
+        case TOKEN_TYPE_NOT_EQUALS1:           return "!=";
+        case TOKEN_TYPE_LESS_THAN1:            return "<";
+        case TOKEN_TYPE_LESS_THAN1_EQUALS1:    return "<=";
+        case TOKEN_TYPE_GREATER_THAN1:         return ">";
+        case TOKEN_TYPE_GREATER_THAN1_EQUALS1: return ">=";
+        case TOKEN_TYPE_PLUS:                  return "+";
+        case TOKEN_TYPE_MINUS:                 return "-";
+        case TOKEN_TYPE_ASTERISK1:             return "*";
+        case TOKEN_TYPE_SLASH:                 return "/";
+        case TOKEN_TYPE_PERCENT:               return "%";
+        case TOKEN_TYPE_ASTERISK2:             return "**";
+        case TOKEN_TYPE_LESS_THAN2:            return "<<";
+        case TOKEN_TYPE_GREATER_THAN2:         return ">>";
+        case TOKEN_TYPE_AMPERSAND:             return "&";
+        case TOKEN_TYPE_PIPE:                  return "|";
+        case TOKEN_TYPE_CARET:                 return "^";
+        case TOKEN_TYPE_AND:                   return "and";
+        case TOKEN_TYPE_OR:                    return "or";
+        case TOKEN_TYPE_FN:                    return "fn";
+        case TOKEN_TYPE_LET:                   return "let";
+        case TOKEN_TYPE_VOID:                  return "void";
+        case TOKEN_TYPE_BOOL:                  return "bool";
+        case TOKEN_TYPE_CHAR:                  return "char";
+        case TOKEN_TYPE_INT:                   return "int";
+        case TOKEN_TYPE_FLOAT:                 return "float";
+        case TOKEN_TYPE_STR:                   return "str";
+        case TOKEN_TYPE_IF:                    return "if";
+        case TOKEN_TYPE_ELSE:                  return "else";
+        case TOKEN_TYPE_WHILE:                 return "while";
+        case TOKEN_TYPE_FOR:                   return "for";
+        case TOKEN_TYPE_BREAK:                 return "break";
+        case TOKEN_TYPE_CONTINUE:              return "continue";
+        case TOKEN_TYPE_RETURN:                return "return";
+        default:                               return NULL;
+    }
+}
 
 i64 token_slice_print(Token_slice tokens_slice, FILE *file){
     assert(file && "<file> is not nullable");
@@ -149,7 +204,7 @@ i64 token_slice_print(Token_slice tokens_slice, FILE *file){
 
     for (usize i = 0; i < tokens_slice.m_size; ++i){
         const Token *t = &tokens_slice.m_data[i];
-        int temp = fprintf(file, "{.type = %s, .id = %s, .line_number = " USIZE_PFMT "}\n", token_type_to_str(t->m_type), str_base_data_const(&t->m_id), t->m_line_number);
+        int temp = fprintf(file, "{.type = %s, .id = %s, .line_number = " USIZE_PFMT "}\n", token_type_enum_to_str(t->m_type), str_base_data_const(&t->m_id), t->m_line_number);
         if (temp < 0)
             return temp;
         chars_written += temp;
@@ -170,9 +225,9 @@ Lex_result lex(Arena *arena, const char *path){
     };
     #define oom_error() lexer_state_oom_error(&state)
     #define syntax_error(...) lexer_state_syntax_error(&state, __VA_ARGS__)
-    #define token_push_back(token_type, id) \
+    #define token_push_back(token_type_val, token_type_id) \
         do{ \
-            if (!lexer_state_token_push_back(&state, (token_type), (id))) \
+            if (!lexer_state_token_push_back(&state, (token_type_val), (token_type_id))) \
                 return oom_error(); \
         } while (0)
 
@@ -201,9 +256,7 @@ Lex_result lex(Arena *arena, const char *path){
                 Str_base_result error_info = str_base_init_raw(state.alloc, "<ferror> during tokenization");
                 if (!error_info.success)
                     return oom_error();
-
                 lexer_state_cleanup(&state);
-
                 return (Lex_result){.error_info = error_info.result, .error = LEX_ERROR_FILE};
             }
         }
@@ -214,13 +267,14 @@ Lex_result lex(Arena *arena, const char *path){
     usize lbrace_count   = 0, rbrace_count   = 0;
 
     for (Str_view sv = str_base_to_str_view(&lines); (sv = str_view_trim_left_while(sv, is_space_not_newline)).m_size > 0;){
-        const char *punct_match;
-        #define punct_match_starts_with(starts_with) (punct_match = (starts_with), str_view_starts_with(sv, punct_match))
-        #define punct_match_token_push_back(token_type) \
-            do{ \
-                token_push_back((token_type), punct_match); \
-                sv = str_view_trim_prefix(sv, punct_match); \
-            } while (0)
+        enum Token_type punct_token_type;
+        const char *punct_token_id;
+        #define punct_match(punct_token_type_val) \
+            ( \
+                punct_token_type = (punct_token_type_val), \
+                punct_token_id = token_type_to_str(punct_token_type), \
+                str_view_starts_with(sv, punct_token_id) \
+            )
 
         if (str_view_starts_with(sv, "\n")){
             ++state.line_number;
@@ -286,38 +340,47 @@ Lex_result lex(Arena *arena, const char *path){
 
             sv = str_view_trim_left(sv, quoted_sv.m_size);
         }
-        
-        else if (punct_match_starts_with("(")){ punct_match_token_push_back(TOKEN_TYPE_LPAREN);   ++lparen_count;   }
-        else if (punct_match_starts_with(")")){ punct_match_token_push_back(TOKEN_TYPE_RPAREN);   ++rparen_count;   }
-        else if (punct_match_starts_with("[")){ punct_match_token_push_back(TOKEN_TYPE_LBRACKET); ++lbracket_count; }
-        else if (punct_match_starts_with("]")){ punct_match_token_push_back(TOKEN_TYPE_RBRACKET); ++rbracket_count; }
-        else if (punct_match_starts_with("{")){ punct_match_token_push_back(TOKEN_TYPE_LBRACE);   ++lbrace_count;   }
-        else if (punct_match_starts_with("}")){ punct_match_token_push_back(TOKEN_TYPE_RBRACE);   ++rbrace_count;   }
+        else if (
+            punct_match(TOKEN_TYPE_LPAREN               ) ||
+            punct_match(TOKEN_TYPE_RPAREN               ) ||
+            punct_match(TOKEN_TYPE_LBRACKET             ) ||
+            punct_match(TOKEN_TYPE_RBRACKET             ) ||
+            punct_match(TOKEN_TYPE_LBRACE               ) ||
+            punct_match(TOKEN_TYPE_RBRACE               ) ||
+            punct_match(TOKEN_TYPE_COMMA                ) ||
+            punct_match(TOKEN_TYPE_COLON                ) ||
+            punct_match(TOKEN_TYPE_SEMICOLON            ) ||
+            punct_match(TOKEN_TYPE_DOT2                 ) ||
+            punct_match(TOKEN_TYPE_PLUS                 ) ||
+            punct_match(TOKEN_TYPE_MINUS                ) ||
+            punct_match(TOKEN_TYPE_ASTERISK2            ) ||
+            punct_match(TOKEN_TYPE_ASTERISK1            ) ||
+            punct_match(TOKEN_TYPE_SLASH                ) ||
+            punct_match(TOKEN_TYPE_PERCENT              ) ||
+            punct_match(TOKEN_TYPE_LESS_THAN2           ) ||
+            punct_match(TOKEN_TYPE_GREATER_THAN2        ) ||
+            punct_match(TOKEN_TYPE_AMPERSAND            ) ||
+            punct_match(TOKEN_TYPE_PIPE                 ) ||
+            punct_match(TOKEN_TYPE_CARET                ) ||
+            punct_match(TOKEN_TYPE_TILDE                ) ||
+            punct_match(TOKEN_TYPE_EQUALS2              ) ||
+            punct_match(TOKEN_TYPE_NOT_EQUALS1          ) ||
+            punct_match(TOKEN_TYPE_LESS_THAN1_EQUALS1   ) ||
+            punct_match(TOKEN_TYPE_LESS_THAN1           ) ||
+            punct_match(TOKEN_TYPE_GREATER_THAN1_EQUALS1) ||
+            punct_match(TOKEN_TYPE_GREATER_THAN1        ) ||
+            punct_match(TOKEN_TYPE_EQUALS1              )
+        ){
+            lparen_count   += (punct_token_type == TOKEN_TYPE_LPAREN  );
+            rparen_count   += (punct_token_type == TOKEN_TYPE_RPAREN  );
+            lbracket_count += (punct_token_type == TOKEN_TYPE_LBRACKET);
+            rbracket_count += (punct_token_type == TOKEN_TYPE_RBRACKET);
+            lbrace_count   += (punct_token_type == TOKEN_TYPE_LBRACE  );
+            rbrace_count   += (punct_token_type == TOKEN_TYPE_RBRACE  );
 
-        else if (punct_match_starts_with("," )) punct_match_token_push_back(TOKEN_TYPE_COMMA);
-        else if (punct_match_starts_with(":" )) punct_match_token_push_back(TOKEN_TYPE_COLON);
-        else if (punct_match_starts_with(";" )) punct_match_token_push_back(TOKEN_TYPE_SEMICOLON);
-        else if (punct_match_starts_with("..")) punct_match_token_push_back(TOKEN_TYPE_DOT2);
-        else if (punct_match_starts_with("+" )) punct_match_token_push_back(TOKEN_TYPE_PLUS);
-        else if (punct_match_starts_with("-" )) punct_match_token_push_back(TOKEN_TYPE_MINUS);
-        else if (punct_match_starts_with("**")) punct_match_token_push_back(TOKEN_TYPE_ASTERISK2);
-        else if (punct_match_starts_with("*" )) punct_match_token_push_back(TOKEN_TYPE_ASTERISK1);
-        else if (punct_match_starts_with("/" )) punct_match_token_push_back(TOKEN_TYPE_SLASH);
-        else if (punct_match_starts_with("%" )) punct_match_token_push_back(TOKEN_TYPE_PERCENT);
-        else if (punct_match_starts_with("<<")) punct_match_token_push_back(TOKEN_TYPE_LESS_THAN2);
-        else if (punct_match_starts_with(">>")) punct_match_token_push_back(TOKEN_TYPE_GREATER_THAN2);
-        else if (punct_match_starts_with("&" )) punct_match_token_push_back(TOKEN_TYPE_AMPERSAND);
-        else if (punct_match_starts_with("|" )) punct_match_token_push_back(TOKEN_TYPE_PIPE);
-        else if (punct_match_starts_with("^" )) punct_match_token_push_back(TOKEN_TYPE_CARET);
-        else if (punct_match_starts_with("~" )) punct_match_token_push_back(TOKEN_TYPE_TILDE);
-        else if (punct_match_starts_with("==")) punct_match_token_push_back(TOKEN_TYPE_EQUALS2);
-        else if (punct_match_starts_with("!=")) punct_match_token_push_back(TOKEN_TYPE_NOT_EQUALS1);
-        else if (punct_match_starts_with("<=")) punct_match_token_push_back(TOKEN_TYPE_LESS_THAN1_EQUALS1);
-        else if (punct_match_starts_with("<" )) punct_match_token_push_back(TOKEN_TYPE_LESS_THAN1);
-        else if (punct_match_starts_with(">=")) punct_match_token_push_back(TOKEN_TYPE_GREATER_THAN1_EQUALS1);
-        else if (punct_match_starts_with(">" )) punct_match_token_push_back(TOKEN_TYPE_GREATER_THAN1);
-        else if (punct_match_starts_with("=" )) punct_match_token_push_back(TOKEN_TYPE_EQUALS1);
-
+            token_push_back(punct_token_type, punct_token_id);
+            sv = str_view_trim_left(sv, (usize)strlen(punct_token_id));
+        }
         else if (isdigit(sv.m_str[0])){
             if (str_view_starts_with(sv, "0x") || str_view_starts_with(sv, "0X") || str_view_starts_with(sv, "0b") || str_view_starts_with(sv, "0B")){
                 bool is_hex = (tolower(sv.m_str[1]) == 'x');
@@ -404,36 +467,41 @@ Lex_result lex(Arena *arena, const char *path){
             while (++id_end_pos < sv.m_size && (isalnum(sv.m_str[id_end_pos]) || sv.m_str[id_end_pos] == '_'));
             Str_view id_sv = str_view_trim_right(sv, sv.m_size - id_end_pos);
 
-            Str_view keyword_sv;
-            #define keyword_match(keyword) (keyword_sv = str_view_init((keyword)), cmp_eq_Str_view(&id_sv, &keyword_sv))
-            #define keyword_match_token_push_back(token_type) \
-                do{ \
-                    token_push_back((token_type), keyword_sv.m_str); \
-                    sv = str_view_trim_left(sv, keyword_sv.m_size); \
-                } while (0)
+            enum Token_type keyword_token_type;
+            Str_view keyword_token_sv;
+            #define keyword_match(keyword_token_type_val) \
+                ( \
+                    keyword_token_type = (keyword_token_type_val), \
+                    keyword_token_sv = str_view_init(token_type_to_str(keyword_token_type)), \
+                    cmp_eq_Str_view(&id_sv, &keyword_token_sv) \
+                )
 
-            if      (keyword_match("argv"    )) keyword_match_token_push_back(TOKEN_TYPE_ARGV);
-            else if (keyword_match("false"   )) keyword_match_token_push_back(TOKEN_TYPE_FALSE);
-            else if (keyword_match("true"    )) keyword_match_token_push_back(TOKEN_TYPE_TRUE);
-            else if (keyword_match("as"      )) keyword_match_token_push_back(TOKEN_TYPE_AS);
-            else if (keyword_match("and"     )) keyword_match_token_push_back(TOKEN_TYPE_AND);
-            else if (keyword_match("or"      )) keyword_match_token_push_back(TOKEN_TYPE_OR);
-            else if (keyword_match("not"     )) keyword_match_token_push_back(TOKEN_TYPE_NOT);
-            else if (keyword_match("fn"      )) keyword_match_token_push_back(TOKEN_TYPE_FN);
-            else if (keyword_match("let"     )) keyword_match_token_push_back(TOKEN_TYPE_LET);
-            else if (keyword_match("void"    )) keyword_match_token_push_back(TOKEN_TYPE_VOID);
-            else if (keyword_match("bool"    )) keyword_match_token_push_back(TOKEN_TYPE_BOOL);
-            else if (keyword_match("char"    )) keyword_match_token_push_back(TOKEN_TYPE_CHAR);
-            else if (keyword_match("int"     )) keyword_match_token_push_back(TOKEN_TYPE_INT);
-            else if (keyword_match("float"   )) keyword_match_token_push_back(TOKEN_TYPE_FLOAT);
-            else if (keyword_match("str"     )) keyword_match_token_push_back(TOKEN_TYPE_STR);
-            else if (keyword_match("if"      )) keyword_match_token_push_back(TOKEN_TYPE_IF);
-            else if (keyword_match("else"    )) keyword_match_token_push_back(TOKEN_TYPE_ELSE);
-            else if (keyword_match("while"   )) keyword_match_token_push_back(TOKEN_TYPE_WHILE);
-            else if (keyword_match("for"     )) keyword_match_token_push_back(TOKEN_TYPE_FOR);
-            else if (keyword_match("break"   )) keyword_match_token_push_back(TOKEN_TYPE_BREAK);
-            else if (keyword_match("continue")) keyword_match_token_push_back(TOKEN_TYPE_CONTINUE);
-            else if (keyword_match("return"  )) keyword_match_token_push_back(TOKEN_TYPE_RETURN);
+            if (
+                keyword_match(TOKEN_TYPE_FALSE   ) ||
+                keyword_match(TOKEN_TYPE_TRUE    ) ||
+                keyword_match(TOKEN_TYPE_AS      ) ||
+                keyword_match(TOKEN_TYPE_AND     ) ||
+                keyword_match(TOKEN_TYPE_OR      ) ||
+                keyword_match(TOKEN_TYPE_NOT     ) ||
+                keyword_match(TOKEN_TYPE_FN      ) ||
+                keyword_match(TOKEN_TYPE_LET     ) ||
+                keyword_match(TOKEN_TYPE_VOID    ) ||
+                keyword_match(TOKEN_TYPE_BOOL    ) ||
+                keyword_match(TOKEN_TYPE_CHAR    ) ||
+                keyword_match(TOKEN_TYPE_INT     ) ||
+                keyword_match(TOKEN_TYPE_FLOAT   ) ||
+                keyword_match(TOKEN_TYPE_STR     ) ||
+                keyword_match(TOKEN_TYPE_IF      ) ||
+                keyword_match(TOKEN_TYPE_ELSE    ) ||
+                keyword_match(TOKEN_TYPE_WHILE   ) ||
+                keyword_match(TOKEN_TYPE_FOR     ) ||
+                keyword_match(TOKEN_TYPE_BREAK   ) ||
+                keyword_match(TOKEN_TYPE_CONTINUE) ||
+                keyword_match(TOKEN_TYPE_RETURN  )
+            ){
+                token_push_back(keyword_token_type, keyword_token_sv.m_str);
+                sv = str_view_trim_left(sv, id_sv.m_size);
+            }
             else{
                 Str_base_result id = str_base_init_str_view(state.alloc, id_sv);
                 if (!id.success || !vec_base_push_back(&state.tokens, state.alloc, &(Token){.m_type = TOKEN_TYPE_ID, .m_id = id.result, .m_line_number = state.line_number}))

@@ -14,7 +14,6 @@ extern "C"{
 enum Op_code_arg_tag{
     OP_CODE_ARG_TAG_BP,
     OP_CODE_ARG_TAG_SP,
-    OP_CODE_ARG_TAG_ARGV,
     OP_CODE_ARG_TAG_BOOL,
     OP_CODE_ARG_TAG_CHAR,
     OP_CODE_ARG_TAG_INT,

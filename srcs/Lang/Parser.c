@@ -422,7 +422,6 @@ Parser_state_parse_result parser_state_parse(Parser_state *self){
 
             FALLTHROUGH;
         }
-        case TOKEN_TYPE_ARGV:
         case TOKEN_TYPE_FALSE:
         case TOKEN_TYPE_TRUE:
         case TOKEN_TYPE_CHAR_LIT:
@@ -818,60 +817,59 @@ Parser_state_parse_result parser_state_parse(Parser_state *self){
     return (Parser_state_parse_result){.ast_node_ptr = node, .error = PARSE_ERROR_NONE};
 }
 
-static const char* ast_node_type_to_str(enum AST_node_type ast_node_type){
-    #define generate_case(ast_node_type_id) case ast_node_type_id: return #ast_node_type_id;
+static const char* ast_node_type_enum_to_str(enum AST_node_type ast_node_type){
+    #define generate_case(ast_node_type_id) case ast_node_type_id: return #ast_node_type_id
     switch (ast_node_type){
-        generate_case(AST_NODE_TYPE_ATOM_ID)
-        generate_case(AST_NODE_TYPE_ATOM_ARGV)
-        generate_case(AST_NODE_TYPE_ATOM_FALSE)
-        generate_case(AST_NODE_TYPE_ATOM_TRUE)
-        generate_case(AST_NODE_TYPE_ATOM_CHAR_LIT)
-        generate_case(AST_NODE_TYPE_ATOM_INT_LIT)
-        generate_case(AST_NODE_TYPE_ATOM_FLOAT_LIT)
-        generate_case(AST_NODE_TYPE_ATOM_STR_LIT)
-        generate_case(AST_NODE_TYPE_ATOM_INIT_LIST)
-        generate_case(AST_NODE_TYPE_TYPE_VOID)
-        generate_case(AST_NODE_TYPE_TYPE_BOOL)
-        generate_case(AST_NODE_TYPE_TYPE_CHAR)
-        generate_case(AST_NODE_TYPE_TYPE_INT)
-        generate_case(AST_NODE_TYPE_TYPE_FLOAT)
-        generate_case(AST_NODE_TYPE_TYPE_STR)
-        generate_case(AST_NODE_TYPE_TYPE_LIST)
-        generate_case(AST_NODE_TYPE_UNARY_OP_PLUS)
-        generate_case(AST_NODE_TYPE_UNARY_OP_MINUS)
-        generate_case(AST_NODE_TYPE_UNARY_OP_BNEG)
-        generate_case(AST_NODE_TYPE_UNARY_OP_NOT)
-        generate_case(AST_NODE_TYPE_BINARY_OP_SUBSCRIPT)
-        generate_case(AST_NODE_TYPE_BINARY_OP_POW)
-        generate_case(AST_NODE_TYPE_BINARY_OP_AS)
-        generate_case(AST_NODE_TYPE_BINARY_OP_MUL)
-        generate_case(AST_NODE_TYPE_BINARY_OP_DIV)
-        generate_case(AST_NODE_TYPE_BINARY_OP_REM)
-        generate_case(AST_NODE_TYPE_BINARY_OP_ADD)
-        generate_case(AST_NODE_TYPE_BINARY_OP_SUB)
-        generate_case(AST_NODE_TYPE_BINARY_OP_SHL)
-        generate_case(AST_NODE_TYPE_BINARY_OP_SHR)
-        generate_case(AST_NODE_TYPE_BINARY_OP_CMP_LE)
-        generate_case(AST_NODE_TYPE_BINARY_OP_CMP_LEQ)
-        generate_case(AST_NODE_TYPE_BINARY_OP_CMP_GE)
-        generate_case(AST_NODE_TYPE_BINARY_OP_CMP_GEQ)
-        generate_case(AST_NODE_TYPE_BINARY_OP_CMP_EQ)
-        generate_case(AST_NODE_TYPE_BINARY_OP_CMP_NEQ)
-        generate_case(AST_NODE_TYPE_BINARY_OP_BAND)
-        generate_case(AST_NODE_TYPE_BINARY_OP_XOR)
-        generate_case(AST_NODE_TYPE_BINARY_OP_BOR)
-        generate_case(AST_NODE_TYPE_BINARY_OP_AND)
-        generate_case(AST_NODE_TYPE_BINARY_OP_OR)
-        generate_case(AST_NODE_TYPE_BINARY_OP_ASSIGN)
-        generate_case(AST_NODE_TYPE_FN_CALL)
-        generate_case(AST_NODE_TYPE_DECL_FN)
-        generate_case(AST_NODE_TYPE_DECL_VAR)
-        generate_case(AST_NODE_TYPE_STATEMENT_BLOCK)
-        generate_case(AST_NODE_TYPE_STATEMENT_IF)
-        generate_case(AST_NODE_TYPE_STATEMENT_WHILE)
-        generate_case(AST_NODE_TYPE_STATEMENT_BREAK)
-        generate_case(AST_NODE_TYPE_STATEMENT_CONTINUE)
-        generate_case(AST_NODE_TYPE_STATEMENT_RETURN)
+        generate_case(AST_NODE_TYPE_ATOM_ID);
+        generate_case(AST_NODE_TYPE_ATOM_FALSE);
+        generate_case(AST_NODE_TYPE_ATOM_TRUE);
+        generate_case(AST_NODE_TYPE_ATOM_CHAR_LIT);
+        generate_case(AST_NODE_TYPE_ATOM_INT_LIT);
+        generate_case(AST_NODE_TYPE_ATOM_FLOAT_LIT);
+        generate_case(AST_NODE_TYPE_ATOM_STR_LIT);
+        generate_case(AST_NODE_TYPE_ATOM_INIT_LIST);
+        generate_case(AST_NODE_TYPE_TYPE_VOID);
+        generate_case(AST_NODE_TYPE_TYPE_BOOL);
+        generate_case(AST_NODE_TYPE_TYPE_CHAR);
+        generate_case(AST_NODE_TYPE_TYPE_INT);
+        generate_case(AST_NODE_TYPE_TYPE_FLOAT);
+        generate_case(AST_NODE_TYPE_TYPE_STR);
+        generate_case(AST_NODE_TYPE_TYPE_LIST);
+        generate_case(AST_NODE_TYPE_UNARY_OP_PLUS);
+        generate_case(AST_NODE_TYPE_UNARY_OP_MINUS);
+        generate_case(AST_NODE_TYPE_UNARY_OP_BNEG);
+        generate_case(AST_NODE_TYPE_UNARY_OP_NOT);
+        generate_case(AST_NODE_TYPE_BINARY_OP_SUBSCRIPT);
+        generate_case(AST_NODE_TYPE_BINARY_OP_POW);
+        generate_case(AST_NODE_TYPE_BINARY_OP_AS);
+        generate_case(AST_NODE_TYPE_BINARY_OP_MUL);
+        generate_case(AST_NODE_TYPE_BINARY_OP_DIV);
+        generate_case(AST_NODE_TYPE_BINARY_OP_REM);
+        generate_case(AST_NODE_TYPE_BINARY_OP_ADD);
+        generate_case(AST_NODE_TYPE_BINARY_OP_SUB);
+        generate_case(AST_NODE_TYPE_BINARY_OP_SHL);
+        generate_case(AST_NODE_TYPE_BINARY_OP_SHR);
+        generate_case(AST_NODE_TYPE_BINARY_OP_CMP_LE);
+        generate_case(AST_NODE_TYPE_BINARY_OP_CMP_LEQ);
+        generate_case(AST_NODE_TYPE_BINARY_OP_CMP_GE);
+        generate_case(AST_NODE_TYPE_BINARY_OP_CMP_GEQ);
+        generate_case(AST_NODE_TYPE_BINARY_OP_CMP_EQ);
+        generate_case(AST_NODE_TYPE_BINARY_OP_CMP_NEQ);
+        generate_case(AST_NODE_TYPE_BINARY_OP_BAND);
+        generate_case(AST_NODE_TYPE_BINARY_OP_XOR);
+        generate_case(AST_NODE_TYPE_BINARY_OP_BOR);
+        generate_case(AST_NODE_TYPE_BINARY_OP_AND);
+        generate_case(AST_NODE_TYPE_BINARY_OP_OR);
+        generate_case(AST_NODE_TYPE_BINARY_OP_ASSIGN);
+        generate_case(AST_NODE_TYPE_FN_CALL);
+        generate_case(AST_NODE_TYPE_DECL_FN);
+        generate_case(AST_NODE_TYPE_DECL_VAR);
+        generate_case(AST_NODE_TYPE_STATEMENT_BLOCK);
+        generate_case(AST_NODE_TYPE_STATEMENT_IF);
+        generate_case(AST_NODE_TYPE_STATEMENT_WHILE);
+        generate_case(AST_NODE_TYPE_STATEMENT_BREAK);
+        generate_case(AST_NODE_TYPE_STATEMENT_CONTINUE);
+        generate_case(AST_NODE_TYPE_STATEMENT_RETURN);
     }
     unreachable();
 }
@@ -885,7 +883,10 @@ static i64 ast_node_print(const AST_node *self, FILE *file, int indent){
     chars_written += temp;
 
     if (self){
-        const char *ast_node_type_str = ast_node_type_to_str(self->m_type);
+        const char *ast_node_type_str = ast_node_type_enum_to_str(self->m_type);
+
+        int indent2 = indent + 2;
+        int indent4 = indent + 4;
 
         temp = fprintf(
             file,
@@ -893,26 +894,26 @@ static i64 ast_node_print(const AST_node *self, FILE *file, int indent){
             "%*s<id>%s</id>\n"
             "%*s<line_number>" USIZE_PFMT "</line_number>\n",
             ast_node_type_str,
-            indent + 2, "", str_base_data_const(&self->m_token->m_id),
-            indent + 2, "", self->m_token->m_line_number
+            indent2, "", str_base_data_const(&self->m_token->m_id),
+            indent2, "", self->m_token->m_line_number
         );
         if (temp < 0)
             return temp;
         chars_written += temp;
 
         if (self->m_sub_nodes.m_size > 0){
-            temp = fprintf(file, "%*s<sub_nodes>\n", indent + 2, "");
+            temp = fprintf(file, "%*s<sub_nodes>\n", indent2, "");
             if (temp < 0)
                 return temp;
             chars_written += temp;
 
             for (usize i = 0; i < self->m_sub_nodes.m_size; ++i){
-                temp = ast_node_print(self->m_sub_nodes.m_data[i], file, indent + 4);
+                temp = ast_node_print(self->m_sub_nodes.m_data[i], file, indent4);
                 if (temp < 0)
                     return temp;
             }
 
-            temp = fprintf(file, "%*s</sub_nodes>\n", indent + 2, "");
+            temp = fprintf(file, "%*s</sub_nodes>\n", indent2, "");
             if (temp < 0)
                 return temp;
             chars_written += temp;
