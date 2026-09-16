@@ -15,6 +15,7 @@
 
 #include "../../hdrs/Lang/Builtin_fn.h"
 #include "../../hdrs/Lang/IR_compiler.h"
+#include "../../hdrs/Lang/Lexer.h"
 #include "../../hdrs/Lang/Parser.h"
 #include "../../hdrs/Lang/Type_info.h"
 
@@ -132,28 +133,29 @@ typedef struct IR_compiler_state_compile_result{
     enum Compile_error error;
 } IR_compiler_state_compile_result;
 
+static const IR_compiler_state_compile_result  NO_ERROR = {.error = COMPILE_ERROR_NONE};
 static const IR_compiler_state_compile_result OOM_ERROR = {.error = COMPILE_ERROR_OOM};
 
-static IR_compiler_state_compile_result IR_compiler_state_syntax_error(IR_compiler_state *self, const char *fmt, ...){
-    va_list args;
-    va_start(args, fmt);
-    Str_base_result error_info = str_base_init_fmt_va_list(self->alloc, fmt, args);
-    va_end(args);
+static IR_compiler_state_compile_result IR_compiler_state_syntax_error(IR_compiler_state *self, const AST_node *ast_node, const char *fmt, ...){
+    Token_positiion_info pos = ast_node->m_token->m_pos;
+
+    Str_base_result error_info = str_base_init_fmt(self->alloc, "<" USIZE_PFMT ":" USIZE_PFMT ">: ", pos.m_line, pos.m_column);
+    if (error_info.success){
+        va_list args;
+        va_start(args, fmt);
+        error_info.success = str_base_append_fmt_va_list(&error_info.result, self->alloc, fmt, args);
+        va_end(args);
+    }
 
     return (error_info.success) ? (IR_compiler_state_compile_result){.error_info = error_info.result, .error = COMPILE_ERROR_SYNTAX} : OOM_ERROR;
 }
-#define syntax_error(...) IR_compiler_state_syntax_error(self, "On line <" USIZE_PFMT ">: " __VA_ARGS__)
+#define syntax_error(ast_node_val, ...) IR_compiler_state_syntax_error(self, ast_node_val, __VA_ARGS__)
 
 static IR_compiler_state_compile_result IR_compiler_state_unary_op_error(IR_compiler_state *self, const AST_node *un_op_node, Type_info type_info){
     Str_base_result type_info_str = type_info_to_str_base(type_info, self->alloc);
     if (!type_info_str.success)
         return OOM_ERROR;
-    return syntax_error(
-        "Invalid unary operation <%s> on <%s>",
-        un_op_node->m_token->m_line_number,
-        str_base_data_const(&un_op_node->m_token->m_id),
-        str_base_data(&type_info_str.result)
-    );
+    return syntax_error(un_op_node, "Invalid unary operation <%s> on <%s>", str_base_data_const(&un_op_node->m_token->m_id), str_base_data(&type_info_str.result));
 }
 static IR_compiler_state_compile_result IR_compiler_state_binary_op_error(IR_compiler_state *self, const AST_node *bin_op_node, Type_info lhs_type_info, Type_info rhs_type_info){
     Str_base_result lhs_type_info_str;
@@ -164,8 +166,8 @@ static IR_compiler_state_compile_result IR_compiler_state_binary_op_error(IR_com
     )
         return OOM_ERROR;
     return syntax_error(
+        bin_op_node,
         "Invalid binary operation <%s> between <%s> and <%s>",
-        bin_op_node->m_token->m_line_number,
         str_base_data_const(&bin_op_node->m_token->m_id),
         str_base_data(&lhs_type_info_str.result),
         str_base_data(&rhs_type_info_str.result)
@@ -184,12 +186,7 @@ static IR_compiler_state_compile_result IR_compiler_state_type_conversion_error(
         !( src_type_info_str = type_info_to_str_base( src_type_info, self->alloc)).success
     )
         return OOM_ERROR;
-    return syntax_error(
-        "Expression with type <%s> is not convertible to <%s>",
-        ast_node->m_token->m_line_number,
-        str_base_data(&src_type_info_str.result),
-        str_base_data(&dest_type_info_str.result)
-    );
+    return syntax_error(ast_node, "Expression with type <%s> is not convertible to <%s>", str_base_data(&src_type_info_str.result), str_base_data(&dest_type_info_str.result));
 }
 
 #define INDENT "    "
@@ -274,12 +271,12 @@ static IR_compiler_state_compile_result IR_compiler_state_push_back_var_id(IR_co
         case UMAP_INSERT_ERROR_OOM:
             return OOM_ERROR;
         case UMAP_INSERT_ERROR_ALREADY_INSERTED:
-            return syntax_error("Identifier <%s> is already in use", id_node->m_token->m_line_number, str_base_data_const(&id_node->m_token->m_id));
+            return syntax_error(id_node, "Identifier <%s> is already in use", str_base_data_const(&id_node->m_token->m_id));
     }
 
     ++((Id_count*)vec_base_at(&self->id_count_stack, self->id_count_stack.m_size - 1))->var_id_count;
 
-    return (IR_compiler_state_compile_result){0};
+    return NO_ERROR;
 }
 static bool IR_compiler_state_pop_ids_in_current_scope(IR_compiler_state *self){
     Id_count id_count;
@@ -312,12 +309,12 @@ static IR_compiler_state_compile_result IR_compiler_state_init_list_type_info_fr
         case AST_NODE_TYPE_ATOM_INIT_LIST:
             (void)IR_compiler_state_init_list_type_info_from_context(self, parent, out_init_list_type_info);
             if (--out_init_list_type_info->m_dimensions == 0)
-                return syntax_error("Initializer list has an incorrect number of dimensions", init_list_node->m_token->m_line_number);
+                return syntax_error(init_list_node, "Initializer list has an incorrect number of dimensions");
             break;
         case AST_NODE_TYPE_BINARY_OP_AS:
             *out_init_list_type_info = ast_node_to_type_info(parent->m_sub_nodes.m_data[1]);
             if (out_init_list_type_info->m_dimensions == 0)
-                return syntax_error("Casting initializer list to non-list type in <as> expression", init_list_node->m_token->m_line_number);
+                return syntax_error(init_list_node, "Casting initializer list to non-list type in <as> expression");
             break;
         case AST_NODE_TYPE_BINARY_OP_ASSIGN:{
             usize i = 0;
@@ -335,7 +332,7 @@ static IR_compiler_state_compile_result IR_compiler_state_init_list_type_info_fr
             while (parent->m_sub_nodes.m_data[i] != init_list_node)
                 ++i;
             if (builtin_fn_tag_init(str_base_data_const(&parent->m_sub_nodes.m_data[0]->m_token->m_id)) != BUILTIN_FN_TAG_NONE)
-                return syntax_error("Using an initializer list as a parameter to a function is only allowed in user-defined functions", init_list_node->m_token->m_line_number);
+                return syntax_error(init_list_node, "Using an initializer list as a parameter to a function is only allowed in user-defined functions");
             *out_init_list_type_info = (
                 (Fn_id_info*)ordered_umap_base_at_key(self->fn_ids_ptr, &parent->m_sub_nodes.m_data[0]->m_token->m_id).m_value
             )->arg_type_infos.m_data[i - 1];
@@ -347,16 +344,16 @@ static IR_compiler_state_compile_result IR_compiler_state_init_list_type_info_fr
         case AST_NODE_TYPE_STATEMENT_RETURN:{
             const AST_node *fn_node = ast_node_find_fn_node(parent->m_parent);
             if (!fn_node)
-                return syntax_error("Returning an initializer list is only allowed inside a user-defined function", init_list_node->m_token->m_line_number);
+                return syntax_error(init_list_node, "Returning an initializer list is only allowed inside a user-defined function");
             *out_init_list_type_info = ((Fn_id_info*)ordered_umap_base_at_key(self->fn_ids_ptr, &fn_node->m_sub_nodes.m_data[0]->m_token->m_id).m_value)->return_type_info;
             break;
         }
         default:
         init_list_context_error:
-            return syntax_error("Initializer list's type is contextually unknown", init_list_node->m_token->m_line_number);
+            return syntax_error(init_list_node, "Initializer list's type is contextually unknown");
     }
 
-    return (IR_compiler_state_compile_result){.error = COMPILE_ERROR_NONE};
+    return NO_ERROR;
 }
 
 #define JMP_LABEL_SYMBOL "L"
@@ -372,7 +369,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
         case AST_NODE_TYPE_ATOM_ID:{
             Var_id_info *var_id_info_ptr = ordered_umap_base_at_key(&self->var_ids, &ast_node->m_token->m_id).m_value;
             if (!var_id_info_ptr)
-                return syntax_error("Use of undeclared identifier <%s>", ast_node->m_token->m_line_number, str_base_data_const(&ast_node->m_token->m_id));
+                return syntax_error(ast_node, "Use of undeclared identifier <%s>", str_base_data_const(&ast_node->m_token->m_id));
             if (!vec_base_push_back(&self->type_info_stack, self->alloc, &var_id_info_ptr->type_info))
                 return OOM_ERROR;
             if (var_id_info_ptr->is_global)
@@ -404,7 +401,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
             break;
         case AST_NODE_TYPE_ATOM_INIT_LIST:{
             if (!ast_node->m_parent)
-                return syntax_error("Initializer list's type is unknown in the current context", ast_node->m_token->m_line_number);
+                return syntax_error(ast_node, "Initializer list's type is unknown in the current context");
 
             Type_info init_list_type_info;
 
@@ -435,7 +432,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                     Str_base_result type_info_str = type_info_to_str_base(init_list_type_info, self->alloc);
                     if (!type_info_str.success)
                         return OOM_ERROR;
-                    return syntax_error("Initializer list must only contain elements of type <%s>", ast_node->m_token->m_line_number, str_base_data(&type_info_str.result));
+                    return syntax_error(ast_node, "Initializer list must only contain elements of type <%s>", str_base_data(&type_info_str.result));
                 }
 
                 add_type_conversion_instruction(*(Type_info*)vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1));
@@ -642,11 +639,11 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
 
             if (lhs_node->m_type != AST_NODE_TYPE_BINARY_OP_SUBSCRIPT){
                 if (lhs_node->m_type != AST_NODE_TYPE_ATOM_ID)
-                    return syntax_error("Trying to assign to rvalue", lhs_node->m_token->m_line_number);
+                    return syntax_error(lhs_node, "Trying to assign to rvalue");
 
                 Var_id_info *var_id_info_ptr = ordered_umap_base_at_key(&self->var_ids, &lhs_node->m_token->m_id).m_value;
                 if (!var_id_info_ptr)
-                    return syntax_error("Use of undeclared identifier <%s>", lhs_node->m_token->m_line_number, str_base_data_const(&lhs_node->m_token->m_id));
+                    return syntax_error(lhs_node, "Use of undeclared identifier <%s>", str_base_data_const(&lhs_node->m_token->m_id));
 
                 IR_compiler_state_compile_result compile_result = IR_compiler_state_compile(self, rhs_node);
                 if (compile_result.error != COMPILE_ERROR_NONE)
@@ -675,7 +672,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                 ){
                     enum AST_node_type ast_node_type = lhs_sub_node->m_type;
                     if (ast_node_type != AST_NODE_TYPE_BINARY_OP_ASSIGN && ast_node_type != AST_NODE_TYPE_BINARY_OP_SUBSCRIPT && ast_node_type != AST_NODE_TYPE_BINARY_OP_AS)
-                        return syntax_error("Trying to assign to rvalue", lhs_sub_node->m_token->m_line_number);
+                        return syntax_error(lhs_node, "Trying to assign to rvalue");
                 }
 
                 const AST_node *subscript_lhs_node = lhs_node->m_sub_nodes.m_data[0];
@@ -753,31 +750,27 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                     bfn_call_result = builtin_fn_tag_call(bfn_tag, arg_type_infos);
                     if (!bfn_call_result.m_is_callable){
                         Str_base_result type_info_list_str = type_info_slice_to_str_base(arg_type_infos, self->alloc);
-                        if (!type_info_list_str.success)
-                            return OOM_ERROR;
-                        return syntax_error(
-                            "Builtin function <%s> is not callable with types <%s>",
-                            ast_node->m_token->m_line_number,
-                            fn_id,
-                            str_base_data(&type_info_list_str.result)
-                        );
+                        return(type_info_list_str.success)
+                            ? syntax_error(ast_node, "Builtin function <%s> is not callable with types <%s>", fn_id, str_base_data(&type_info_list_str.result))
+                            : OOM_ERROR
+                        ;
                     }
                 }
                 else if (!(bfn_call_result = builtin_fn_tag_call(bfn_tag, (Type_info_slice){0})).m_is_callable)
-                    return syntax_error("Builtin function <%s> is not callable without arguments", ast_node->m_token->m_line_number, fn_id);
+                    return syntax_error(ast_node, "Builtin function <%s> is not callable without arguments", fn_id);
 
                 return_type_info = bfn_call_result.m_return_type_info;
             }
             else{
                 Fn_id_info *fn_id_info_ptr = ordered_umap_base_at_key(self->fn_ids_ptr, &ast_node->m_sub_nodes.m_data[0]->m_token->m_id).m_value;
                 if (!fn_id_info_ptr)
-                    return syntax_error("Use of undeclared function <%s>", ast_node->m_token->m_line_number, fn_id);
+                    return syntax_error(ast_node, "Use of undeclared function <%s>", fn_id);
 
                 fn_id_mangled = str_base_data_const(&fn_id_info_ptr->id_mangled);
 
                 for (usize i = 0; i < fn_arg_nodes.m_size; ++i){
                     if (i >= fn_id_info_ptr->arg_type_infos.m_size)
-                        return syntax_error("Function <%s> called with wrong number of arguments", ast_node->m_token->m_line_number, fn_id);
+                        return syntax_error(ast_node, "Function <%s> called with wrong number of arguments", fn_id);
 
                     IR_compiler_state_compile_result compile_result = IR_compiler_state_compile(self, fn_arg_nodes.m_data[i]);
                     if (compile_result.error != COMPILE_ERROR_NONE)
@@ -814,7 +807,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                             break;
                         FALLTHROUGH;
                     default:
-                        return syntax_error("Function <%s> returning type <void> is used in an expression", ast_node->m_token->m_line_number, fn_id);
+                        return syntax_error(ast_node, "Function <%s> returning type <void> is used in an expression", fn_id);
                 }
             }
 
@@ -855,7 +848,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                 case UMAP_INSERT_ERROR_NONE:
                     if (builtin_fn_tag_init(fn_id) != BUILTIN_FN_TAG_NONE){
                 case UMAP_INSERT_ERROR_ALREADY_INSERTED:
-                        return syntax_error("Function identifier <%s> is already in use", fn_id_node->m_token->m_line_number, fn_id);
+                        return syntax_error(fn_id_node, "Function identifier <%s> is already in use", fn_id);
                     }
                     break;
                 case UMAP_INSERT_ERROR_OOM:
@@ -908,19 +901,15 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                     fn_body_node->m_sub_nodes.m_size == 0 ||
                     (fn_body_last_node = fn_body_node->m_sub_nodes.m_data[fn_body_node->m_sub_nodes.m_size - 1])->m_type != AST_NODE_TYPE_STATEMENT_RETURN ||
                     fn_body_last_node->m_sub_nodes.m_size == 0
-                ){
-                    return syntax_error(
-                        "Function returning non-void must end with a <return> statement that contains an expression",
-                        fn_body_last_node->m_token->m_line_number
-                    );
-                }
+                )
+                    return syntax_error(fn_body_last_node, "Function returning non-void must end with a <return> statement that contains an expression");
             }
             else if (
                 fn_body_node->m_sub_nodes.m_size > 0 &&
                 (fn_body_last_node = fn_body_node->m_sub_nodes.m_data[fn_body_node->m_sub_nodes.m_size - 1])->m_type == AST_NODE_TYPE_STATEMENT_RETURN &&
                 fn_body_last_node->m_sub_nodes.m_size > 0
             )
-                return syntax_error("Function with return type <void> returning non-void", fn_body_last_node->m_token->m_line_number);
+                return syntax_error(fn_body_last_node, "Function with return type <void> returning non-void");
 
             IR_compiler_state_compile_result compile_result = IR_compiler_state_compile(&fn_IR_compiler_state, fn_body_node);
             if (compile_result.error != COMPILE_ERROR_NONE)
@@ -975,8 +964,8 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                 )
                     return OOM_ERROR;
                 return syntax_error(
+                    expr_node,
                     "Expression's type <%s> is incompatible with the type of the destination <%s>",
-                    expr_node->m_token->m_line_number,
                     str_base_data(&expr_type_str.result),
                     str_base_data(&type_str.result)
                 );
@@ -1105,7 +1094,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                 case UMAP_INSERT_ERROR_OOM:
                     return OOM_ERROR;
                 case UMAP_INSERT_ERROR_ALREADY_INSERTED:
-                    return syntax_error("Identifier <%s> is already in use", while_label_node->m_token->m_line_number, str_base_data_const(&while_label_id_str));
+                    return syntax_error(while_label_node, "Identifier <%s> is already in use", str_base_data_const(&while_label_id_str));
             }
             if (while_body_node){
                 if (!vec_base_push_back(&self->id_count_stack, self->alloc, &(Id_count){0}))
@@ -1132,14 +1121,14 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
         case AST_NODE_TYPE_STATEMENT_BREAK:
         case AST_NODE_TYPE_STATEMENT_CONTINUE:{
             if (self->while_labels.m_keys.m_size == 0)
-                return syntax_error("<%s> must be used inside a loop", ast_node->m_token->m_line_number, str_base_data_const(&ast_node->m_token->m_id));
+                return syntax_error(ast_node, "<%s> must be used inside a loop", str_base_data_const(&ast_node->m_token->m_id));
             While_label_info *while_label_info_ptr = ((ast_node->m_sub_nodes.m_size > 0)
                 ? ordered_umap_base_at_key(&self->while_labels, &ast_node->m_sub_nodes.m_data[0]->m_token->m_id)
                 : ordered_umap_base_at_idx(&self->while_labels, self->while_labels.m_keys.m_size - 1)
             ).m_value;
             if (!while_label_info_ptr){
                 const AST_node *label_id_node = ast_node->m_sub_nodes.m_data[0];
-                return syntax_error("Use of undeclared identifier <%s>", label_id_node->m_token->m_line_number, str_base_data_const(&label_id_node->m_token->m_id));
+                return syntax_error(label_id_node, "Use of undeclared identifier <%s>", str_base_data_const(&label_id_node->m_token->m_id));
             }
             usize type_info_stack_size = self->type_info_stack.m_size;
             for (usize i = self->id_count_stack.m_size; i-- > while_label_info_ptr->id_count_stack_idx;)
@@ -1159,7 +1148,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
             const AST_node *fn_node = ast_node_find_fn_node(ast_node->m_parent);
             if (!fn_node){
                 if (ast_node->m_sub_nodes.m_size != 1)
-                    return syntax_error("The program must return a non-void value on exit", ast_node->m_token->m_line_number);
+                    return syntax_error(ast_node, "The program must return a non-void value on exit");
 
                 IR_compiler_state_compile_result compile_result = IR_compiler_state_compile(self, ast_node->m_sub_nodes.m_data[0]);
                 if (compile_result.error != COMPILE_ERROR_NONE)
@@ -1174,7 +1163,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                 Fn_id_info *fn_id_info_ptr = ordered_umap_base_at_key(self->fn_ids_ptr, &fn_node->m_sub_nodes.m_data[0]->m_token->m_id).m_value;
                 if (fn_id_info_ptr->return_type_info.m_tag != TYPE_INFO_TAG_VOID){
                     if (ast_node->m_sub_nodes.m_size != 1)
-                        return syntax_error("Function returning non-void must end with a <return> statement that contains an expression", ast_node->m_token->m_line_number);
+                        return syntax_error(ast_node, "Function returning non-void must end with a <return> statement that contains an expression");
 
                     ret_op_code = OP_CODE_RET;
 
@@ -1192,7 +1181,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                     vec_base_pop_back_discard(&self->type_info_stack);
                 }
                 else if (ast_node->m_sub_nodes.m_size > 0)
-                    return syntax_error("Function with return type <void> returning non-void", ast_node->m_token->m_line_number);
+                    return syntax_error(ast_node, "Function with return type <void> returning non-void");
 
                 usize type_info_stack_size = self->type_info_stack.m_size;
                 self->type_info_stack.m_size = ((Id_count*)vec_base_at(&self->id_count_stack, 0))->var_id_count;
@@ -1207,7 +1196,7 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
             abort();
     }
 
-    return (IR_compiler_state_compile_result){.error = COMPILE_ERROR_NONE};
+    return NO_ERROR;
 }
 
 // ------------------------------------------------------------------------------------------------

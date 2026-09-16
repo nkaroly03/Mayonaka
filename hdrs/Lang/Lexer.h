@@ -81,10 +81,14 @@ enum Token_type{
 
 const char* token_type_to_str(enum Token_type token_type);
 
+typedef struct Token_positiion_info{
+    usize m_line, m_column;
+} Token_positiion_info;
+
 typedef struct Token{
     enum Token_type m_type;
     Str_base m_id;
-    usize m_line_number;
+    Token_positiion_info m_pos;
 } Token;
 
 typedef struct Token_slice{

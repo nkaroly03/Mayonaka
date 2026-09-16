@@ -37,7 +37,7 @@ Type_info unary_op_type_info_result(enum Unary_op op, Type_info type_info){
 }
 
 Type_info binary_op_type_info_result(enum Binary_op op, Type_info lhs, Type_info rhs){
-    Type_info result = {0};
+    Type_info result = {.m_tag = TYPE_INFO_TAG_NONE};
 
     if (lhs.m_tag > TYPE_INFO_TAG_VOID && rhs.m_tag > TYPE_INFO_TAG_VOID){
         switch (op){

@@ -157,7 +157,6 @@ print('\n');
 let arr: [][]str = [["Hello"], ["World"]];
 ((arr = [["Ok", "Test"]])[0][0] = "Foo")[0] = 'A';
 print(arr);
-/*/
 
 let argv: []str = get_argv();
 print(stdout(), argv, true);
@@ -167,3 +166,6 @@ set_errno(3);
 print(stdout(), "errno: " + get_errno() as str + '\n', true);
 
 return 0;
+/*/
+
+if (true)

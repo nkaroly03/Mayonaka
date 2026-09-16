@@ -77,6 +77,7 @@ typedef struct Bytecode_compiler_state{
     Vec_base bytecode;
 } Bytecode_compiler_state;
 
+static const Bytecode_compile_result  NO_ERROR = {.error = COMPILE_ERROR_NONE};
 static const Bytecode_compile_result OOM_ERROR = {.error = COMPILE_ERROR_OOM};
 
 static Bytecode_compile_result bytecode_compiler_syntax_error(Bytecode_compiler_state *self, const char *fmt, ...){
@@ -85,9 +86,8 @@ static Bytecode_compile_result bytecode_compiler_syntax_error(Bytecode_compiler_
     if (error_info.success){
         va_list args;
         va_start(args, fmt);
-        bool append_result = str_base_append_fmt_va_list(&error_info.result, self->alloc, fmt, args);
+        error_info.success = str_base_append_fmt_va_list(&error_info.result, self->alloc, fmt, args);
         va_end(args);
-        error_info.success = append_result;
     }
     
     return (error_info.success) ? (Bytecode_compile_result){.error_info = error_info.result, .error = COMPILE_ERROR_SYNTAX} : OOM_ERROR;
@@ -110,7 +110,7 @@ static Bytecode_compile_result bytecode_compiler_state_arg_bp(Bytecode_compiler_
         if (!vec_base_push_back(&self->bytecode, self->alloc, &bp_offset.as_u8s[i]))
             return OOM_ERROR;
 
-    return (Bytecode_compile_result){.error = COMPILE_ERROR_NONE};
+    return NO_ERROR;
 }
 static Bytecode_compile_result bytecode_compiler_state_arg_sp(Bytecode_compiler_state *self, Str_view rhs){
     Usize_u8s_union sp_offset;
@@ -128,7 +128,7 @@ static Bytecode_compile_result bytecode_compiler_state_arg_sp(Bytecode_compiler_
         if (!vec_base_push_back(&self->bytecode, self->alloc, &sp_offset.as_u8s[i]))
             return OOM_ERROR;
 
-    return (Bytecode_compile_result){.error = COMPILE_ERROR_NONE};
+    return NO_ERROR;
 }
 
 static Bytecode_compile_result (*const ARG_FNS[])(Bytecode_compiler_state*, Str_view) = {
@@ -174,7 +174,7 @@ static Bytecode_compile_result bytecode_compiler_state_label_to_str(Bytecode_com
 
     *out_label_str = label_str;
 
-    return (Bytecode_compile_result){.error = COMPILE_ERROR_NONE};
+    return NO_ERROR;
 }
 
 static Bytecode_compile_result bytecode_compiler_state_add_label(Bytecode_compiler_state *self, const Str_base *label_str){
@@ -184,7 +184,7 @@ static Bytecode_compile_result bytecode_compiler_state_add_label(Bytecode_compil
         case UMAP_INSERT_ERROR_OOM:              return OOM_ERROR;
         case UMAP_INSERT_ERROR_ALREADY_INSERTED: return syntax_error("Label <%s> is already in use", str_base_data_const(label_str));
     }
-    return (Bytecode_compile_result){.error = COMPILE_ERROR_NONE};
+    return NO_ERROR;
 }
 
 static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler_state *self){

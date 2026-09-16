@@ -33,7 +33,7 @@ static int is_bin_digit(int c){
 typedef struct Lexer_state{
     Allocator alloc;
     FILE *file;
-    usize line_number;
+    Token_positiion_info pos;
     Vec_base tokens;
 } Lexer_state;
 
@@ -41,16 +41,20 @@ typedef struct Lexer_state{
 #define HEX_DIGIT_MAX_COUNT (BIN_DIGIT_MAX_COUNT / 4)
 #define U64_MAX_STRLEN 20
 
-static const char MULTI_LINE_COMMENT_SYMBOL[] = "/*/";
+static const char  MULTI_LINE_COMMENT_SYMBOL[] = "/*/";
 static const char SINGLE_LINE_COMMENT_SYMBOL[] = "//";
+
+#define  MULTI_LINE_COMMENT_SYMBOL_SIZE (array_size( MULTI_LINE_COMMENT_SYMBOL) - 1)
+#define SINGLE_LINE_COMMENT_SYMBOL_SIZE (array_size(SINGLE_LINE_COMMENT_SYMBOL) - 1)
+
+static const Lex_result OOM_ERROR = {.error = LEX_ERROR_OOM};
 
 static void lexer_state_cleanup(Lexer_state *self){
     fclose(self->file);
 }
 static Lex_result lexer_state_oom_error(Lexer_state *self){
     lexer_state_cleanup(self);
-
-    return (Lex_result){.error = LEX_ERROR_OOM};
+    return OOM_ERROR;
 }
 static Lex_result lexer_state_syntax_error(Lexer_state *self, const char *fmt, ...){
     va_list args;
@@ -61,8 +65,9 @@ static Lex_result lexer_state_syntax_error(Lexer_state *self, const char *fmt, .
     if (!error_info.success)
         return lexer_state_oom_error(self);
 
-    if (self->line_number > 0){
-        Str_base_result temp = str_base_init_fmt(self->alloc, "On line <" USIZE_PFMT ">: %s", self->line_number, str_base_data(&error_info.result));
+    Token_positiion_info pos = self->pos;
+    if (pos.m_line > 0){
+        Str_base_result temp = str_base_init_fmt(self->alloc, "<" USIZE_PFMT ":" USIZE_PFMT ">: %s", pos.m_line, pos.m_column, str_base_data(&error_info.result));
         if (!temp.success)
             return lexer_state_oom_error(self);
         error_info = temp;
@@ -74,7 +79,7 @@ static Lex_result lexer_state_syntax_error(Lexer_state *self, const char *fmt, .
 }
 static bool lexer_state_token_push_back(Lexer_state *self, enum Token_type type, const char *id){
     Str_base_result temp = str_base_init_raw(self->alloc, id);
-    return temp.success && vec_base_push_back(&self->tokens, self->alloc, &(Token){.m_type = type, .m_id = temp.result, .m_line_number = self->line_number});
+    return temp.success && vec_base_push_back(&self->tokens, self->alloc, &(Token){.m_type = type, .m_id = temp.result, .m_pos = self->pos});
 }
 
 static const char* token_type_enum_to_str(enum Token_type token_type){
@@ -204,7 +209,14 @@ i64 token_slice_print(Token_slice tokens_slice, FILE *file){
 
     for (usize i = 0; i < tokens_slice.m_size; ++i){
         const Token *t = &tokens_slice.m_data[i];
-        int temp = fprintf(file, "{.type = %s, .id = %s, .line_number = " USIZE_PFMT "}\n", token_type_enum_to_str(t->m_type), str_base_data_const(&t->m_id), t->m_line_number);
+        int temp = fprintf(
+            file,
+            "{.type = %s, .id = %s, .pos = <" USIZE_PFMT ":" USIZE_PFMT ">}\n",
+            token_type_enum_to_str(t->m_type),
+            str_base_data_const(&t->m_id),
+            t->m_pos.m_line,
+            t->m_pos.m_column
+        );
         if (temp < 0)
             return temp;
         chars_written += temp;
@@ -220,7 +232,7 @@ Lex_result lex(Arena *arena, const char *path){
     Lexer_state state = {
         .alloc       = arena_allocator(arena),
         .file        = fopen(path, "r"),
-        .line_number = 1,
+        .pos         = {.m_line = 1, .m_column = 1},
         .tokens      = vec_base_init(Token)
     };
     #define oom_error() lexer_state_oom_error(&state)
@@ -233,7 +245,7 @@ Lex_result lex(Arena *arena, const char *path){
 
     if (!state.file){
         Str_base_result error_info = str_base_init_fmt(state.alloc, "<%s>: %s", path, strerror(errno));
-        return (error_info.success) ? (Lex_result){.error_info = error_info.result, .error = LEX_ERROR_FILE} : (Lex_result){.error = LEX_ERROR_OOM};
+        return (error_info.success) ? (Lex_result){.error_info = error_info.result, .error = LEX_ERROR_FILE} : OOM_ERROR;
     }
 
     Str_base lines = {0};
@@ -266,7 +278,10 @@ Lex_result lex(Arena *arena, const char *path){
     usize lbracket_count = 0, rbracket_count = 0;
     usize lbrace_count   = 0, rbrace_count   = 0;
 
-    for (Str_view sv = str_base_to_str_view(&lines); (sv = str_view_trim_left_while(sv, is_space_not_newline)).m_size > 0;){
+    for (
+        Str_view sv = str_base_to_str_view(&lines), sv_temp;
+        (sv_temp = str_view_trim_left_while(sv, is_space_not_newline), state.pos.m_column += (sv.m_size - sv_temp.m_size), sv = sv_temp).m_size > 0;
+    ){
         enum Token_type punct_token_type;
         const char *punct_token_id;
         #define punct_match(punct_token_type_val) \
@@ -277,25 +292,31 @@ Lex_result lex(Arena *arena, const char *path){
             )
 
         if (str_view_starts_with(sv, "\n")){
-            ++state.line_number;
-            sv = str_view_trim_prefix(sv, "\n");
+            state.pos = (Token_positiion_info){.m_line = state.pos.m_line + 1, .m_column = 1};
+            sv = str_view_trim_left(sv, 1);
         }
         else if (str_view_starts_with(sv, MULTI_LINE_COMMENT_SYMBOL)){
-            usize multiline_newline_count = 0;
+            Token_positiion_info new_pos = state.pos;
 
-            sv = str_view_trim_prefix(sv, MULTI_LINE_COMMENT_SYMBOL);
+            new_pos.m_column += MULTI_LINE_COMMENT_SYMBOL_SIZE;
+            sv = str_view_trim_left(sv, MULTI_LINE_COMMENT_SYMBOL_SIZE);
             while (sv.m_size > 0 && !str_view_starts_with(sv, MULTI_LINE_COMMENT_SYMBOL)){
-                multiline_newline_count += str_view_starts_with(sv, "\n");
+                if (str_view_starts_with(sv, "\n"))
+                    new_pos = (Token_positiion_info){.m_line = new_pos.m_line + 1, .m_column = 0};
+                ++new_pos.m_column;
                 sv = str_view_trim_left(sv, 1);
             }
             if (sv.m_size == 0)
                 return syntax_error("Unclosed multi line comment");
             
-            state.line_number += multiline_newline_count;
-            sv = str_view_trim_prefix(sv, MULTI_LINE_COMMENT_SYMBOL);
+            state.pos = new_pos;
+            state.pos.m_column += MULTI_LINE_COMMENT_SYMBOL_SIZE;
+            sv = str_view_trim_left(sv, MULTI_LINE_COMMENT_SYMBOL_SIZE);
         }
-        else if (str_view_starts_with(sv, SINGLE_LINE_COMMENT_SYMBOL))
+        else if (str_view_starts_with(sv, SINGLE_LINE_COMMENT_SYMBOL)){
+            state.pos.m_column += SINGLE_LINE_COMMENT_SYMBOL_SIZE;
             sv = str_view_trim_left_while_not(sv, is_newline);
+        }
         else if (str_view_starts_with(sv, "'") || str_view_starts_with(sv, "\"")){
             char quote = sv.m_str[0];
             const char *type_str = (quote == '\'') ? "char" : "str";
@@ -322,7 +343,7 @@ Lex_result lex(Arena *arena, const char *path){
             if (quote == '\'' && (quoted_sv.m_size == 2 || str_base_size(&temp.result) > 1 + 2))
                 return syntax_error("<char> literal must represent 1 character");
 
-            if (quote == '"' && state.tokens.m_size != 0 && ((Token*)vec_base_at(&state.tokens, state.tokens.m_size - 1))->m_type == TOKEN_TYPE_STR_LIT){
+            if (quote == '"' && state.tokens.m_size > 0 && ((Token*)vec_base_at(&state.tokens, state.tokens.m_size - 1))->m_type == TOKEN_TYPE_STR_LIT){
                 Token *last = vec_base_at(&state.tokens, state.tokens.m_size - 1);
                 str_base_pop_back(&last->m_id);
                 if (!str_base_append_str_view(&last->m_id, state.alloc, str_view_trim_left(quoted_sv, 1)))
@@ -333,11 +354,12 @@ Lex_result lex(Arena *arena, const char *path){
                 !vec_base_push_back(
                     &state.tokens,
                     state.alloc,
-                    &(Token){.m_type = (quote == '\'') ? TOKEN_TYPE_CHAR_LIT : TOKEN_TYPE_STR_LIT, .m_id = temp.result, .m_line_number = state.line_number}
+                    &(Token){.m_type = (quote == '\'') ? TOKEN_TYPE_CHAR_LIT : TOKEN_TYPE_STR_LIT, .m_id = temp.result, .m_pos = state.pos}
                 )
             )
                 return oom_error();
 
+            state.pos.m_column += quoted_sv.m_size;
             sv = str_view_trim_left(sv, quoted_sv.m_size);
         }
         else if (
@@ -379,7 +401,10 @@ Lex_result lex(Arena *arena, const char *path){
             rbrace_count   += (punct_token_type == TOKEN_TYPE_RBRACE  );
 
             token_push_back(punct_token_type, punct_token_id);
-            sv = str_view_trim_left(sv, (usize)strlen(punct_token_id));
+
+            usize punct_token_id_len = (usize)strlen(punct_token_id);
+            state.pos.m_column += punct_token_id_len;
+            sv = str_view_trim_left(sv, punct_token_id_len);
         }
         else if (isdigit(sv.m_str[0])){
             if (str_view_starts_with(sv, "0x") || str_view_starts_with(sv, "0X") || str_view_starts_with(sv, "0b") || str_view_starts_with(sv, "0B")){
@@ -395,6 +420,9 @@ Lex_result lex(Arena *arena, const char *path){
                     base            = 2;
                 }
 
+                Token_positiion_info new_pos = state.pos;
+
+                new_pos.m_column += 2;
                 sv = str_view_trim_left(sv, 2);
 
                 if (sv.m_size == 0 || !is_fn(sv.m_str[0]))
@@ -419,6 +447,7 @@ Lex_result lex(Arena *arena, const char *path){
 
                 token_push_back(TOKEN_TYPE_INT_LIT, int_buf);
 
+                new_pos.m_column += i;
                 sv = str_view_trim_left(sv, i);
             }
             else{
@@ -431,7 +460,7 @@ Lex_result lex(Arena *arena, const char *path){
                         char next = sv.m_str[i + 1];
                         if (next == '.')
                             break;
-                        if (++dot_count > 1 || sv.m_str[i - 1] == '_' || !next || next == '_')
+                        if (!next || next == '_' || sv.m_str[i - 1] == '_' || ++dot_count > 1)
                             return syntax_error("Digit separator <_> must not come before or after <.>");
                         if (!str_base_push_back(&decimal_buf, state.alloc, '.'))
                             return oom_error();
@@ -441,7 +470,7 @@ Lex_result lex(Arena *arena, const char *path){
                 }
 
                 char temp = sv.m_str[i - 1];
-                if (temp == '_' || (temp = sv.m_str[i], !isspace(temp) && !ispunct(temp)))
+                if (temp == '_' || (temp = sv.m_str[i], isalpha(temp)))
                     return syntax_error("<%s> literal followed by <%c>", (dot_count > 0) ? "float" : "int", temp);
 
                 char *data = str_base_data(&decimal_buf);
@@ -459,6 +488,7 @@ Lex_result lex(Arena *arena, const char *path){
 
                 token_push_back((dot_count > 0) ? TOKEN_TYPE_FLOAT_LIT : TOKEN_TYPE_INT_LIT, data);
 
+                state.pos.m_column += i;
                 sv = str_view_trim_left(sv, i);
             }
         }
@@ -500,13 +530,16 @@ Lex_result lex(Arena *arena, const char *path){
                 keyword_match(TOKEN_TYPE_RETURN  )
             ){
                 token_push_back(keyword_token_type, keyword_token_sv.m_str);
+                state.pos.m_column += id_sv.m_size;
                 sv = str_view_trim_left(sv, id_sv.m_size);
             }
             else{
                 Str_base_result id = str_base_init_str_view(state.alloc, id_sv);
-                if (!id.success || !vec_base_push_back(&state.tokens, state.alloc, &(Token){.m_type = TOKEN_TYPE_ID, .m_id = id.result, .m_line_number = state.line_number}))
+                if (!id.success || !vec_base_push_back(&state.tokens, state.alloc, &(Token){.m_type = TOKEN_TYPE_ID, .m_id = id.result, .m_pos = state.pos}))
                     return oom_error();
-                sv = str_view_trim_prefix(sv, str_base_data(&id.result));
+                usize id_size = str_base_size(&id.result);
+                state.pos.m_column += id_size;
+                sv = str_view_trim_left(sv, id_size);
             }
         }
         else{
@@ -517,7 +550,7 @@ Lex_result lex(Arena *arena, const char *path){
         }
     }
 
-    state.line_number = 0;
+    state.pos.m_line = 0;
     if (lparen_count != rparen_count)
         return syntax_error("Number of opening and closing parentheses must match");
     if (lbracket_count != rbracket_count)
