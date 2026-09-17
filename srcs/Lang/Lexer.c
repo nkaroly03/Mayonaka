@@ -241,11 +241,7 @@ Lex_result lex(Arena *arena, const char *path){
     };
     #define oom_error() lexer_state_oom_error(&state)
     #define syntax_error(...) lexer_state_syntax_error(&state, __VA_ARGS__)
-    #define token_push_back(token_type_val, token_type_id) \
-        do{ \
-            if (!lexer_state_token_push_back(&state, (token_type_val), (token_type_id))) \
-                return oom_error(); \
-        } while (0)
+    #define token_push_back(token_type_val, token_type_id) lexer_state_token_push_back(&state, (token_type_val), (token_type_id))
 
     if (!state.file){
         Str_base_result error_info = str_base_init_fmt(state.alloc, "<%s>: %s", path, strerror(errno));
@@ -405,7 +401,8 @@ Lex_result lex(Arena *arena, const char *path){
             lbrace_count   += (punct_token_type == TOKEN_TYPE_LBRACE  );
             rbrace_count   += (punct_token_type == TOKEN_TYPE_RBRACE  );
 
-            token_push_back(punct_token_type, punct_token_id);
+            if (!token_push_back(punct_token_type, punct_token_id))
+                return oom_error();
 
             usize punct_token_id_len = (usize)strlen(punct_token_id);
             state.pos.m_column += punct_token_id_len;
@@ -450,7 +447,8 @@ Lex_result lex(Arena *arena, const char *path){
                 char int_buf[U64_MAX_STRLEN + 1];
                 sprintf(int_buf, I64_PFMT, (i64)strtoull(digit_buf, NULL, base));
 
-                token_push_back(TOKEN_TYPE_INT_LIT, int_buf);
+                if (!token_push_back(TOKEN_TYPE_INT_LIT, int_buf))
+                    return oom_error();
 
                 new_pos.m_column += i;
                 sv = str_view_trim_left(sv, i);
@@ -491,7 +489,8 @@ Lex_result lex(Arena *arena, const char *path){
                         return syntax_error("<int> literal out of range");
                 }
 
-                token_push_back((dot_count > 0) ? TOKEN_TYPE_FLOAT_LIT : TOKEN_TYPE_INT_LIT, data);
+                if (!token_push_back((dot_count > 0) ? TOKEN_TYPE_FLOAT_LIT : TOKEN_TYPE_INT_LIT, data))
+                    return oom_error();
 
                 state.pos.m_column += i;
                 sv = str_view_trim_left(sv, i);
@@ -535,7 +534,8 @@ Lex_result lex(Arena *arena, const char *path){
                 keyword_match(TOKEN_TYPE_CONTINUE) ||
                 keyword_match(TOKEN_TYPE_RETURN  )
             ){
-                token_push_back(keyword_token_type, keyword_token_sv.m_str);
+                if (!token_push_back(keyword_token_type, keyword_token_sv.m_str))
+                    return oom_error();
                 state.pos.m_column += id_sv.m_size;
                 sv = str_view_trim_left(sv, id_sv.m_size);
             }

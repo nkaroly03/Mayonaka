@@ -70,38 +70,39 @@ static Binding_powers token_type_binding_powers(enum AST_node_type ast_node_type
     #define bps_init(lhs_bp, rhs_bp) (Binding_powers){.lhs = lhs_bp, .rhs = rhs_bp}
 
     switch (ast_node_type){
-        case AST_NODE_TYPE_BINARY_OP_SUBSCRIPT: return bps_init(140, 141); 
+        case AST_NODE_TYPE_BINARY_OP_MEMBER_ACCESS:
+        case AST_NODE_TYPE_BINARY_OP_SUBSCRIPT:     return bps_init(140, 141); 
 
-        case AST_NODE_TYPE_BINARY_OP_POW:       return bps_init(131, 130); 
+        case AST_NODE_TYPE_BINARY_OP_POW:           return bps_init(131, 130); 
 
-        case AST_NODE_TYPE_BINARY_OP_AS:        return bps_init(UNARY_BINDING_POWER + 1, UNARY_BINDING_POWER); 
+        case AST_NODE_TYPE_BINARY_OP_AS:            return bps_init(UNARY_BINDING_POWER + 1, UNARY_BINDING_POWER); 
 
         case AST_NODE_TYPE_BINARY_OP_MUL:
         case AST_NODE_TYPE_BINARY_OP_DIV:
-        case AST_NODE_TYPE_BINARY_OP_REM:       return bps_init(110, 111);
+        case AST_NODE_TYPE_BINARY_OP_REM:           return bps_init(110, 111);
 
         case AST_NODE_TYPE_BINARY_OP_ADD:
-        case AST_NODE_TYPE_BINARY_OP_SUB:       return bps_init(100, 101);
+        case AST_NODE_TYPE_BINARY_OP_SUB:           return bps_init(100, 101);
 
         case AST_NODE_TYPE_BINARY_OP_SHL:
-        case AST_NODE_TYPE_BINARY_OP_SHR:       return bps_init(90, 91);
+        case AST_NODE_TYPE_BINARY_OP_SHR:           return bps_init(90, 91);
 
         case AST_NODE_TYPE_BINARY_OP_CMP_LE:
         case AST_NODE_TYPE_BINARY_OP_CMP_LEQ:
         case AST_NODE_TYPE_BINARY_OP_CMP_GE:
-        case AST_NODE_TYPE_BINARY_OP_CMP_GEQ:   return bps_init(80, 81);
+        case AST_NODE_TYPE_BINARY_OP_CMP_GEQ:       return bps_init(80, 81);
 
         case AST_NODE_TYPE_BINARY_OP_CMP_EQ:
-        case AST_NODE_TYPE_BINARY_OP_CMP_NEQ:   return bps_init(70, 71);
+        case AST_NODE_TYPE_BINARY_OP_CMP_NEQ:       return bps_init(70, 71);
 
-        case AST_NODE_TYPE_BINARY_OP_BAND:      return bps_init(60, 61);
-        case AST_NODE_TYPE_BINARY_OP_XOR:       return bps_init(50, 51);
-        case AST_NODE_TYPE_BINARY_OP_BOR:       return bps_init(40, 41);
-        case AST_NODE_TYPE_BINARY_OP_AND:       return bps_init(30, 31);
-        case AST_NODE_TYPE_BINARY_OP_OR:        return bps_init(20, 21);
-        case AST_NODE_TYPE_BINARY_OP_ASSIGN:    return bps_init(11, 10);
+        case AST_NODE_TYPE_BINARY_OP_BAND:          return bps_init(60, 61);
+        case AST_NODE_TYPE_BINARY_OP_XOR:           return bps_init(50, 51);
+        case AST_NODE_TYPE_BINARY_OP_BOR:           return bps_init(40, 41);
+        case AST_NODE_TYPE_BINARY_OP_AND:           return bps_init(30, 31);
+        case AST_NODE_TYPE_BINARY_OP_OR:            return bps_init(20, 21);
+        case AST_NODE_TYPE_BINARY_OP_ASSIGN:        return bps_init(11, 10);
 
-        default:                                unreachable();
+        default:                                    unreachable();
     }
 }
 
@@ -156,11 +157,18 @@ static bool parser_state_push_back_ast_node_from_token(Parser_state *self, const
 #define push_back_ast_node_from_token(parent, parent_sub_nodes, tok, ast_node_type) \
     parser_state_push_back_ast_node_from_token(self, (parent), (parent_sub_nodes), (tok), (ast_node_type))
 
-static bool parser_state_for_to_while_tokens_push_back(Parser_state *self, Vec_base *for_to_while_tokens, const char *id, enum Token_type token_type, Token_positiion_info pos){
+static bool parser_state_for_to_while_tokens_push_back(
+    Parser_state *self,
+    Vec_base *for_to_while_tokens,
+    const char *id,
+    enum Token_type token_type,
+    Token_positiion_info pos
+){
     Str_base_result token_id = str_base_init_raw(self->alloc, id);
     return token_id.success && vec_base_push_back(for_to_while_tokens, self->alloc, &(Token){.m_type = token_type, .m_id = token_id.result, .m_pos = pos});
 }
-#define for_to_while_tokens_push_back(for_to_while_tokens, id, token_type, pos) parser_state_for_to_while_tokens_push_back(self, (for_to_while_tokens), (id), (token_type), (pos))
+#define for_to_while_tokens_push_back(for_to_while_tokens, id, token_type, pos) \
+    parser_state_for_to_while_tokens_push_back(self, (for_to_while_tokens), (id), (token_type), (pos))
 
 static Parser_state_parse_result parser_state_parse_type(Parser_state *self, bool void_is_allowed);
 #define parse_type(void_is_allowed) parser_state_parse_type(self, (void_is_allowed))
@@ -171,11 +179,21 @@ static Parser_state_parse_result parser_state_parse_arithm_expr(Parser_state *se
 static Parser_state_parse_result parser_state_parse_expr(Parser_state *self);
 #define parse_expr() parser_state_parse_expr(self)
 
-static Parser_state_parse_result parser_state_parse_and_push_back_ast_sub_node_type(Parser_state *self, const AST_node *parent, Vec_base *parent_sub_nodes, bool void_is_allowed);
+static Parser_state_parse_result parser_state_parse_and_push_back_ast_sub_node_type(
+    Parser_state *self,
+    const AST_node *parent,
+    Vec_base *parent_sub_nodes,
+    bool void_is_allowed
+);
 #define parse_and_push_back_ast_sub_node_type(parent, parent_sub_nodes, void_is_allowed) \
     parser_state_parse_and_push_back_ast_sub_node_type(self, (parent), (parent_sub_nodes), (void_is_allowed))
 
-static Parser_state_parse_result parser_state_parse_and_push_back_ast_sub_node_arithm_expr(Parser_state *self, const AST_node *parent, Vec_base *parent_sub_nodes, u8 prev_rhs_bp);
+static Parser_state_parse_result parser_state_parse_and_push_back_ast_sub_node_arithm_expr(
+    Parser_state *self,
+    const AST_node *parent,
+    Vec_base *parent_sub_nodes,
+    u8 prev_rhs_bp
+);
 #define parse_and_push_back_ast_sub_node_arithm_expr(parent, parent_sub_nodes, prev_rhs_bp) \
     parser_state_parse_and_push_back_ast_sub_node_arithm_expr(self, (parent), (parent_sub_nodes), (prev_rhs_bp))
 
@@ -198,11 +216,10 @@ static Parser_state_parse_result parser_state_parse_and_push_back_ast_sub_node_i
     Parser_state *self,
     const AST_node *parent,
     Vec_base *parent_sub_nodes,
-    enum Token_type opening,
-    enum Token_type closing
+    enum Token_type opening
 );
-#define parse_and_push_back_ast_sub_node_id_type_list(parent, parent_sub_nodes, opening, closing) \
-    parser_state_parse_and_push_back_ast_sub_node_id_type_list(self, (parent), (parent_sub_nodes), (opening), (closing))
+#define parse_and_push_back_ast_sub_node_id_type_list(parent, parent_sub_nodes, opening) \
+    parser_state_parse_and_push_back_ast_sub_node_id_type_list(self, (parent), (parent_sub_nodes), (opening))
 
 Parser_state_parse_result parser_state_parse_type(Parser_state *self, bool void_is_allowed){
     if (self->token_idx >= self->tokens.m_size)
@@ -491,8 +508,7 @@ Parser_state_parse_result parser_state_parse_and_push_back_ast_sub_node_id_type_
     Parser_state *self,
     const AST_node *parent,
     Vec_base *parent_sub_nodes,
-    enum Token_type opening,
-    enum Token_type closing
+    enum Token_type opening
 ){
     const Token *tok;
     if (self->token_idx >= self->tokens.m_size || (tok = &self->tokens.m_data[self->token_idx])->m_type != TOKEN_TYPE_ID)
@@ -506,6 +522,8 @@ Parser_state_parse_result parser_state_parse_and_push_back_ast_sub_node_id_type_
     if (self->token_idx >= self->tokens.m_size || (tok = &self->tokens.m_data[self->token_idx])->m_type != opening)
         return syntax_error("<%s> must be followed by <%s> in function definition", str_base_data_const(&id_tok->m_id), token_type_to_str(opening));
     ++self->token_idx;
+
+    enum Token_type closing = (enum Token_type)(opening + 1);
 
     for (const Token *id_tok_it; (id_tok_it = &self->tokens.m_data[self->token_idx])->m_type != closing;){
         if (id_tok_it->m_type != TOKEN_TYPE_ID)
@@ -615,7 +633,7 @@ Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
             break;
         
         case TOKEN_TYPE_FN:{
-            parse_result = parse_and_push_back_ast_sub_node_id_type_list(node, &node_sub_nodes, TOKEN_TYPE_LPAREN, TOKEN_TYPE_RPAREN);
+            parse_result = parse_and_push_back_ast_sub_node_id_type_list(node, &node_sub_nodes, TOKEN_TYPE_LPAREN);
             if (parse_result.error != PARSE_ERROR_NONE || (parse_result = parse_and_push_back_ast_sub_node_type(node, &node_sub_nodes, true)).error != PARSE_ERROR_NONE)
                 return parse_result;
 
@@ -665,7 +683,7 @@ Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
         }
 
         case TOKEN_TYPE_DEFTYPE:{
-            parse_result = parse_and_push_back_ast_sub_node_id_type_list(node, &node_sub_nodes, TOKEN_TYPE_LBRACE, TOKEN_TYPE_RBRACE);
+            parse_result = parse_and_push_back_ast_sub_node_id_type_list(node, &node_sub_nodes, TOKEN_TYPE_LBRACE);
             if (parse_result.error != PARSE_ERROR_NONE)
                 return parse_result;
             node->m_sub_nodes = (AST_node_ptr_slice){.m_size = node_sub_nodes.m_size, .m_data = node_sub_nodes.m_data};
@@ -799,66 +817,76 @@ Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
 
             Vec_base for_to_while_tokens = vec_base_init(Token);
             #define for_to_while_push_back(token_type_val) \
-                do{ \
-                    if (!for_to_while_tokens_push_back(&for_to_while_tokens, token_type_to_str((token_type_val)), (token_type_val), for_capture_tok_pos)) \
-                        return OOM_ERROR; \
-                } while (0)
-            #define for_to_while_id_push_back(id_val) \
-                do{ \
-                    if (!for_to_while_tokens_push_back(&for_to_while_tokens, (id_val), TOKEN_TYPE_ID, for_capture_tok_pos)) \
-                        return OOM_ERROR; \
-                } while (0)
+                for_to_while_tokens_push_back(&for_to_while_tokens, token_type_to_str((token_type_val)), (token_type_val), for_capture_tok_pos)
+            #define for_to_while_id_push_back(id_val) for_to_while_tokens_push_back(&for_to_while_tokens, (id_val), TOKEN_TYPE_ID, for_capture_tok_pos)
 
-            for_to_while_push_back(TOKEN_TYPE_LBRACE);
-            for_to_while_push_back(TOKEN_TYPE_LET);
-            for_to_while_id_push_back(start_var);
-            for_to_while_push_back(TOKEN_TYPE_COLON);
-            for_to_while_push_back(TOKEN_TYPE_INT);
-            for_to_while_push_back(TOKEN_TYPE_EQUALS1);
+            if (
+                !for_to_while_push_back(TOKEN_TYPE_LBRACE)  ||
+                !for_to_while_push_back(TOKEN_TYPE_LET)     ||
+                !for_to_while_id_push_back(start_var)       ||
+                !for_to_while_push_back(TOKEN_TYPE_COLON)   ||
+                !for_to_while_push_back(TOKEN_TYPE_INT)     ||
+                !for_to_while_push_back(TOKEN_TYPE_EQUALS1) 
+            )
+                return OOM_ERROR;
             for (usize i = for_start_expr_start_pos; i < dot2_pos; ++i)
                 if (!vec_base_push_back(&for_to_while_tokens, self->alloc, &self->tokens.m_data[i]))
                     return OOM_ERROR;
-            for_to_while_push_back(TOKEN_TYPE_SEMICOLON);
-            for_to_while_push_back(TOKEN_TYPE_LET);
-            for_to_while_id_push_back(end_var);
-            for_to_while_push_back(TOKEN_TYPE_COLON);
-            for_to_while_push_back(TOKEN_TYPE_INT);
-            for_to_while_push_back(TOKEN_TYPE_EQUALS1);
+            if (
+                !for_to_while_push_back(TOKEN_TYPE_SEMICOLON) ||
+                !for_to_while_push_back(TOKEN_TYPE_LET)       ||
+                !for_to_while_id_push_back(end_var)           ||
+                !for_to_while_push_back(TOKEN_TYPE_COLON)     ||
+                !for_to_while_push_back(TOKEN_TYPE_INT)       ||
+                !for_to_while_push_back(TOKEN_TYPE_EQUALS1)
+            )
+                return OOM_ERROR;
             for (usize i = dot2_pos + 1; i < for_end_expr_end_pos; ++i)
                 if (!vec_base_push_back(&for_to_while_tokens, self->alloc, &self->tokens.m_data[i]))
                     return OOM_ERROR;
-            for_to_while_push_back(TOKEN_TYPE_SEMICOLON);
+            if (!for_to_while_push_back(TOKEN_TYPE_SEMICOLON))
+                return OOM_ERROR;
             if (loop_label_tok_ptr){
-                for_to_while_id_push_back(str_base_data_const(&loop_label_tok_ptr->m_id));
-                for_to_while_push_back(TOKEN_TYPE_COLON);
+                if (
+                    !for_to_while_id_push_back(str_base_data_const(&loop_label_tok_ptr->m_id)) ||
+                    !for_to_while_push_back(TOKEN_TYPE_COLON)
+                )
+                    return OOM_ERROR;
             }
-            for_to_while_push_back(TOKEN_TYPE_WHILE);
-            for_to_while_push_back(TOKEN_TYPE_LPAREN);
-            for_to_while_id_push_back(start_var);
-            for_to_while_push_back(TOKEN_TYPE_LESS_THAN1);
-            for_to_while_id_push_back(end_var);
-            for_to_while_push_back(TOKEN_TYPE_RPAREN);
-            for_to_while_push_back(TOKEN_TYPE_LBRACE);
-            for_to_while_push_back(TOKEN_TYPE_LET);
-            for_to_while_id_push_back(capture_id);
-            for_to_while_push_back(TOKEN_TYPE_COLON);
-            for_to_while_push_back(TOKEN_TYPE_INT);
-            for_to_while_push_back(TOKEN_TYPE_EQUALS1);
-            for_to_while_id_push_back(start_var);
-            for_to_while_push_back(TOKEN_TYPE_SEMICOLON);
-            for_to_while_id_push_back(start_var);
-            for_to_while_push_back(TOKEN_TYPE_EQUALS1);
-            for_to_while_id_push_back(start_var);
-            for_to_while_push_back(TOKEN_TYPE_PLUS);
+            if (
+                !for_to_while_push_back(TOKEN_TYPE_WHILE)      ||
+                !for_to_while_push_back(TOKEN_TYPE_LPAREN)     ||
+                !for_to_while_id_push_back(start_var)          ||
+                !for_to_while_push_back(TOKEN_TYPE_LESS_THAN1) ||
+                !for_to_while_id_push_back(end_var)            ||
+                !for_to_while_push_back(TOKEN_TYPE_RPAREN)     ||
+                !for_to_while_push_back(TOKEN_TYPE_LBRACE)     ||
+                !for_to_while_push_back(TOKEN_TYPE_LET)        ||
+                !for_to_while_id_push_back(capture_id)         ||
+                !for_to_while_push_back(TOKEN_TYPE_COLON)      ||
+                !for_to_while_push_back(TOKEN_TYPE_INT)        ||
+                !for_to_while_push_back(TOKEN_TYPE_EQUALS1)    ||
+                !for_to_while_id_push_back(start_var)          ||
+                !for_to_while_push_back(TOKEN_TYPE_SEMICOLON)  ||
+                !for_to_while_id_push_back(start_var)          ||
+                !for_to_while_push_back(TOKEN_TYPE_EQUALS1)    ||
+                !for_to_while_id_push_back(start_var)          ||
+                !for_to_while_push_back(TOKEN_TYPE_PLUS)
+            )
+                return OOM_ERROR;
             if (!for_to_while_tokens_push_back(&for_to_while_tokens, "1", TOKEN_TYPE_INT_LIT, for_capture_tok_pos))
                 return OOM_ERROR;
-            for_to_while_push_back(TOKEN_TYPE_SEMICOLON);
+            if (!for_to_while_push_back(TOKEN_TYPE_SEMICOLON))
+                return OOM_ERROR;
             if (for_has_body)
                 for (usize i = for_body_start_pos; i < self->token_idx; ++i)
                     if (!vec_base_push_back(&for_to_while_tokens, self->alloc, &self->tokens.m_data[i]))
                         return OOM_ERROR;
-            for_to_while_push_back(TOKEN_TYPE_RBRACE);
-            for_to_while_push_back(TOKEN_TYPE_RBRACE);
+            if (
+                !for_to_while_push_back(TOKEN_TYPE_RBRACE) ||
+                !for_to_while_push_back(TOKEN_TYPE_RBRACE)
+            )
+                return OOM_ERROR;
 
             usize current_token_idx = self->token_idx;
             Token_slice current_token_slice = self->tokens;

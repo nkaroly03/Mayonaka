@@ -173,6 +173,9 @@ deftype Foo{
     f: float
 }
 
-[
+let temp: []RGB = [
     RGB{.r = Bar{.z = [0,1,2]},}
-] as RGB;
+] as []RGB;
+
+temp.hello;
+
