@@ -103,6 +103,7 @@ static const char* token_type_enum_to_str(enum Token_type token_type){
         generate_case(TOKEN_TYPE_RBRACE);
         generate_case(TOKEN_TYPE_TILDE);
         generate_case(TOKEN_TYPE_NOT);
+        generate_case(TOKEN_TYPE_DOT1);
         generate_case(TOKEN_TYPE_DOT2);
         generate_case(TOKEN_TYPE_AS);
         generate_case(TOKEN_TYPE_EQUALS1);
@@ -127,6 +128,7 @@ static const char* token_type_enum_to_str(enum Token_type token_type){
         generate_case(TOKEN_TYPE_OR);
         generate_case(TOKEN_TYPE_FN);
         generate_case(TOKEN_TYPE_LET);
+        generate_case(TOKEN_TYPE_DEFTYPE);
         generate_case(TOKEN_TYPE_VOID);
         generate_case(TOKEN_TYPE_BOOL);
         generate_case(TOKEN_TYPE_CHAR);
@@ -161,6 +163,7 @@ const char* token_type_to_str(enum Token_type token_type){
         case TOKEN_TYPE_RBRACE:                return "}";
         case TOKEN_TYPE_TILDE:                 return "~";
         case TOKEN_TYPE_NOT:                   return "not";
+        case TOKEN_TYPE_DOT1:                  return ".";
         case TOKEN_TYPE_DOT2:                  return "..";
         case TOKEN_TYPE_AS:                    return "as";
         case TOKEN_TYPE_EQUALS1:               return "=";
@@ -185,6 +188,7 @@ const char* token_type_to_str(enum Token_type token_type){
         case TOKEN_TYPE_OR:                    return "or";
         case TOKEN_TYPE_FN:                    return "fn";
         case TOKEN_TYPE_LET:                   return "let";
+        case TOKEN_TYPE_DEFTYPE:               return "deftype";
         case TOKEN_TYPE_VOID:                  return "void";
         case TOKEN_TYPE_BOOL:                  return "bool";
         case TOKEN_TYPE_CHAR:                  return "char";
@@ -373,6 +377,7 @@ Lex_result lex(Arena *arena, const char *path){
             punct_match(TOKEN_TYPE_COLON                ) ||
             punct_match(TOKEN_TYPE_SEMICOLON            ) ||
             punct_match(TOKEN_TYPE_DOT2                 ) ||
+            punct_match(TOKEN_TYPE_DOT1                 ) ||
             punct_match(TOKEN_TYPE_PLUS                 ) ||
             punct_match(TOKEN_TYPE_MINUS                ) ||
             punct_match(TOKEN_TYPE_ASTERISK2            ) ||
@@ -515,6 +520,7 @@ Lex_result lex(Arena *arena, const char *path){
                 keyword_match(TOKEN_TYPE_NOT     ) ||
                 keyword_match(TOKEN_TYPE_FN      ) ||
                 keyword_match(TOKEN_TYPE_LET     ) ||
+                keyword_match(TOKEN_TYPE_DEFTYPE ) ||
                 keyword_match(TOKEN_TYPE_VOID    ) ||
                 keyword_match(TOKEN_TYPE_BOOL    ) ||
                 keyword_match(TOKEN_TYPE_CHAR    ) ||

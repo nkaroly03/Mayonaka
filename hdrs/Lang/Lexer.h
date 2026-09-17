@@ -33,8 +33,8 @@ enum Token_type{
     TOKEN_TYPE_TILDE,
     TOKEN_TYPE_NOT,
 
+    TOKEN_TYPE_DOT1,
     TOKEN_TYPE_DOT2,
-
     TOKEN_TYPE_AS,
     TOKEN_TYPE_EQUALS1,
     TOKEN_TYPE_EQUALS2,
@@ -59,6 +59,7 @@ enum Token_type{
     
     TOKEN_TYPE_FN,
     TOKEN_TYPE_LET,
+    TOKEN_TYPE_DEFTYPE,
 
     TOKEN_TYPE_VOID,
     TOKEN_TYPE_BOOL,

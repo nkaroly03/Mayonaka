@@ -149,7 +149,7 @@ static IR_compiler_state_compile_result IR_compiler_state_syntax_error(IR_compil
 
     return (error_info.success) ? (IR_compiler_state_compile_result){.error_info = error_info.result, .error = COMPILE_ERROR_SYNTAX} : OOM_ERROR;
 }
-#define syntax_error(ast_node_val, ...) IR_compiler_state_syntax_error(self, ast_node_val, __VA_ARGS__)
+#define syntax_error(ast_node_val, ...) IR_compiler_state_syntax_error(self, (ast_node_val), __VA_ARGS__)
 
 static IR_compiler_state_compile_result IR_compiler_state_unary_op_error(IR_compiler_state *self, const AST_node *un_op_node, Type_info type_info){
     Str_base_result type_info_str = type_info_to_str_base(type_info, self->alloc);

@@ -168,4 +168,11 @@ print(stdout(), "errno: " + get_errno() as str + '\n', true);
 return 0;
 /*/
 
-if (true)
+deftype Foo{
+    i: int,
+    f: float
+}
+
+[
+    RGB{.r = Bar{.z = [0,1,2]},}
+] as RGB;

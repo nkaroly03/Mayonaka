@@ -139,10 +139,10 @@ bad_escape_sequence_error:
 
 static bool str_base_assign(Str_base *self, Allocator alloc, const char *raw_str, usize size){
     Str_base_info info = str_base_info(self);
+    usize cap = info.capacity;
     char *location = info.str;
 
-    if (raw_str != location){
-        usize cap = info.capacity;
+    if ((usize)raw_str < (usize)location || (usize)raw_str > (usize)&location[cap]){
         if (size > cap){
             usize new_cap = size * 2;
             if (cap < STR_BASE_BUFSIZE || !allocator_resize(alloc, location, cap + 1, new_cap + 1)){
@@ -158,9 +158,9 @@ static bool str_base_assign(Str_base *self, Allocator alloc, const char *raw_str
             }
             self->m_alloced_capacity = new_cap;
         }
-        memcpy(location, raw_str, sizeof(*location) * size);
     }
 
+    memmove(location, raw_str, sizeof(*location) * size);
     str_base_set_size(self, size);
     location[size] = '\0';
 
@@ -172,7 +172,8 @@ static bool str_base_append(Str_base *self, Allocator alloc, const char *raw_str
     usize cap = info.capacity;
     char *location = info.str;
 
-    bool self_append = (location == raw_str);
+    bool in_location = ((usize)raw_str >= (usize)location && (usize)raw_str <= (usize)&location[cap]);
+    usize location_offset = (usize)raw_str - (usize)location;
 
     usize old_size = str_base_size(self), new_size = old_size + size;
 
@@ -194,7 +195,7 @@ static bool str_base_append(Str_base *self, Allocator alloc, const char *raw_str
         self->m_alloced_capacity = new_cap;
     }
 
-    memcpy(&location[old_size], (self_append) ? location : raw_str, sizeof(*location) * size);
+    memcpy(&location[old_size], (in_location) ? &location[location_offset] : raw_str, sizeof(*location) * size);
     str_base_set_size(self, new_size);
     location[new_size] = '\0';
 
