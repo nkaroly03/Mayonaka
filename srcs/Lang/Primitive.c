@@ -209,7 +209,7 @@ static Primitive_op_result primitive_bin_op(Primitive *self, const Primitive *ot
         }
     }
 
-    Allocator alloc_placeholder = {0};
+    static const Allocator ALLOC_PLACEHOLDER = {0};
 
     Primitive lhs_temp = *self;
     Primitive rhs_temp = *other;
@@ -220,13 +220,13 @@ static Primitive_op_result primitive_bin_op(Primitive *self, const Primitive *ot
                 case PRIMITIVE_TAG_BOOL:
                     break;
                 case PRIMITIVE_TAG_CHAR:
-                    (void)primitive_to_char(&lhs_temp, alloc_placeholder);
+                    (void)primitive_to_char(&lhs_temp, ALLOC_PLACEHOLDER);
                     break;
                 case PRIMITIVE_TAG_INT:
-                    (void)primitive_to_int(&lhs_temp, alloc_placeholder);
+                    (void)primitive_to_int(&lhs_temp, ALLOC_PLACEHOLDER);
                     break;
                 case PRIMITIVE_TAG_FLOAT:
-                    (void)primitive_to_float(&lhs_temp, alloc_placeholder);
+                    (void)primitive_to_float(&lhs_temp, ALLOC_PLACEHOLDER);
                     break;
                 default:
                     unreachable();
@@ -235,15 +235,15 @@ static Primitive_op_result primitive_bin_op(Primitive *self, const Primitive *ot
         case PRIMITIVE_TAG_CHAR:
             switch (rhs_temp.m_tag){
                 case PRIMITIVE_TAG_BOOL:
-                    (void)primitive_to_char(&rhs_temp, alloc_placeholder);
+                    (void)primitive_to_char(&rhs_temp, ALLOC_PLACEHOLDER);
                     break;
                 case PRIMITIVE_TAG_CHAR:
                     break;
                 case PRIMITIVE_TAG_INT:
-                    (void)primitive_to_int(&lhs_temp, alloc_placeholder);
+                    (void)primitive_to_int(&lhs_temp, ALLOC_PLACEHOLDER);
                     break;
                 case PRIMITIVE_TAG_FLOAT:
-                    (void)primitive_to_float(&lhs_temp, alloc_placeholder);
+                    (void)primitive_to_float(&lhs_temp, ALLOC_PLACEHOLDER);
                     break;
                 default:
                     unreachable();
@@ -253,12 +253,12 @@ static Primitive_op_result primitive_bin_op(Primitive *self, const Primitive *ot
             switch (rhs_temp.m_tag){
                 case PRIMITIVE_TAG_BOOL:
                 case PRIMITIVE_TAG_CHAR:
-                    (void)primitive_to_int(&rhs_temp, alloc_placeholder);
+                    (void)primitive_to_int(&rhs_temp, ALLOC_PLACEHOLDER);
                     break;
                 case PRIMITIVE_TAG_INT:
                     break;
                 case PRIMITIVE_TAG_FLOAT:
-                    (void)primitive_to_float(&lhs_temp, alloc_placeholder);
+                    (void)primitive_to_float(&lhs_temp, ALLOC_PLACEHOLDER);
                     break;
                 default:
                     unreachable();
@@ -269,7 +269,7 @@ static Primitive_op_result primitive_bin_op(Primitive *self, const Primitive *ot
                 case PRIMITIVE_TAG_BOOL:
                 case PRIMITIVE_TAG_CHAR:
                 case PRIMITIVE_TAG_INT:
-                    (void)primitive_to_float(&rhs_temp, alloc_placeholder);
+                    (void)primitive_to_float(&rhs_temp, ALLOC_PLACEHOLDER);
                     break;
                 case PRIMITIVE_TAG_FLOAT:
                     break;

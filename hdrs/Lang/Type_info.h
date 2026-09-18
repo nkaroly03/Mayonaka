@@ -22,6 +22,13 @@ typedef struct Type_info{
     usize m_dimensions;
 } Type_info;
 
+extern const Type_info TYPE_INFO_VOID;
+extern const Type_info TYPE_INFO_BOOL;
+extern const Type_info TYPE_INFO_CHAR;
+extern const Type_info TYPE_INFO_INT;
+extern const Type_info TYPE_INFO_FLOAT;
+extern const Type_info TYPE_INFO_STR;
+
 typedef struct Type_info_slice{
     usize m_size;
     const Type_info *m_data;
@@ -39,35 +46,28 @@ Type_info unary_op_type_info_result(enum Unary_op op, Type_info type_info);
 
 enum Binary_op{
     BINARY_OP_NONE,
-
-    BINARY_OP_AS,
-
-    BINARY_OP_ASSIGNMENT,
-
     BINARY_OP_SUBSCRIPT,
-
-    BINARY_OP_CMP_EQ,
-    BINARY_OP_CMP_NEQ,
+    BINARY_OP_POW,
+    BINARY_OP_AS,
+    BINARY_OP_MUL,
+    BINARY_OP_DIV,
+    BINARY_OP_REM,
+    BINARY_OP_ADD,
+    BINARY_OP_SUB,
+    BINARY_OP_SHL,
+    BINARY_OP_SHR,
     BINARY_OP_CMP_LE,
     BINARY_OP_CMP_LEQ,
     BINARY_OP_CMP_GE,
     BINARY_OP_CMP_GEQ,
-
-    BINARY_OP_ADD,
-    BINARY_OP_SUB,
-    BINARY_OP_MUL,
-    BINARY_OP_DIV,
-    BINARY_OP_REM,
-    BINARY_OP_POW,
-
-    BINARY_OP_SHL,
-    BINARY_OP_SHR,
+    BINARY_OP_CMP_EQ,
+    BINARY_OP_CMP_NEQ,
     BINARY_OP_BAND,
-    BINARY_OP_BOR,
     BINARY_OP_XOR,
-
+    BINARY_OP_BOR,
     BINARY_OP_AND,
-    BINARY_OP_OR
+    BINARY_OP_OR,
+    BINARY_OP_ASSIGNMENT
 };
 
 Type_info binary_op_type_info_result(enum Binary_op op, Type_info lhs, Type_info rhs);

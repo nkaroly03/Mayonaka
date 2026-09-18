@@ -60,7 +60,7 @@ static bool token_type_binary_op_to_ast_node_type(enum Token_type token_type, en
         case TOKEN_TYPE_PIPE:                  *out_ast_node_type = AST_NODE_TYPE_BINARY_OP_BOR;           break;
         case TOKEN_TYPE_AND:                   *out_ast_node_type = AST_NODE_TYPE_BINARY_OP_AND;           break;
         case TOKEN_TYPE_OR:                    *out_ast_node_type = AST_NODE_TYPE_BINARY_OP_OR;            break;
-        case TOKEN_TYPE_EQUALS1:               *out_ast_node_type = AST_NODE_TYPE_BINARY_OP_ASSIGN;        break;
+        case TOKEN_TYPE_EQUALS1:               *out_ast_node_type = AST_NODE_TYPE_BINARY_OP_ASSIGNMENT;    break;
         default:                               return false;
     }
     return true;
@@ -100,7 +100,7 @@ static Binding_powers token_type_binding_powers(enum AST_node_type ast_node_type
         case AST_NODE_TYPE_BINARY_OP_BOR:           return bps_init(40, 41);
         case AST_NODE_TYPE_BINARY_OP_AND:           return bps_init(30, 31);
         case AST_NODE_TYPE_BINARY_OP_OR:            return bps_init(20, 21);
-        case AST_NODE_TYPE_BINARY_OP_ASSIGN:        return bps_init(11, 10);
+        case AST_NODE_TYPE_BINARY_OP_ASSIGNMENT:    return bps_init(11, 10);
 
         default:                                    unreachable();
     }
@@ -234,7 +234,7 @@ Parser_state_parse_result parser_state_parse_type(Parser_state *self, bool void_
 
     switch (tok->m_type){
         case TOKEN_TYPE_ID:
-            type_node->m_type = AST_NODE_TYPE_ATOM_ID;
+            type_node->m_type = AST_NODE_TYPE_TYPE_ID;
             break;
         case TOKEN_TYPE_LBRACKET:{
             if (self->token_idx >= self->tokens.m_size || self->tokens.m_data[self->token_idx].m_type != TOKEN_TYPE_RBRACKET)
@@ -687,7 +687,8 @@ Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
             if (parse_result.error != PARSE_ERROR_NONE)
                 return parse_result;
             node->m_sub_nodes = (AST_node_ptr_slice){.m_size = node_sub_nodes.m_size, .m_data = node_sub_nodes.m_data};
-            node->m_type = AST_NODE_TYPE_DECL_DEFTYPE;
+            node->m_type = AST_NODE_TYPE_DECL_TYPE;
+            ((AST_node*)node->m_sub_nodes.m_data[0])->m_type = AST_NODE_TYPE_TYPE_ID;
             break;
         }
 
@@ -963,8 +964,9 @@ static const char* ast_node_type_enum_to_str(enum AST_node_type ast_node_type){
         generate_case(AST_NODE_TYPE_ATOM_INT_LIT);
         generate_case(AST_NODE_TYPE_ATOM_FLOAT_LIT);
         generate_case(AST_NODE_TYPE_ATOM_STR_LIT);
-        generate_case(AST_NODE_TYPE_ATOM_INIT_LIST);
         generate_case(AST_NODE_TYPE_ATOM_OBJ_INIT);
+        generate_case(AST_NODE_TYPE_ATOM_INIT_LIST);
+        generate_case(AST_NODE_TYPE_TYPE_ID);
         generate_case(AST_NODE_TYPE_TYPE_VOID);
         generate_case(AST_NODE_TYPE_TYPE_BOOL);
         generate_case(AST_NODE_TYPE_TYPE_CHAR);
@@ -998,11 +1000,11 @@ static const char* ast_node_type_enum_to_str(enum AST_node_type ast_node_type){
         generate_case(AST_NODE_TYPE_BINARY_OP_BOR);
         generate_case(AST_NODE_TYPE_BINARY_OP_AND);
         generate_case(AST_NODE_TYPE_BINARY_OP_OR);
-        generate_case(AST_NODE_TYPE_BINARY_OP_ASSIGN);
+        generate_case(AST_NODE_TYPE_BINARY_OP_ASSIGNMENT);
         generate_case(AST_NODE_TYPE_FN_CALL);
         generate_case(AST_NODE_TYPE_DECL_FN);
         generate_case(AST_NODE_TYPE_DECL_VAR);
-        generate_case(AST_NODE_TYPE_DECL_DEFTYPE);
+        generate_case(AST_NODE_TYPE_DECL_TYPE);
         generate_case(AST_NODE_TYPE_STATEMENT_BLOCK);
         generate_case(AST_NODE_TYPE_STATEMENT_IF);
         generate_case(AST_NODE_TYPE_STATEMENT_WHILE);

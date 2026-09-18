@@ -169,13 +169,19 @@ return 0;
 /*/
 
 deftype Foo{
-    i: int,
-    f: float
+    i: []Foo,
+    f: float,
 }
 
-let temp: []RGB = [
-    RGB{.r = Bar{.z = [0,1,2]},}
-] as []RGB;
+// Foo{.r = 0};
 
-temp.hello;
+// let temp: []RGB = [
+    // RGB{.r = Bar{.z = [0,1,2]},}
+// ] as []RGB;
+// 
+// temp.hello.ok.g = [];
+// 
+// Foo{.r = 0, .g = 1, .b = 2};
 
+// let i: int = 0;
+// let arr: []int = [(i = 10)];
