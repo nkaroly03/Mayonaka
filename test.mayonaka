@@ -184,8 +184,17 @@ return 0;
     // },
 // ];
 
+deftype RGB{
+    r: char,
+    g: char,
+    b: char
+}
 deftype Foo{
-    f: []Foo
+    rgb: RGB,
+    f: float
 }
 
-let a: []Foo = [Foo{.f = [Foo{.f = []}]}];
+let foo: Foo = Foo{
+    .rgb = RGB{.r = 0, .g = 1, .b = 2},
+    .f = 3.14
+};
