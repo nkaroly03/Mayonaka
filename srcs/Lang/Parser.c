@@ -389,26 +389,6 @@ Parser_state_parse_result parser_state_parse_arithm_expr(Parser_state *self, u8 
             case TOKEN_TYPE_DOT2:
                 goto end;
 
-            case TOKEN_TYPE_LBRACKET:{
-                Token *subscript_token = allocator_alloc(self->alloc, Token, 1);
-                Str_base_result subscript_token_id;
-                if (!subscript_token || !(subscript_token_id = str_base_init_raw(self->alloc, "[]")).success)
-                    return OOM_ERROR;
-                *subscript_token = (Token){.m_type = op_tok->m_type, .m_id = subscript_token_id.result, .m_pos = op_tok->m_pos};
-
-                ++self->token_idx;
-                rhs_result = parse_arithm_expr(0);
-                if (rhs_result.error == PARSE_ERROR_NONE){
-                    if (self->tokens.m_data[self->token_idx].m_type != TOKEN_TYPE_RBRACKET)
-                        return syntax_error("<[> must be closed by <]>");
-                    ++self->token_idx;
-
-                    op_node_type = AST_NODE_TYPE_BINARY_OP_SUBSCRIPT;
-                    op_node->m_token = subscript_token;
-                }
-                break;
-            }
-
             case TOKEN_TYPE_LPAREN:
                 if (!vec_base_push_back(&op_node_sub_nodes, self->alloc, &lhs))
                     return OOM_ERROR;
@@ -426,8 +406,28 @@ Parser_state_parse_result parser_state_parse_arithm_expr(Parser_state *self, u8 
                 if (bps.lhs < prev_rhs_bp)
                     goto end;
 
-                ++self->token_idx;
-                rhs_result = (op_tok->m_type != TOKEN_TYPE_AS) ? parse_arithm_expr(bps.rhs) : parse_type(false);
+                if (op_node_type == AST_NODE_TYPE_BINARY_OP_SUBSCRIPT){
+                    Token *subscript_token = allocator_alloc(self->alloc, Token, 1);
+                    Str_base_result subscript_token_id;
+                    if (!subscript_token || !(subscript_token_id = str_base_init_raw(self->alloc, "[]")).success)
+                        return OOM_ERROR;
+                    *subscript_token = (Token){.m_type = op_tok->m_type, .m_id = subscript_token_id.result, .m_pos = op_tok->m_pos};
+
+                    ++self->token_idx;
+                    rhs_result = parse_arithm_expr(0);
+                    if (rhs_result.error == PARSE_ERROR_NONE){
+                        if (self->tokens.m_data[self->token_idx].m_type != TOKEN_TYPE_RBRACKET)
+                            return syntax_error("<[> must be closed by <]>");
+                        ++self->token_idx;
+
+                        op_node_type = AST_NODE_TYPE_BINARY_OP_SUBSCRIPT;
+                        op_node->m_token = subscript_token;
+                    }
+                }
+                else{
+                    ++self->token_idx;
+                    rhs_result = (op_tok->m_type != TOKEN_TYPE_AS) ? parse_arithm_expr(bps.rhs) : parse_type(false);
+                }
                 break;
             }
         }

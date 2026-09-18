@@ -625,15 +625,15 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
             if (compile_result.error != COMPILE_ERROR_NONE)
                 return compile_result;
 
-            Type_info last_type_info = *(Type_info*)vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1);
+            Type_info obj_type_info = *(Type_info*)vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1);
 
             Type_id_info *type_id_info_ptr = ordered_umap_base_at_key(
                 &self->type_id_info_maps_ptr->type_info_tag_as_i32_id_map,
-                &(i32){(i32)last_type_info.m_tag}
+                &(i32){(i32)obj_type_info.m_tag}
             ).m_value;
 
-            if (last_type_info.m_dimensions > 0 || !type_id_info_ptr){
-                Str_base_result type_info_str = type_info_to_str_base(last_type_info);
+            if (obj_type_info.m_dimensions > 0 || !type_id_info_ptr){
+                Str_base_result type_info_str = type_info_to_str_base(obj_type_info);
                 return (type_info_str.success) ? syntax_error(ast_node, "Member access on type <%s>", str_base_data(&type_info_str.result)) : OOM_ERROR;
             }
 
@@ -651,7 +651,6 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                 return OOM_ERROR;
 
             vec_base_pop_back_discard(&self->type_info_stack);
-
             if (!add_instruction("%s", op_code_to_str(OP_CODE_DEREF)))
                 return OOM_ERROR;
 
@@ -791,7 +790,6 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                 const AST_node *parent = ast_node->m_parent;
                 enum AST_node_type parent_token_type = parent->m_type;
                 switch (parent_token_type){
-                    // TODO: for objs
                     case AST_NODE_TYPE_STATEMENT_IF:
                     case AST_NODE_TYPE_STATEMENT_WHILE:
                         if (parent->m_sub_nodes.m_data[parent_token_type == AST_NODE_TYPE_STATEMENT_WHILE] != ast_node)
@@ -836,9 +834,9 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                 }
             }
 
-            if (lhs_node->m_type != AST_NODE_TYPE_BINARY_OP_SUBSCRIPT){
+            if (lhs_node->m_type != AST_NODE_TYPE_BINARY_OP_MEMBER_ACCESS && lhs_node->m_type != AST_NODE_TYPE_BINARY_OP_SUBSCRIPT){
                 if (lhs_node->m_type != AST_NODE_TYPE_ATOM_ID)
-                    return syntax_error(lhs_node, "Trying to assign to rvalue");
+                    return syntax_error(ast_node, "Trying to assign to rvalue");
 
                 Var_id_info *var_id_info_ptr = ordered_umap_base_at_key(&self->var_id_info_map, &lhs_node->m_token->m_id).m_value;
                 if (!var_id_info_ptr)
@@ -871,34 +869,81 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                     lhs_sub_node->m_type != AST_NODE_TYPE_ATOM_ID;
                     lhs_sub_node = lhs_sub_node->m_sub_nodes.m_data[0]
                 ){
-                    enum AST_node_type ast_node_type = lhs_sub_node->m_type;
-                    if (ast_node_type != AST_NODE_TYPE_BINARY_OP_ASSIGNMENT && ast_node_type != AST_NODE_TYPE_BINARY_OP_SUBSCRIPT && ast_node_type != AST_NODE_TYPE_BINARY_OP_AS)
-                        return syntax_error(lhs_node, "Trying to assign to rvalue");
+                    switch (lhs_sub_node->m_type){
+                        case AST_NODE_TYPE_BINARY_OP_MEMBER_ACCESS:
+                        case AST_NODE_TYPE_BINARY_OP_SUBSCRIPT:
+                        case AST_NODE_TYPE_BINARY_OP_AS:
+                        case AST_NODE_TYPE_BINARY_OP_ASSIGNMENT:
+                            break;
+                        default:
+                            return syntax_error(ast_node, "Trying to assign to rvalue");
+                    }
                 }
 
-                const AST_node *subscript_lhs_node = lhs_node->m_sub_nodes.m_data[0];
-                const AST_node *subscript_rhs_node = lhs_node->m_sub_nodes.m_data[1];
-
                 IR_compiler_state_compile_result compile_result;
+
+                Type_info lhs_bin_op_type_info;
+                Type_info rhs_type_info;
+
+                if (lhs_node->m_type == AST_NODE_TYPE_BINARY_OP_MEMBER_ACCESS){
+                    const AST_node *member_access_lhs_node = lhs_node->m_sub_nodes.m_data[0];
+                    const AST_node *member_access_rhs_node = lhs_node->m_sub_nodes.m_data[1];
+
+                    compile_result = IR_compiler_state_compile(self, member_access_lhs_node);
+                    if (compile_result.error != COMPILE_ERROR_NONE)
+                        return compile_result;
+
+                    Type_info obj_type_info = *(Type_info*)vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1);
+
+                    Type_id_info *type_id_info_ptr = ordered_umap_base_at_key(
+                        &self->type_id_info_maps_ptr->type_info_tag_as_i32_id_map,
+                        &(i32){(i32)obj_type_info.m_tag}
+                    ).m_value;
+
+                    if (obj_type_info.m_dimensions > 0 || !type_id_info_ptr){
+                        Str_base_result type_info_str = type_info_to_str_base(obj_type_info);
+                        return (type_info_str.success) ? syntax_error(member_access_lhs_node, "Member access on type <%s>", str_base_data(&type_info_str.result)) : OOM_ERROR;
+                    }
+
+                    if (member_access_rhs_node->m_type != AST_NODE_TYPE_ATOM_ID)
+                        return syntax_error(member_access_rhs_node, "Member access with non-identifier");
+
+                    Field_info *field_info_ptr = ordered_umap_base_at_key(type_id_info_ptr->field_info_map_ptr, &member_access_rhs_node->m_token->m_id).m_value;
+                    if (!field_info_ptr)
+                        return syntax_error(member_access_rhs_node, "Use of undeclared field identifier <%s>", str_base_data_const(&member_access_rhs_node->m_token->m_id));
+
+                    if (
+                        !vec_base_push_back(&self->type_info_stack, self->alloc, &TYPE_INFO_INT) ||
+                        !add_instruction("%s " USIZE_PFMT, op_code_to_str(OP_CODE_PUSH), field_info_ptr->idx)
+                    )
+                        return OOM_ERROR;
+
+                    lhs_bin_op_type_info = field_info_ptr->type_info;
+                }
+                else{
+                    const AST_node *subscript_lhs_node = lhs_node->m_sub_nodes.m_data[0];
+                    const AST_node *subscript_rhs_node = lhs_node->m_sub_nodes.m_data[1];
+
+                    if (
+                        (compile_result = IR_compiler_state_compile(self, subscript_lhs_node)).error != COMPILE_ERROR_NONE ||
+                        (compile_result = IR_compiler_state_compile(self, subscript_rhs_node)).error != COMPILE_ERROR_NONE
+                    )
+                        return compile_result;
+
+                    Type_info subscript_lhs_type_info = *(Type_info*)vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 2);
+                    Type_info subscript_rhs_type_info = *(Type_info*)vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1);
+
+                    lhs_bin_op_type_info = binary_op_type_info_result(BINARY_OP_SUBSCRIPT, subscript_lhs_type_info, subscript_rhs_type_info);
+                    if (lhs_bin_op_type_info.m_tag == TYPE_INFO_TAG_NONE)
+                        return binary_op_error(lhs_node, subscript_lhs_type_info, subscript_rhs_type_info);
+                }
+
                 if (
-                    (compile_result = IR_compiler_state_compile(self, subscript_lhs_node)).error != COMPILE_ERROR_NONE ||
-                    (compile_result = IR_compiler_state_compile(self, subscript_rhs_node)).error != COMPILE_ERROR_NONE
-                )
-                    return compile_result;
-
-                Type_info subscript_lhs_type_info = *(Type_info*)vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 2);
-                Type_info subscript_rhs_type_info = *(Type_info*)vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1);
-
-                Type_info subscript_bin_op_result = binary_op_type_info_result(BINARY_OP_SUBSCRIPT, subscript_lhs_type_info, subscript_rhs_type_info);
-                if (subscript_bin_op_result.m_tag == TYPE_INFO_TAG_NONE)
-                    return binary_op_error(lhs_node, subscript_lhs_type_info, subscript_rhs_type_info);
-
-                if (
-                    push_back_after_assignment && (
-                        !vec_base_push_back(&self->type_info_stack, self->alloc, &subscript_lhs_type_info) ||
-                        !add_instruction("%s " SP_SYMBOL "[-2]", op_code_to_str(OP_CODE_PUSH)) ||
-                        !vec_base_push_back(&self->type_info_stack, self->alloc, &subscript_rhs_type_info) ||
-                        !add_instruction("%s " SP_SYMBOL "[-2]", op_code_to_str(OP_CODE_PUSH))
+                    push_back_after_assignment && !(
+                        vec_base_push_back(&self->type_info_stack, self->alloc, &TYPE_INFO_VOID) &&
+                        add_instruction("%s " SP_SYMBOL "[-2]", op_code_to_str(OP_CODE_PUSH)) &&
+                        vec_base_push_back(&self->type_info_stack, self->alloc, &TYPE_INFO_VOID) &&
+                        add_instruction("%s " SP_SYMBOL "[-2]", op_code_to_str(OP_CODE_PUSH))
                     )
                 )
                     return OOM_ERROR;
@@ -907,20 +952,19 @@ static IR_compiler_state_compile_result IR_compiler_state_compile(IR_compiler_st
                 if (compile_result.error != COMPILE_ERROR_NONE)
                     return compile_result;
 
-                Type_info rhs_type_info = *(Type_info*)vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1);
-
-                if (binary_op_type_info_result(BINARY_OP_ASSIGNMENT, subscript_bin_op_result, rhs_type_info).m_tag == TYPE_INFO_TAG_NONE)
-                    return binary_op_error(ast_node, subscript_bin_op_result, rhs_type_info);
+                rhs_type_info = *(Type_info*)vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1);
+                if (binary_op_type_info_result(BINARY_OP_ASSIGNMENT, lhs_bin_op_type_info, rhs_type_info).m_tag == TYPE_INFO_TAG_NONE)
+                    return binary_op_error(ast_node, lhs_bin_op_type_info, rhs_type_info);
 
                 vec_base_pop_back_discard(&self->type_info_stack);
                 vec_base_pop_back_discard(&self->type_info_stack);
                 vec_base_pop_back_discard(&self->type_info_stack);
                 if (!add_instruction("%s", op_code_to_str(OP_CODE_MOV_DEREF)))
                     return OOM_ERROR;
-
+                
                 if (push_back_after_assignment){
                     vec_base_pop_back_discard(&self->type_info_stack);
-                    *(Type_info*)vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1) = subscript_bin_op_result;
+                    *(Type_info*)vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1) = lhs_bin_op_type_info;
                     if (!add_instruction("%s", op_code_to_str(OP_CODE_DEREF)))
                         return OOM_ERROR;
                 }

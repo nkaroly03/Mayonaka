@@ -58,7 +58,7 @@ const char* builtin_fn_tag_to_str(enum Builtin_fn_tag tag){
 Builtin_fn_tag_call_result builtin_fn_tag_call(enum Builtin_fn_tag tag, Type_info_slice args){
     switch (tag){
         case BUILTIN_FN_TAG_GET_ARGV:
-            return (Builtin_fn_tag_call_result){.m_return_type_info = {.m_tag = TYPE_INFO_TAG_STR,  .m_dimensions = 1}, .m_is_callable = (args.m_size == 0)};
+            return (Builtin_fn_tag_call_result){.m_return_type_info = {.m_tag = TYPE_INFO_TAG_STR, .m_dimensions = 1}, .m_is_callable = (args.m_size == 0)};
         case BUILTIN_FN_TAG_EXIT:
         case BUILTIN_FN_TAG_NSLEEP:
         case BUILTIN_FN_TAG_SET_ERRNO:
@@ -78,6 +78,7 @@ Builtin_fn_tag_call_result builtin_fn_tag_call(enum Builtin_fn_tag tag, Type_inf
                 .m_is_callable      = (
                     args.m_size == 3 &&
                     args.m_data[0].m_tag == TYPE_INFO_TAG_INT  && args.m_data[0].m_dimensions == 0 &&
+                    args.m_data[1].m_tag >= TYPE_INFO_TAG_BOOL && args.m_data[1].m_tag <= TYPE_INFO_TAG_STR &&
                     args.m_data[2].m_tag == TYPE_INFO_TAG_BOOL && args.m_data[2].m_dimensions == 0
                 )
             };

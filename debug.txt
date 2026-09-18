@@ -1,0 +1,355 @@
+{.type = TOKEN_TYPE_DEFTYPE, .id = deftype, .pos = <171:1>}
+{.type = TOKEN_TYPE_ID, .id = RGB, .pos = <171:9>}
+{.type = TOKEN_TYPE_LBRACE, .id = {, .pos = <171:12>}
+{.type = TOKEN_TYPE_ID, .id = r, .pos = <172:5>}
+{.type = TOKEN_TYPE_COLON, .id = :, .pos = <172:6>}
+{.type = TOKEN_TYPE_CHAR, .id = char, .pos = <172:8>}
+{.type = TOKEN_TYPE_COMMA, .id = ,, .pos = <172:12>}
+{.type = TOKEN_TYPE_ID, .id = g, .pos = <173:5>}
+{.type = TOKEN_TYPE_COLON, .id = :, .pos = <173:6>}
+{.type = TOKEN_TYPE_CHAR, .id = char, .pos = <173:8>}
+{.type = TOKEN_TYPE_COMMA, .id = ,, .pos = <173:12>}
+{.type = TOKEN_TYPE_ID, .id = b, .pos = <174:5>}
+{.type = TOKEN_TYPE_COLON, .id = :, .pos = <174:6>}
+{.type = TOKEN_TYPE_CHAR, .id = char, .pos = <174:8>}
+{.type = TOKEN_TYPE_COMMA, .id = ,, .pos = <174:12>}
+{.type = TOKEN_TYPE_RBRACE, .id = }, .pos = <175:1>}
+{.type = TOKEN_TYPE_FN, .id = fn, .pos = <177:1>}
+{.type = TOKEN_TYPE_ID, .id = rgb_init, .pos = <177:4>}
+{.type = TOKEN_TYPE_LPAREN, .id = (, .pos = <177:12>}
+{.type = TOKEN_TYPE_ID, .id = r, .pos = <177:13>}
+{.type = TOKEN_TYPE_COLON, .id = :, .pos = <177:14>}
+{.type = TOKEN_TYPE_CHAR, .id = char, .pos = <177:16>}
+{.type = TOKEN_TYPE_COMMA, .id = ,, .pos = <177:20>}
+{.type = TOKEN_TYPE_ID, .id = g, .pos = <177:22>}
+{.type = TOKEN_TYPE_COLON, .id = :, .pos = <177:23>}
+{.type = TOKEN_TYPE_CHAR, .id = char, .pos = <177:25>}
+{.type = TOKEN_TYPE_COMMA, .id = ,, .pos = <177:29>}
+{.type = TOKEN_TYPE_ID, .id = b, .pos = <177:31>}
+{.type = TOKEN_TYPE_COLON, .id = :, .pos = <177:32>}
+{.type = TOKEN_TYPE_CHAR, .id = char, .pos = <177:34>}
+{.type = TOKEN_TYPE_RPAREN, .id = ), .pos = <177:38>}
+{.type = TOKEN_TYPE_ID, .id = RGB, .pos = <177:40>}
+{.type = TOKEN_TYPE_LBRACE, .id = {, .pos = <177:44>}
+{.type = TOKEN_TYPE_RETURN, .id = return, .pos = <178:5>}
+{.type = TOKEN_TYPE_ID, .id = RGB, .pos = <178:12>}
+{.type = TOKEN_TYPE_LBRACE, .id = {, .pos = <178:15>}
+{.type = TOKEN_TYPE_DOT1, .id = ., .pos = <178:16>}
+{.type = TOKEN_TYPE_ID, .id = r, .pos = <178:17>}
+{.type = TOKEN_TYPE_EQUALS1, .id = =, .pos = <178:19>}
+{.type = TOKEN_TYPE_ID, .id = r, .pos = <178:21>}
+{.type = TOKEN_TYPE_COMMA, .id = ,, .pos = <178:22>}
+{.type = TOKEN_TYPE_DOT1, .id = ., .pos = <178:24>}
+{.type = TOKEN_TYPE_ID, .id = g, .pos = <178:25>}
+{.type = TOKEN_TYPE_EQUALS1, .id = =, .pos = <178:27>}
+{.type = TOKEN_TYPE_ID, .id = g, .pos = <178:29>}
+{.type = TOKEN_TYPE_COMMA, .id = ,, .pos = <178:30>}
+{.type = TOKEN_TYPE_DOT1, .id = ., .pos = <178:32>}
+{.type = TOKEN_TYPE_ID, .id = b, .pos = <178:33>}
+{.type = TOKEN_TYPE_EQUALS1, .id = =, .pos = <178:35>}
+{.type = TOKEN_TYPE_ID, .id = b, .pos = <178:37>}
+{.type = TOKEN_TYPE_RBRACE, .id = }, .pos = <178:38>}
+{.type = TOKEN_TYPE_SEMICOLON, .id = ;, .pos = <178:39>}
+{.type = TOKEN_TYPE_RBRACE, .id = }, .pos = <179:1>}
+{.type = TOKEN_TYPE_FN, .id = fn, .pos = <181:1>}
+{.type = TOKEN_TYPE_ID, .id = rgb_print, .pos = <181:4>}
+{.type = TOKEN_TYPE_LPAREN, .id = (, .pos = <181:13>}
+{.type = TOKEN_TYPE_ID, .id = rgb, .pos = <181:14>}
+{.type = TOKEN_TYPE_COLON, .id = :, .pos = <181:17>}
+{.type = TOKEN_TYPE_ID, .id = RGB, .pos = <181:19>}
+{.type = TOKEN_TYPE_RPAREN, .id = ), .pos = <181:22>}
+{.type = TOKEN_TYPE_VOID, .id = void, .pos = <181:24>}
+{.type = TOKEN_TYPE_LBRACE, .id = {, .pos = <181:29>}
+{.type = TOKEN_TYPE_LET, .id = let, .pos = <182:5>}
+{.type = TOKEN_TYPE_ID, .id = rgb_temp, .pos = <182:9>}
+{.type = TOKEN_TYPE_COLON, .id = :, .pos = <182:17>}
+{.type = TOKEN_TYPE_ID, .id = RGB, .pos = <182:19>}
+{.type = TOKEN_TYPE_EQUALS1, .id = =, .pos = <182:23>}
+{.type = TOKEN_TYPE_ID, .id = rgb_init, .pos = <182:25>}
+{.type = TOKEN_TYPE_LPAREN, .id = (, .pos = <182:33>}
+{.type = TOKEN_TYPE_ID, .id = rgb, .pos = <182:34>}
+{.type = TOKEN_TYPE_DOT1, .id = ., .pos = <182:37>}
+{.type = TOKEN_TYPE_ID, .id = r, .pos = <182:38>}
+{.type = TOKEN_TYPE_COMMA, .id = ,, .pos = <182:39>}
+{.type = TOKEN_TYPE_ID, .id = rgb, .pos = <182:41>}
+{.type = TOKEN_TYPE_DOT1, .id = ., .pos = <182:44>}
+{.type = TOKEN_TYPE_ID, .id = g, .pos = <182:45>}
+{.type = TOKEN_TYPE_COMMA, .id = ,, .pos = <182:46>}
+{.type = TOKEN_TYPE_ID, .id = rgb, .pos = <182:48>}
+{.type = TOKEN_TYPE_DOT1, .id = ., .pos = <182:51>}
+{.type = TOKEN_TYPE_ID, .id = b, .pos = <182:52>}
+{.type = TOKEN_TYPE_RPAREN, .id = ), .pos = <182:53>}
+{.type = TOKEN_TYPE_SEMICOLON, .id = ;, .pos = <182:54>}
+{.type = TOKEN_TYPE_ID, .id = print, .pos = <183:5>}
+{.type = TOKEN_TYPE_LPAREN, .id = (, .pos = <183:10>}
+{.type = TOKEN_TYPE_ID, .id = stdout, .pos = <183:11>}
+{.type = TOKEN_TYPE_LPAREN, .id = (, .pos = <183:17>}
+{.type = TOKEN_TYPE_RPAREN, .id = ), .pos = <183:18>}
+{.type = TOKEN_TYPE_COMMA, .id = ,, .pos = <183:19>}
+{.type = TOKEN_TYPE_STR_LIT, .id = "{.r = ", .pos = <183:21>}
+{.type = TOKEN_TYPE_PLUS, .id = +, .pos = <183:30>}
+{.type = TOKEN_TYPE_ID, .id = rgb_temp, .pos = <183:32>}
+{.type = TOKEN_TYPE_DOT1, .id = ., .pos = <183:40>}
+{.type = TOKEN_TYPE_ID, .id = r, .pos = <183:41>}
+{.type = TOKEN_TYPE_AS, .id = as, .pos = <183:43>}
+{.type = TOKEN_TYPE_INT, .id = int, .pos = <183:46>}
+{.type = TOKEN_TYPE_AS, .id = as, .pos = <183:50>}
+{.type = TOKEN_TYPE_STR, .id = str, .pos = <183:53>}
+{.type = TOKEN_TYPE_PLUS, .id = +, .pos = <183:57>}
+{.type = TOKEN_TYPE_STR_LIT, .id = ", .g = ", .pos = <183:59>}
+{.type = TOKEN_TYPE_PLUS, .id = +, .pos = <183:69>}
+{.type = TOKEN_TYPE_ID, .id = rgb_temp, .pos = <183:71>}
+{.type = TOKEN_TYPE_DOT1, .id = ., .pos = <183:79>}
+{.type = TOKEN_TYPE_ID, .id = g, .pos = <183:80>}
+{.type = TOKEN_TYPE_AS, .id = as, .pos = <183:82>}
+{.type = TOKEN_TYPE_INT, .id = int, .pos = <183:85>}
+{.type = TOKEN_TYPE_AS, .id = as, .pos = <183:89>}
+{.type = TOKEN_TYPE_STR, .id = str, .pos = <183:92>}
+{.type = TOKEN_TYPE_PLUS, .id = +, .pos = <183:96>}
+{.type = TOKEN_TYPE_STR_LIT, .id = ", .b = ", .pos = <183:98>}
+{.type = TOKEN_TYPE_PLUS, .id = +, .pos = <183:108>}
+{.type = TOKEN_TYPE_ID, .id = rgb_temp, .pos = <183:110>}
+{.type = TOKEN_TYPE_DOT1, .id = ., .pos = <183:118>}
+{.type = TOKEN_TYPE_ID, .id = b, .pos = <183:119>}
+{.type = TOKEN_TYPE_AS, .id = as, .pos = <183:121>}
+{.type = TOKEN_TYPE_INT, .id = int, .pos = <183:124>}
+{.type = TOKEN_TYPE_AS, .id = as, .pos = <183:128>}
+{.type = TOKEN_TYPE_STR, .id = str, .pos = <183:131>}
+{.type = TOKEN_TYPE_PLUS, .id = +, .pos = <183:135>}
+{.type = TOKEN_TYPE_STR_LIT, .id = "}\n", .pos = <183:137>}
+{.type = TOKEN_TYPE_COMMA, .id = ,, .pos = <183:142>}
+{.type = TOKEN_TYPE_TRUE, .id = true, .pos = <183:144>}
+{.type = TOKEN_TYPE_RPAREN, .id = ), .pos = <183:148>}
+{.type = TOKEN_TYPE_SEMICOLON, .id = ;, .pos = <183:149>}
+{.type = TOKEN_TYPE_RBRACE, .id = }, .pos = <184:1>}
+{.type = TOKEN_TYPE_LET, .id = let, .pos = <186:1>}
+{.type = TOKEN_TYPE_ID, .id = rgb, .pos = <186:5>}
+{.type = TOKEN_TYPE_COLON, .id = :, .pos = <186:8>}
+{.type = TOKEN_TYPE_ID, .id = RGB, .pos = <186:10>}
+{.type = TOKEN_TYPE_EQUALS1, .id = =, .pos = <186:14>}
+{.type = TOKEN_TYPE_ID, .id = rgb_init, .pos = <186:16>}
+{.type = TOKEN_TYPE_LPAREN, .id = (, .pos = <186:24>}
+{.type = TOKEN_TYPE_INT_LIT, .id = 0, .pos = <186:25>}
+{.type = TOKEN_TYPE_COMMA, .id = ,, .pos = <186:26>}
+{.type = TOKEN_TYPE_INT_LIT, .id = 1, .pos = <186:28>}
+{.type = TOKEN_TYPE_COMMA, .id = ,, .pos = <186:29>}
+{.type = TOKEN_TYPE_INT_LIT, .id = 2, .pos = <186:31>}
+{.type = TOKEN_TYPE_RPAREN, .id = ), .pos = <186:32>}
+{.type = TOKEN_TYPE_SEMICOLON, .id = ;, .pos = <186:33>}
+{.type = TOKEN_TYPE_ID, .id = rgb_print, .pos = <187:1>}
+{.type = TOKEN_TYPE_LPAREN, .id = (, .pos = <187:10>}
+{.type = TOKEN_TYPE_ID, .id = rgb, .pos = <187:11>}
+{.type = TOKEN_TYPE_RPAREN, .id = ), .pos = <187:14>}
+{.type = TOKEN_TYPE_SEMICOLON, .id = ;, .pos = <187:15>}
+------------------------------------------------------------------------------------------------
+{.type = AST_NODE_TYPE_DECL_TYPE, .id = deftype, .pos = <171:1>}
+    {.type = AST_NODE_TYPE_TYPE_ID, .id = RGB, .pos = <171:9>}
+    {.type = AST_NODE_TYPE_ATOM_ID, .id = r, .pos = <172:5>}
+        {.type = AST_NODE_TYPE_TYPE_CHAR, .id = char, .pos = <172:8>}
+    {.type = AST_NODE_TYPE_ATOM_ID, .id = g, .pos = <173:5>}
+        {.type = AST_NODE_TYPE_TYPE_CHAR, .id = char, .pos = <173:8>}
+    {.type = AST_NODE_TYPE_ATOM_ID, .id = b, .pos = <174:5>}
+        {.type = AST_NODE_TYPE_TYPE_CHAR, .id = char, .pos = <174:8>}
+{.type = AST_NODE_TYPE_DECL_FN, .id = fn, .pos = <177:1>}
+    {.type = AST_NODE_TYPE_ATOM_ID, .id = rgb_init, .pos = <177:4>}
+    {.type = AST_NODE_TYPE_ATOM_ID, .id = r, .pos = <177:13>}
+        {.type = AST_NODE_TYPE_TYPE_CHAR, .id = char, .pos = <177:16>}
+    {.type = AST_NODE_TYPE_ATOM_ID, .id = g, .pos = <177:22>}
+        {.type = AST_NODE_TYPE_TYPE_CHAR, .id = char, .pos = <177:25>}
+    {.type = AST_NODE_TYPE_ATOM_ID, .id = b, .pos = <177:31>}
+        {.type = AST_NODE_TYPE_TYPE_CHAR, .id = char, .pos = <177:34>}
+    {.type = AST_NODE_TYPE_TYPE_ID, .id = RGB, .pos = <177:40>}
+    {.type = AST_NODE_TYPE_STATEMENT_BLOCK, .id = {, .pos = <177:44>}
+        {.type = AST_NODE_TYPE_STATEMENT_RETURN, .id = return, .pos = <178:5>}
+            {.type = AST_NODE_TYPE_ATOM_OBJ_INIT, .id = RGB, .pos = <178:12>}
+                {.type = AST_NODE_TYPE_ATOM_ID, .id = r, .pos = <178:17>}
+                    {.type = AST_NODE_TYPE_ATOM_ID, .id = r, .pos = <178:21>}
+                {.type = AST_NODE_TYPE_ATOM_ID, .id = g, .pos = <178:25>}
+                    {.type = AST_NODE_TYPE_ATOM_ID, .id = g, .pos = <178:29>}
+                {.type = AST_NODE_TYPE_ATOM_ID, .id = b, .pos = <178:33>}
+                    {.type = AST_NODE_TYPE_ATOM_ID, .id = b, .pos = <178:37>}
+{.type = AST_NODE_TYPE_DECL_FN, .id = fn, .pos = <181:1>}
+    {.type = AST_NODE_TYPE_ATOM_ID, .id = rgb_print, .pos = <181:4>}
+    {.type = AST_NODE_TYPE_ATOM_ID, .id = rgb, .pos = <181:14>}
+        {.type = AST_NODE_TYPE_TYPE_ID, .id = RGB, .pos = <181:19>}
+    {.type = AST_NODE_TYPE_TYPE_VOID, .id = void, .pos = <181:24>}
+    {.type = AST_NODE_TYPE_STATEMENT_BLOCK, .id = {, .pos = <181:29>}
+        {.type = AST_NODE_TYPE_DECL_VAR, .id = let, .pos = <182:5>}
+            {.type = AST_NODE_TYPE_ATOM_ID, .id = rgb_temp, .pos = <182:9>}
+            {.type = AST_NODE_TYPE_TYPE_ID, .id = RGB, .pos = <182:19>}
+            {.type = AST_NODE_TYPE_FN_CALL, .id = (, .pos = <182:33>}
+                {.type = AST_NODE_TYPE_ATOM_ID, .id = rgb_init, .pos = <182:25>}
+                {.type = AST_NODE_TYPE_BINARY_OP_MEMBER_ACCESS, .id = ., .pos = <182:37>}
+                    {.type = AST_NODE_TYPE_ATOM_ID, .id = rgb, .pos = <182:34>}
+                    {.type = AST_NODE_TYPE_ATOM_ID, .id = r, .pos = <182:38>}
+                {.type = AST_NODE_TYPE_BINARY_OP_MEMBER_ACCESS, .id = ., .pos = <182:44>}
+                    {.type = AST_NODE_TYPE_ATOM_ID, .id = rgb, .pos = <182:41>}
+                    {.type = AST_NODE_TYPE_ATOM_ID, .id = g, .pos = <182:45>}
+                {.type = AST_NODE_TYPE_BINARY_OP_MEMBER_ACCESS, .id = ., .pos = <182:51>}
+                    {.type = AST_NODE_TYPE_ATOM_ID, .id = rgb, .pos = <182:48>}
+                    {.type = AST_NODE_TYPE_ATOM_ID, .id = b, .pos = <182:52>}
+        {.type = AST_NODE_TYPE_FN_CALL, .id = (, .pos = <183:10>}
+            {.type = AST_NODE_TYPE_ATOM_ID, .id = print, .pos = <183:5>}
+            {.type = AST_NODE_TYPE_FN_CALL, .id = (, .pos = <183:17>}
+                {.type = AST_NODE_TYPE_ATOM_ID, .id = stdout, .pos = <183:11>}
+            {.type = AST_NODE_TYPE_BINARY_OP_ADD, .id = +, .pos = <183:135>}
+                {.type = AST_NODE_TYPE_BINARY_OP_ADD, .id = +, .pos = <183:108>}
+                    {.type = AST_NODE_TYPE_BINARY_OP_ADD, .id = +, .pos = <183:96>}
+                        {.type = AST_NODE_TYPE_BINARY_OP_ADD, .id = +, .pos = <183:69>}
+                            {.type = AST_NODE_TYPE_BINARY_OP_ADD, .id = +, .pos = <183:57>}
+                                {.type = AST_NODE_TYPE_BINARY_OP_ADD, .id = +, .pos = <183:30>}
+                                    {.type = AST_NODE_TYPE_ATOM_STR_LIT, .id = "{.r = ", .pos = <183:21>}
+                                    {.type = AST_NODE_TYPE_BINARY_OP_AS, .id = as, .pos = <183:50>}
+                                        {.type = AST_NODE_TYPE_BINARY_OP_AS, .id = as, .pos = <183:43>}
+                                            {.type = AST_NODE_TYPE_BINARY_OP_MEMBER_ACCESS, .id = ., .pos = <183:40>}
+                                                {.type = AST_NODE_TYPE_ATOM_ID, .id = rgb_temp, .pos = <183:32>}
+                                                {.type = AST_NODE_TYPE_ATOM_ID, .id = r, .pos = <183:41>}
+                                            {.type = AST_NODE_TYPE_TYPE_INT, .id = int, .pos = <183:46>}
+                                        {.type = AST_NODE_TYPE_TYPE_STR, .id = str, .pos = <183:53>}
+                                {.type = AST_NODE_TYPE_ATOM_STR_LIT, .id = ", .g = ", .pos = <183:59>}
+                            {.type = AST_NODE_TYPE_BINARY_OP_AS, .id = as, .pos = <183:89>}
+                                {.type = AST_NODE_TYPE_BINARY_OP_AS, .id = as, .pos = <183:82>}
+                                    {.type = AST_NODE_TYPE_BINARY_OP_MEMBER_ACCESS, .id = ., .pos = <183:79>}
+                                        {.type = AST_NODE_TYPE_ATOM_ID, .id = rgb_temp, .pos = <183:71>}
+                                        {.type = AST_NODE_TYPE_ATOM_ID, .id = g, .pos = <183:80>}
+                                    {.type = AST_NODE_TYPE_TYPE_INT, .id = int, .pos = <183:85>}
+                                {.type = AST_NODE_TYPE_TYPE_STR, .id = str, .pos = <183:92>}
+                        {.type = AST_NODE_TYPE_ATOM_STR_LIT, .id = ", .b = ", .pos = <183:98>}
+                    {.type = AST_NODE_TYPE_BINARY_OP_AS, .id = as, .pos = <183:128>}
+                        {.type = AST_NODE_TYPE_BINARY_OP_AS, .id = as, .pos = <183:121>}
+                            {.type = AST_NODE_TYPE_BINARY_OP_MEMBER_ACCESS, .id = ., .pos = <183:118>}
+                                {.type = AST_NODE_TYPE_ATOM_ID, .id = rgb_temp, .pos = <183:110>}
+                                {.type = AST_NODE_TYPE_ATOM_ID, .id = b, .pos = <183:119>}
+                            {.type = AST_NODE_TYPE_TYPE_INT, .id = int, .pos = <183:124>}
+                        {.type = AST_NODE_TYPE_TYPE_STR, .id = str, .pos = <183:131>}
+                {.type = AST_NODE_TYPE_ATOM_STR_LIT, .id = "}\n", .pos = <183:137>}
+            {.type = AST_NODE_TYPE_ATOM_TRUE, .id = true, .pos = <183:144>}
+{.type = AST_NODE_TYPE_DECL_VAR, .id = let, .pos = <186:1>}
+    {.type = AST_NODE_TYPE_ATOM_ID, .id = rgb, .pos = <186:5>}
+    {.type = AST_NODE_TYPE_TYPE_ID, .id = RGB, .pos = <186:10>}
+    {.type = AST_NODE_TYPE_FN_CALL, .id = (, .pos = <186:24>}
+        {.type = AST_NODE_TYPE_ATOM_ID, .id = rgb_init, .pos = <186:16>}
+        {.type = AST_NODE_TYPE_ATOM_INT_LIT, .id = 0, .pos = <186:25>}
+        {.type = AST_NODE_TYPE_ATOM_INT_LIT, .id = 1, .pos = <186:28>}
+        {.type = AST_NODE_TYPE_ATOM_INT_LIT, .id = 2, .pos = <186:31>}
+{.type = AST_NODE_TYPE_FN_CALL, .id = (, .pos = <187:10>}
+    {.type = AST_NODE_TYPE_ATOM_ID, .id = rgb_print, .pos = <187:1>}
+    {.type = AST_NODE_TYPE_ATOM_ID, .id = rgb, .pos = <187:11>}
+------------------------------------------------------------------------------------------------
+    push 0 ; 1
+    to_char ; 1
+    push 1 ; 2
+    to_char ; 2
+    push 2 ; 3
+    to_char ; 3
+    call rgb_init ; 1
+    push bp[0] ; 2
+    call rgb_print ; 1
+    pop 1 ; 0
+    push 0 ; 1
+    call exit ; 0
+rgb_init:
+    push [] ; 4
+    push sp[-1] ; 5
+    push sp[-5] ; 6
+    to_char ; 6
+    call push_back ; 4
+    push sp[-1] ; 5
+    push sp[-4] ; 6
+    to_char ; 6
+    call push_back ; 4
+    push sp[-1] ; 5
+    push sp[-3] ; 6
+    to_char ; 6
+    call push_back ; 4
+    ret 3 ; 0
+rgb_print:
+    push sp[-1] ; 2
+    push 0 ; 3
+    deref ; 2
+    to_char ; 2
+    push sp[-2] ; 3
+    push 1 ; 4
+    deref ; 3
+    to_char ; 3
+    push sp[-3] ; 4
+    push 2 ; 5
+    deref ; 4
+    to_char ; 4
+    call rgb_init ; 2
+    call stdout ; 3
+    to_int ; 3
+    push "{.r = " ; 4
+    push sp[-3] ; 5
+    push 0 ; 6
+    deref ; 5
+    to_int ; 5
+    to_str ; 5
+    add ; 4
+    push ", .g = " ; 5
+    add ; 4
+    push sp[-3] ; 5
+    push 1 ; 6
+    deref ; 5
+    to_int ; 5
+    to_str ; 5
+    add ; 4
+    push ", .b = " ; 5
+    add ; 4
+    push sp[-3] ; 5
+    push 2 ; 6
+    deref ; 5
+    to_int ; 5
+    to_str ; 5
+    add ; 4
+    push "}\n" ; 5
+    add ; 4
+    to_str ; 4
+    push true ; 5
+    to_bool ; 5
+    call print ; 3
+    pop 1 ; 2
+    pop 1 ; 1
+    retv 1 ; 0
+------------------------------------------------------------------------------------------------
+
+0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 
+8, 0, 4, 1, 0, 0, 0, 0, 0, 0, 
+0, 8, 0, 4, 2, 0, 0, 0, 0, 0, 
+0, 0, 8, 2, 0, 84, 0, 0, 0, 0, 
+0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+0, 0, 0, 2, 0, 164, 0, 0, 0, 0, 
+0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 
+0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 
+0, 0, 2, 2, 0, 7, 0, 1, 1, 0, 
+0, 0, 0, 0, 0, 0, 0, 1, 5, 0, 
+0, 0, 0, 0, 0, 0, 8, 2, 14, 0, 
+1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 
+1, 4, 0, 0, 0, 0, 0, 0, 0, 8, 
+2, 14, 0, 1, 1, 0, 0, 0, 0, 0, 
+0, 0, 0, 1, 3, 0, 0, 0, 0, 0, 
+0, 0, 8, 2, 14, 3, 3, 0, 0, 0, 
+0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 
+0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 
+0, 0, 0, 0, 14, 8, 0, 1, 2, 0, 
+0, 0, 0, 0, 0, 0, 0, 4, 1, 0, 
+0, 0, 0, 0, 0, 0, 14, 8, 0, 1, 
+3, 0, 0, 0, 0, 0, 0, 0, 0, 4, 
+2, 0, 0, 0, 0, 0, 0, 0, 14, 8, 
+2, 0, 84, 0, 0, 0, 0, 0, 0, 0, 
+2, 7, 9, 0, 6, 123, 46, 114, 32, 61, 
+32, 0, 0, 1, 3, 0, 0, 0, 0, 0, 
+0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 
+0, 0, 14, 9, 11, 19, 0, 6, 44, 32, 
+46, 103, 32, 61, 32, 0, 19, 0, 1, 3, 
+0, 0, 0, 0, 0, 0, 0, 0, 4, 1, 
+0, 0, 0, 0, 0, 0, 0, 14, 9, 11, 
+19, 0, 6, 44, 32, 46, 98, 32, 61, 32, 
+0, 19, 0, 1, 3, 0, 0, 0, 0, 0, 
+0, 0, 0, 4, 2, 0, 0, 0, 0, 0, 
+0, 0, 14, 9, 11, 19, 0, 6, 125, 10, 
+0, 19, 11, 0, 2, 1, 7, 2, 9, 1, 
+1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 
+0, 0, 0, 0, 0, 0, 0, 4, 1, 0, 
+0, 0, 0, 0, 0, 0, 
+------------------------------------------------------------------------------------------------
