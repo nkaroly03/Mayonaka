@@ -168,20 +168,24 @@ print(stdout(), "errno: " + get_errno() as str + '\n', true);
 return 0;
 /*/
 
+// deftype RGB{
+    // r: char,
+    // g: char,
+    // b: char
+// }
+
+// deftype Foo{
+    // pi: []float,
+// }
+// 
+// let f: []Foo = [
+    // Foo{
+        // .pi = [3.14],
+    // },
+// ];
+
 deftype Foo{
-    i: []Foo,
-    f: float,
+    f: []Foo
 }
 
-// Foo{.r = 0};
-
-// let temp: []RGB = [
-    // RGB{.r = Bar{.z = [0,1,2]},}
-// ] as []RGB;
-// 
-// temp.hello.ok.g = [];
-// 
-// Foo{.r = 0, .g = 1, .b = 2};
-
-// let i: int = 0;
-// let arr: []int = [(i = 10)];
+let a: []Foo = [Foo{.f = [Foo{.f = []}]}];
