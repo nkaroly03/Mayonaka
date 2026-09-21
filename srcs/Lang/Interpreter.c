@@ -16,6 +16,7 @@
 #endif // _WIN32
 
 #include "../../hdrs/Allocator/Allocator.h"
+#include "../../hdrs/Data_structure/Ordered_umap.h"
 #include "../../hdrs/Data_structure/Ordered_umap_base.h"
 #include "../../hdrs/Data_structure/Str_base.h"
 #include "../../hdrs/Data_structure/Vec_base.h"
@@ -45,7 +46,7 @@ typedef struct File_info{
 } File_info;
 
 typedef struct Interpreter_state{
-    Allocator alloc;
+    Ordered_umap alloc_infos;
     Xoshiro256 rand;
     int argc;
     const char *const *argv;
@@ -58,21 +59,23 @@ typedef struct Interpreter_state{
 } Interpreter_state;
 
 static void interpreter_state_deinit(Interpreter_state *self){
-    vec_base_deinit(&self->return_address_stack, self->alloc);
+    Allocator alloc = self->alloc_infos.m_alloc;
+    vec_base_deinit(&self->return_address_stack, alloc);
     while (self->data_stack.m_size > 0){
         Primitive popped;
         vec_base_pop_back_to(&self->data_stack, &popped);
-        primitive_deinit(&popped, self->alloc);
+        primitive_deinit(&popped);
     }
-    vec_base_deinit(&self->data_stack, self->alloc);
+    vec_base_deinit(&self->data_stack, alloc);
+    ordered_umap_deinit(&self->alloc_infos);
     while (self->file_infos.m_keys.m_size > 0){
         usize key;
-        ordered_umap_base_pop_back_to(&self->file_infos, self->alloc, &key, &(File_info){0});
+        ordered_umap_base_pop_back_to(&self->file_infos, alloc, &key, &(File_info){0});
         FILE *file = (FILE*)key;
         if (file != stdin && file != stdout && file != stderr)
             fclose(file);
     }
-    ordered_umap_base_deinit(&self->file_infos, self->alloc);
+    ordered_umap_base_deinit(&self->file_infos, alloc);
 }
 
 static Interpreter_run_result interpreter_state_oom_error(Interpreter_state *self){
@@ -82,13 +85,14 @@ static Interpreter_run_result interpreter_state_oom_error(Interpreter_state *sel
 #define oom_error() interpreter_state_oom_error(self)
 
 static Interpreter_run_result interpreter_state_runtime_error(Interpreter_state *self, const char *fmt, ...){
+    Allocator alloc = self->alloc_infos.m_alloc;
     va_list args;
     va_start(args, fmt);
     Str_base error_info = {0};
-    bool result = str_base_assign_fmt(&error_info, self->alloc, "At offset <" USIZE_PFMT ">: ", self->pc) && str_base_append_fmt_va_list(&error_info, self->alloc, fmt, args);
+    bool result = str_base_assign_fmt(&error_info, alloc, "At offset <" USIZE_PFMT ">: ", self->pc) && str_base_append_fmt_va_list(&error_info, alloc, fmt, args);
     va_end(args);
     if (!result){
-        str_base_deinit(&error_info, self->alloc);
+        str_base_deinit(&error_info, alloc);
         return oom_error();
     }
     interpreter_state_deinit(self);
@@ -125,8 +129,6 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                 if (new_pc >= self->bytecode.m_size)
                     return bad_instruction_error();
 
-                Primitive temp;
-
                 arg_tag = (enum Op_code_arg_tag)self->bytecode.m_data[new_pc++];
                 switch (arg_tag){
                     case OP_CODE_ARG_TAG_BP:
@@ -144,8 +146,8 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                         if (idx >= self->data_stack.m_size)
                             return runtime_error("<%s> instruction references an out of range element on the stack", op_code_str);
 
-                        temp = *(Primitive*)vec_base_at(&self->data_stack, idx);
-                        if (!vec_base_push_back(&self->data_stack, self->alloc, &temp))
+                        Primitive temp = *(Primitive*)vec_base_at(&self->data_stack, idx);
+                        if (!vec_base_push_back(&self->data_stack, self->alloc_infos.m_alloc, &temp))
                             return oom_error();
 
                         switch (temp.m_tag){
@@ -164,11 +166,19 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                         break;
                     }
                     case OP_CODE_ARG_TAG_BOOL:
-                        if (!vec_base_push_back(&self->data_stack, self->alloc, &(Primitive){.m_tag = PRIMITIVE_TAG_BOOL, .m_bool_data = (bool)self->bytecode.m_data[new_pc++]}))
+                        if (!vec_base_push_back(
+                            &self->data_stack,
+                            self->alloc_infos.m_alloc,
+                            &(Primitive){.m_alloc_infos_ptr = &self->alloc_infos, .m_tag = PRIMITIVE_TAG_BOOL, .m_bool_data = (bool)self->bytecode.m_data[new_pc++]}
+                        ))
                             return oom_error();
                         break;
                     case OP_CODE_ARG_TAG_CHAR:
-                        if (!vec_base_push_back(&self->data_stack, self->alloc, &(Primitive){.m_tag = PRIMITIVE_TAG_CHAR, .m_char_data = self->bytecode.m_data[new_pc++]}))
+                        if (!vec_base_push_back(
+                            &self->data_stack,
+                            self->alloc_infos.m_alloc,
+                            &(Primitive){.m_alloc_infos_ptr = &self->alloc_infos, .m_tag = PRIMITIVE_TAG_CHAR, .m_char_data = self->bytecode.m_data[new_pc++]}
+                        ))
                             return oom_error();
                         break;
                     case OP_CODE_ARG_TAG_INT:{
@@ -176,7 +186,11 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                         if (new_pc + sizeof(i64_data) > self->bytecode.m_size)
                             return bad_instruction_error();
                         memcpy(&i64_data, &self->bytecode.m_data[new_pc], sizeof(i64_data));
-                        if (!vec_base_push_back(&self->data_stack, self->alloc, &(Primitive){.m_tag = PRIMITIVE_TAG_INT, .m_int_data = i64_data}))
+                        if (!vec_base_push_back(
+                            &self->data_stack,
+                            self->alloc_infos.m_alloc,
+                            &(Primitive){.m_alloc_infos_ptr = &self->alloc_infos, .m_tag = PRIMITIVE_TAG_INT, .m_int_data = i64_data}
+                        ))
                             return oom_error();
                         new_pc += sizeof(i64_data);
                         break;
@@ -186,7 +200,11 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                         if (new_pc + sizeof(f64_data) > self->bytecode.m_size)
                             return bad_instruction_error();
                         memcpy(&f64_data, &self->bytecode.m_data[new_pc], sizeof(f64_data));
-                        if (!vec_base_push_back(&self->data_stack, self->alloc, &(Primitive){.m_tag = PRIMITIVE_TAG_FLOAT, .m_float_data = f64_data}))
+                        if (!vec_base_push_back(
+                            &self->data_stack,
+                            self->alloc_infos.m_alloc,
+                            &(Primitive){.m_alloc_infos_ptr = &self->alloc_infos, .m_tag = PRIMITIVE_TAG_FLOAT, .m_float_data = f64_data}
+                        ))
                             return oom_error();
                         new_pc += sizeof(f64_data);
                         break;
@@ -197,34 +215,34 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                             ++i;
                         if (i >= self->bytecode.m_size)
                             return bad_instruction_error();
-                        temp = (Primitive){.m_tag = PRIMITIVE_TAG_STR, .m_str_data_ptr = allocator_alloc(self->alloc, Primitive_str_data, 1)};
-                        if (!temp.m_str_data_ptr)
+                        Primitive_result primitive_init_result = primitive_init_str(&self->alloc_infos, &(Str_base){0});
+                        if (!primitive_init_result.success)
                             return oom_error();
-                        *temp.m_str_data_ptr = (Primitive_str_data){.m_ref_count = 1, .m_data = {0}};
                         if (
                             !str_base_assign_str_view(
-                                &temp.m_str_data_ptr->m_data,
-                                self->alloc,
+                                &primitive_init_result.result.m_str_data_ptr->m_data,
+                                self->alloc_infos.m_alloc,
                                 (Str_view){.m_size = i - new_pc, .m_str = (const char*)&self->bytecode.m_data[new_pc]}
                             ) ||
-                            !vec_base_push_back(&self->data_stack, self->alloc, &temp)
+                            !vec_base_push_back(&self->data_stack, self->alloc_infos.m_alloc, &primitive_init_result.result)
                         ){
-                            primitive_deinit(&temp, self->alloc);
+                            primitive_deinit(&primitive_init_result.result);
                             return oom_error();
                         }
                         new_pc = i + 1;
                         break;
                     }
-                    case OP_CODE_ARG_TAG_LIST:
-                        temp = (Primitive){.m_tag = PRIMITIVE_TAG_LIST, .m_list_data_ptr = allocator_alloc(self->alloc, Primitive_list_data, 1)};
-                        if (!temp.m_list_data_ptr)
+                    case OP_CODE_ARG_TAG_LIST:{
+                        Vec_base temp = vec_base_init(Primitive);
+                        Primitive_result primitive_init_result = primitive_init_list(&self->alloc_infos, &temp);
+                        if (!primitive_init_result.success)
                             return oom_error();
-                        *temp.m_list_data_ptr = (Primitive_list_data){.m_ref_count = 1, .m_data = vec_base_init(Primitive)};
-                        if (!vec_base_push_back(&self->data_stack, self->alloc, &temp)){
-                            primitive_deinit(&temp, self->alloc);
+                        if (!vec_base_push_back(&self->data_stack, self->alloc_infos.m_alloc, &primitive_init_result.result)){
+                            primitive_deinit(&primitive_init_result.result);
                             return oom_error();
                         }
                         break;
+                    }
                     default:
                         return bad_instruction_error();
                 }
@@ -239,9 +257,9 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                 if (pop_count > self->data_stack.m_size)
                     return runtime_error("<%s> instruction pops the stack too many times", op_code_str);
                 while (pop_count-- > 0){
-                    Primitive temp;
-                    vec_base_pop_back_to(&self->data_stack, &temp);
-                    primitive_deinit(&temp, self->alloc);
+                    Primitive popped;
+                    vec_base_pop_back_to(&self->data_stack, &popped);
+                    primitive_deinit(&popped);
                 }
                 break;
             }
@@ -260,50 +278,43 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                         if (call_offset > self->bytecode.m_size)
                             return runtime_error("<%s> instruction jumps past the end of the program", op_code_str);
                         new_pc += sizeof(call_offset);
-                        if (!vec_base_push_back(&self->return_address_stack, self->alloc, &new_pc))
+                        if (!vec_base_push_back(&self->return_address_stack, self->alloc_infos.m_alloc, &new_pc))
                             return oom_error();
                         new_pc = call_offset;
                         break;
                     }
                     case BUILTIN_FN_TAG_GET_ARGV:{
-                        Primitive argv = {.m_tag = PRIMITIVE_TAG_LIST, .m_list_data_ptr = allocator_alloc(self->alloc, Primitive_list_data, 1)};
-                        if (!argv.m_list_data_ptr)
+                        Vec_base temp = vec_base_init(Primitive);
+                        Primitive_result primitive_init_result = primitive_init_list(&self->alloc_infos, &temp);
+                        if (!primitive_init_result.success)
                             return oom_error();
-                        *argv.m_list_data_ptr = (Primitive_list_data){.m_ref_count = 1, .m_data = vec_base_init(Primitive)};
-
-                        for (int i = 0; i < self->argc; ++i){
-                            Primitive temp = {.m_tag = PRIMITIVE_TAG_STR, .m_str_data_ptr = allocator_alloc(self->alloc, Primitive_str_data, 1)};
-                            if (!temp.m_str_data_ptr){
-                                primitive_deinit(&argv, self->alloc);
-                                return oom_error();
-                            }
-                            *temp.m_str_data_ptr = (Primitive_str_data){.m_ref_count = 1, .m_data = {0}};
-
-                            if (
-                                !str_base_assign_raw(&temp.m_str_data_ptr->m_data, self->alloc, self->argv[i]) ||
-                                !vec_base_push_back(&argv.m_list_data_ptr->m_data, self->alloc, &temp)
-                            ){
-                                primitive_deinit(&argv, self->alloc);
-                                primitive_deinit(&temp, self->alloc);
-                                return oom_error();
-                            }
+                        Primitive *argv_ptr = vec_base_push_back(&self->data_stack, self->alloc_infos.m_alloc, &primitive_init_result.result);
+                        if (!argv_ptr){
+                            primitive_deinit(&primitive_init_result.result);
+                            return oom_error();
                         }
 
-                        if (!vec_base_push_back(&self->data_stack, self->alloc, &argv)){
-                            primitive_deinit(&argv, self->alloc);
-                            return oom_error();
+                        for (int i = 0; i < self->argc; ++i){
+                            primitive_init_result = primitive_init_str(&self->alloc_infos, &(Str_base){0});
+                            if (!primitive_init_result.success)
+                                return oom_error();
+                            if (
+                                !str_base_assign_raw(&primitive_init_result.result.m_str_data_ptr->m_data, self->alloc_infos.m_alloc, self->argv[i]) ||
+                                !vec_base_push_back(&argv_ptr->m_list_data_ptr->m_data, self->alloc_infos.m_alloc, &primitive_init_result.result)
+                            ){
+                                primitive_deinit(&primitive_init_result.result);
+                                return oom_error();
+                            }
                         }
                         break;
                     }
                     case BUILTIN_FN_TAG_EXIT:{
                         if (self->data_stack.m_size < 1)
                             return builtin_fn_arg_count_error(bfn_tag_str);
-                        Primitive exit_val;
-                        vec_base_pop_back_to(&self->data_stack, &exit_val);
-                        if (exit_val.m_tag != PRIMITIVE_TAG_INT){
-                            primitive_deinit(&exit_val, self->alloc);
+                        Primitive *exit_val_ptr = vec_base_at(&self->data_stack, self->data_stack.m_size - 1);
+                        if (exit_val_ptr->m_tag != PRIMITIVE_TAG_INT)
                             return runtime_error("Builtin function <%s> must be called with type <int> as its argument", bfn_tag_str);
-                        }
+                        i64 exit_val = exit_val_ptr->m_int_data;
                         interpreter_state_deinit(self);
                         return (Interpreter_run_result){.result = exit_val, .error = INTERPRETER_RUN_ERROR_NONE};
                     }
@@ -316,12 +327,16 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                         lldiv_t res = lldiv(sleep_for->m_int_data, 1000000000);
                         if (errno = 0, nanosleep(&(struct timespec){.tv_sec = (time_t)res.quot, .tv_nsec = (i32)res.rem}, NULL) != 0)
                             return runtime_error(strerror(errno));
-                        primitive_deinit(sleep_for, self->alloc);
+                        primitive_deinit(sleep_for);
                         vec_base_pop_back_discard(&self->data_stack);
                         break;
                     }
                     case BUILTIN_FN_TAG_GET_ERRNO:
-                        if (!vec_base_push_back(&self->data_stack, self->alloc, &(Primitive){.m_tag = PRIMITIVE_TAG_INT, .m_int_data = self->errno_val}))
+                        if (!vec_base_push_back(
+                            &self->data_stack,
+                            self->alloc_infos.m_alloc,
+                            &(Primitive){.m_alloc_infos_ptr = &self->alloc_infos, .m_tag = PRIMITIVE_TAG_INT, .m_int_data = self->errno_val}
+                        ))
                             return oom_error();
                         break;
                     case BUILTIN_FN_TAG_SET_ERRNO:{
@@ -331,21 +346,25 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                         if (to_set->m_tag != PRIMITIVE_TAG_INT)
                             return runtime_error("Builtin function <%s> must be called with type <int> as its argument", bfn_tag_str);
                         self->errno_val = to_set->m_int_data;
-                        primitive_deinit(to_set, self->alloc);
+                        primitive_deinit(to_set);
                         vec_base_pop_back_discard(&self->data_stack);
                         break;
                     }
                     case BUILTIN_FN_TAG_STDIN:
                     case BUILTIN_FN_TAG_STDOUT:
                     case BUILTIN_FN_TAG_STDERR:{
-                        FILE *file_ptr;
+                        FILE *file;
                         switch (bfn_tag){
-                            case BUILTIN_FN_TAG_STDIN:  file_ptr = stdin;  break;
-                            case BUILTIN_FN_TAG_STDOUT: file_ptr = stdout; break;
-                            case BUILTIN_FN_TAG_STDERR: file_ptr = stderr; break;
+                            case BUILTIN_FN_TAG_STDIN:  file = stdin;  break;
+                            case BUILTIN_FN_TAG_STDOUT: file = stdout; break;
+                            case BUILTIN_FN_TAG_STDERR: file = stderr; break;
                             default:                    unreachable();
                         }
-                        if (!vec_base_push_back(&self->data_stack, self->alloc, &(Primitive){.m_tag = PRIMITIVE_TAG_INT, .m_int_data = (i64)((usize)file_ptr)}))
+                        if (!vec_base_push_back(
+                            &self->data_stack,
+                            self->alloc_infos.m_alloc,
+                            &(Primitive){.m_alloc_infos_ptr = &self->alloc_infos, .m_tag = PRIMITIVE_TAG_INT, .m_int_data = (i64)((usize)file)}
+                        ))
                             return oom_error();
                         break;
                     }
@@ -380,13 +399,13 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                                 abort();
                         }
 
-                        primitive_deinit(to_flush, self->alloc);
-                        primitive_deinit(to_print, self->alloc);
-                        primitive_deinit(file, self->alloc);
+                        primitive_deinit(to_flush);
+                        primitive_deinit(to_print);
+                        primitive_deinit(file);
                         vec_base_pop_back_discard(&self->data_stack);
                         vec_base_pop_back_discard(&self->data_stack);
 
-                        *file = (Primitive){.m_tag = PRIMITIVE_TAG_INT, .m_int_data = print_result.result};
+                        *file = (Primitive){.m_alloc_infos_ptr = &self->alloc_infos, .m_tag = PRIMITIVE_TAG_INT, .m_int_data = print_result.result};
                         break;
                     }
                     case BUILTIN_FN_TAG_SCAN:{
@@ -409,12 +428,12 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
 
                         Str_base str_result = {0};
 #ifdef _WIN32
-                        enum Str_getline_error getline_result = str_base_getline(&str_result, self->alloc, file_ptr);
+                        enum Str_getline_error getline_result = str_base_getline(&str_result, self->alloc_infos.m_alloc, file_ptr);
 #else
                         struct termios old_settings, new_settings = (tcgetattr(0, &old_settings), old_settings);
                         new_settings.c_lflag |= (tcflag_t)ECHO;
                         tcsetattr(0, TCSANOW, &new_settings);
-                        enum Str_getline_error getline_result = str_base_getline(&str_result, self->alloc, file_ptr);
+                        enum Str_getline_error getline_result = str_base_getline(&str_result, self->alloc_infos.m_alloc, file_ptr);
                         tcsetattr(0, TCSANOW, &old_settings);
 #endif // _WIN32
                         switch (getline_result){
@@ -422,11 +441,11 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                                 break;
                             case STR_GETLINE_ERROR_FEOF:
                                 // TODO: reimplement after implementing errno
-                                if (str_base_push_back(&str_result, self->alloc, '\n'))
+                                if (str_base_push_back(&str_result, self->alloc_infos.m_alloc, '\n'))
                                     break;
                                 FALLTHROUGH;
                             case STR_GETLINE_ERROR_OOM:
-                                str_base_deinit(&str_result, self->alloc);
+                                str_base_deinit(&str_result, self->alloc_infos.m_alloc);
                                 return oom_error();
                             case STR_GETLINE_ERROR_FERROR:
                                 // TODO: reimplement after implementing errno
@@ -434,15 +453,14 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                                 abort();
                         }
 
-                        Primitive scanned = {.m_tag = PRIMITIVE_TAG_STR, .m_str_data_ptr = allocator_alloc(self->alloc, Primitive_str_data, 1)};
-                        if (!scanned.m_str_data_ptr){
-                            str_base_deinit(&str_result, self->alloc);
+                        Primitive_result primitive_init_result = primitive_init_str(&self->alloc_infos, &str_result);
+                        if (!primitive_init_result.success){
+                            str_base_deinit(&str_result, self->alloc_infos.m_alloc);
                             return oom_error();
                         }
-                        *scanned.m_str_data_ptr = (Primitive_str_data){.m_ref_count = 1, .m_data = str_result};
 
-                        primitive_deinit(file, self->alloc);
-                        *file = scanned;
+                        primitive_deinit(file);
+                        *file = primitive_init_result.result;
                         break;
                     }
                     case BUILTIN_FN_TAG_POLL_KEYPRESS:{
@@ -463,19 +481,27 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                             tcflush(0, TCIFLUSH);
                         tcsetattr(0, TCSANOW, &old_settings);
 #endif // _WIN32
-                        if (!vec_base_push_back(&self->data_stack, self->alloc, &(Primitive){.m_tag = PRIMITIVE_TAG_CHAR, .m_char_data = (u8)keypress}))
+                        if (!vec_base_push_back(
+                            &self->data_stack,
+                            self->alloc_infos.m_alloc,
+                            &(Primitive){.m_alloc_infos_ptr = &self->alloc_infos, .m_tag = PRIMITIVE_TAG_CHAR, .m_char_data = (u8)keypress}
+                        ))
                             return oom_error();
                         break;
                     }
                     case BUILTIN_FN_TAG_RAND:
-                        if (!vec_base_push_back(&self->data_stack, self->alloc, &(Primitive){.m_tag = PRIMITIVE_TAG_INT, .m_int_data = (i64)xoshiro256_next(&self->rand)}))
+                        if (!vec_base_push_back(
+                            &self->data_stack,
+                            self->alloc_infos.m_alloc,
+                            &(Primitive){.m_alloc_infos_ptr = &self->alloc_infos, .m_tag = PRIMITIVE_TAG_INT, .m_int_data = (i64)xoshiro256_next(&self->rand)}
+                        ))
                             return oom_error();
                         break;
                     case BUILTIN_FN_TAG_LEN:{
                         if (self->data_stack.m_size < 1)
                             return builtin_fn_arg_count_error(bfn_tag_str);
 
-                        Primitive len = {.m_tag = PRIMITIVE_TAG_INT};
+                        Primitive len = {.m_alloc_infos_ptr = &self->alloc_infos, .m_tag = PRIMITIVE_TAG_INT};
 
                         Primitive *list_like = vec_base_at(&self->data_stack, self->data_stack.m_size - 1);
                         switch (list_like->m_tag){
@@ -483,7 +509,7 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                             case PRIMITIVE_TAG_LIST: len.m_int_data = (i64)list_like->m_list_data_ptr->m_data.m_size;         break;
                             default:                 return runtime_error("Builtin function <%s> must be called with type <str> or <list> as its argument", bfn_tag_str);
                         }
-                        primitive_deinit(list_like, self->alloc);
+                        primitive_deinit(list_like);
 
                         *list_like = len;
                         break;
@@ -496,10 +522,10 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                         if (list->m_tag != PRIMITIVE_TAG_LIST)
                             return runtime_error("Builtin function <%s> must be called with type <list> as its 1st argument", bfn_tag_str);
 
-                        if (!vec_base_push_back(&list->m_list_data_ptr->m_data, self->alloc, vec_base_at(&self->data_stack, self->data_stack.m_size - 1)))
+                        if (!vec_base_push_back(&list->m_list_data_ptr->m_data, self->alloc_infos.m_alloc, vec_base_at(&self->data_stack, self->data_stack.m_size - 1)))
                             return oom_error();
 
-                        primitive_deinit(list, self->alloc);
+                        primitive_deinit(list);
                         vec_base_pop_back_discard(&self->data_stack);
                         vec_base_pop_back_discard(&self->data_stack);
                         break;
@@ -517,9 +543,9 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
 
                         Primitive popped;
                         vec_base_pop_back_to(&list->m_list_data_ptr->m_data, &popped);
-                        primitive_deinit(&popped, self->alloc);
+                        primitive_deinit(&popped);
 
-                        primitive_deinit(list, self->alloc);
+                        primitive_deinit(list);
                         vec_base_pop_back_discard(&self->data_stack);
                         break;
                     }
@@ -543,12 +569,13 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                     vec_base_pop_back_to(&self->data_stack, &ret_val);
 
                 while (pop_count-- > 0){
-                    primitive_deinit(vec_base_at(&self->data_stack, self->data_stack.m_size - 1), self->alloc);
-                    vec_base_pop_back_discard(&self->data_stack);
+                    Primitive popped;
+                    vec_base_pop_back_to(&self->data_stack, &popped);
+                    primitive_deinit(&popped);
                 }
 
                 if (op_code == OP_CODE_RET)
-                    (void)vec_base_push_back(&self->data_stack, self->alloc, &ret_val);
+                    (void)vec_base_push_back(&self->data_stack, self->alloc_infos.m_alloc, &ret_val);
 
                 if (self->return_address_stack.m_size == 0)
                     goto end;
@@ -583,12 +610,12 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
 
                 Primitive *condition = vec_base_at(&self->data_stack, self->data_stack.m_size - 1);
 
-                op_result = primitive_to_bool(condition, self->alloc);
+                op_result = primitive_to_bool(condition);
                 if (op_result.error != PRIMITIVE_OP_ERROR_NONE)
                     return primitive_op_error(op_result);
 
                 bool condition_val = condition->m_bool_data;
-                primitive_deinit(condition, self->alloc);
+                primitive_deinit(condition);
                 vec_base_pop_back_discard(&self->data_stack);
 
                 if (!condition_val)
@@ -607,19 +634,67 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                     return runtime_error("<%s> instruction used on empty stack", op_code_str);
                 Primitive *last = vec_base_at(&self->data_stack, self->data_stack.m_size - 1);
                 switch (op_code){
-                    case OP_CODE_TO_BOOL:  op_result = primitive_to_bool (last, self->alloc); break;
-                    case OP_CODE_TO_CHAR:  op_result = primitive_to_char (last, self->alloc); break;
-                    case OP_CODE_TO_INT:   op_result = primitive_to_int  (last, self->alloc); break;
-                    case OP_CODE_TO_FLOAT: op_result = primitive_to_float(last, self->alloc); break;
-                    case OP_CODE_TO_STR:   op_result = primitive_to_str  (last, self->alloc); break;
-
-                    case OP_CODE_NEG:      op_result = primitive_neg (last); break;
-                    case OP_CODE_BNEG:     op_result = primitive_bneg(last); break;
-
+                    case OP_CODE_TO_BOOL:  op_result = primitive_to_bool (last); break;
+                    case OP_CODE_TO_CHAR:  op_result = primitive_to_char (last); break;
+                    case OP_CODE_TO_INT:   op_result = primitive_to_int  (last); break;
+                    case OP_CODE_TO_FLOAT: op_result = primitive_to_float(last); break;
+                    case OP_CODE_TO_STR:   op_result = primitive_to_str  (last); break;
+                    case OP_CODE_NEG:      op_result = primitive_neg     (last); break;
+                    case OP_CODE_BNEG:     op_result = primitive_bneg    (last); break;
                     default:               unreachable();
                 }
                 if (op_result.error != PRIMITIVE_OP_ERROR_NONE)
                     return primitive_op_error(op_result);
+                break;
+            }
+
+            case OP_CODE_DEREF:
+            case OP_CODE_POW:
+            case OP_CODE_MUL:
+            case OP_CODE_DIV:
+            case OP_CODE_REM:
+            case OP_CODE_ADD:
+            case OP_CODE_SUB:
+            case OP_CODE_SHL:
+            case OP_CODE_SHR:
+            case OP_CODE_CMP_LE:
+            case OP_CODE_CMP_LEQ:
+            case OP_CODE_CMP_GE:
+            case OP_CODE_CMP_GEQ:
+            case OP_CODE_CMP_EQ:
+            case OP_CODE_CMP_NEQ:
+            case OP_CODE_BAND:
+            case OP_CODE_XOR:
+            case OP_CODE_BOR:{
+                if (self->data_stack.m_size < 2)
+                    return runtime_error("<%s> instruction used with less than 2 elements on the stack", op_code_str);
+                Primitive *lhs = vec_base_at(&self->data_stack, self->data_stack.m_size - 2);
+                Primitive *rhs = vec_base_at(&self->data_stack, self->data_stack.m_size - 1);
+                switch (op_code){
+                    case OP_CODE_DEREF:   op_result = primitive_deref  (lhs, rhs); break;
+                    case OP_CODE_POW:     op_result = primitive_pow    (lhs, rhs); break;
+                    case OP_CODE_MUL:     op_result = primitive_mul    (lhs, rhs); break;
+                    case OP_CODE_DIV:     op_result = primitive_div    (lhs, rhs); break;
+                    case OP_CODE_REM:     op_result = primitive_rem    (lhs, rhs); break;
+                    case OP_CODE_ADD:     op_result = primitive_add    (lhs, rhs); break;
+                    case OP_CODE_SUB:     op_result = primitive_sub    (lhs, rhs); break;
+                    case OP_CODE_SHL:     op_result = primitive_shl    (lhs, rhs); break;
+                    case OP_CODE_SHR:     op_result = primitive_shr    (lhs, rhs); break;
+                    case OP_CODE_CMP_LE:  op_result = primitive_cmp_le (lhs, rhs); break;
+                    case OP_CODE_CMP_LEQ: op_result = primitive_cmp_leq(lhs, rhs); break;
+                    case OP_CODE_CMP_GE:  op_result = primitive_cmp_ge (lhs, rhs); break;
+                    case OP_CODE_CMP_GEQ: op_result = primitive_cmp_geq(lhs, rhs); break;
+                    case OP_CODE_CMP_EQ:  op_result = primitive_cmp_eq (lhs, rhs); break;
+                    case OP_CODE_CMP_NEQ: op_result = primitive_cmp_neq(lhs, rhs); break;
+                    case OP_CODE_BAND:    op_result = primitive_band   (lhs, rhs); break;
+                    case OP_CODE_XOR:     op_result = primitive_xor    (lhs, rhs); break;
+                    case OP_CODE_BOR:     op_result = primitive_bor    (lhs, rhs); break;
+                    default:              unreachable();
+                }
+                if (op_result.error != PRIMITIVE_OP_ERROR_NONE)
+                    return primitive_op_error(op_result);
+                primitive_deinit(rhs);
+                vec_base_pop_back_discard(&self->data_stack);
                 break;
             }
 
@@ -650,11 +725,11 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                         Primitive *lhs = vec_base_at(&self->data_stack, idx);
                         Primitive *rhs = vec_base_at(&self->data_stack, self->data_stack.m_size - 1);
 
-                        op_result = primitive_mov(lhs, self->alloc, rhs);
+                        op_result = primitive_mov(lhs, rhs);
                         if (op_result.error != PRIMITIVE_OP_ERROR_NONE)
                             return primitive_op_error(op_result);
 
-                        primitive_deinit(rhs, self->alloc);
+                        primitive_deinit(rhs);
                         vec_base_pop_back_discard(&self->data_stack);
                         break;
                     }
@@ -669,66 +744,14 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                 Primitive *lhs = vec_base_at(&self->data_stack, self->data_stack.m_size - 3);
                 Primitive *idx = vec_base_at(&self->data_stack, self->data_stack.m_size - 2);
                 Primitive *rhs = vec_base_at(&self->data_stack, self->data_stack.m_size - 1);
-                op_result = primitive_mov_deref(lhs, self->alloc, idx, rhs);
+                op_result = primitive_mov_deref(lhs, idx, rhs);
                 if (op_result.error != PRIMITIVE_OP_ERROR_NONE)
                     return primitive_op_error(op_result);
-                primitive_deinit(rhs, self->alloc);
-                primitive_deinit(idx, self->alloc);
-                primitive_deinit(lhs, self->alloc);
+                primitive_deinit(rhs);
+                primitive_deinit(idx);
+                primitive_deinit(lhs);
                 vec_base_pop_back_discard(&self->data_stack);
                 vec_base_pop_back_discard(&self->data_stack);
-                vec_base_pop_back_discard(&self->data_stack);
-                break;
-            }
-
-            case OP_CODE_DEREF:
-            case OP_CODE_CMP_EQ:
-            case OP_CODE_CMP_NEQ:
-            case OP_CODE_CMP_LE:
-            case OP_CODE_CMP_LEQ:
-            case OP_CODE_CMP_GE:
-            case OP_CODE_CMP_GEQ:
-            case OP_CODE_ADD:
-            case OP_CODE_SUB:
-            case OP_CODE_MUL:
-            case OP_CODE_DIV:
-            case OP_CODE_REM:
-            case OP_CODE_POW:
-            case OP_CODE_SHL:
-            case OP_CODE_SHR:
-            case OP_CODE_BAND:
-            case OP_CODE_BOR:
-            case OP_CODE_XOR:{
-                if (self->data_stack.m_size < 2)
-                    return runtime_error("<%s> instruction used with less than 2 elements on the stack", op_code_str);
-                Primitive *lhs = vec_base_at(&self->data_stack, self->data_stack.m_size - 2);
-                Primitive *rhs = vec_base_at(&self->data_stack, self->data_stack.m_size - 1);
-                switch (op_code){
-                    case OP_CODE_DEREF:   op_result = primitive_deref  (lhs, self->alloc, rhs); break;
-                    case OP_CODE_CMP_EQ:  op_result = primitive_cmp_eq (lhs, self->alloc, rhs); break;
-                    case OP_CODE_CMP_NEQ: op_result = primitive_cmp_neq(lhs, self->alloc, rhs); break;
-                    case OP_CODE_CMP_LE:  op_result = primitive_cmp_le (lhs, self->alloc, rhs); break;
-                    case OP_CODE_CMP_LEQ: op_result = primitive_cmp_leq(lhs, self->alloc, rhs); break;
-                    case OP_CODE_CMP_GE:  op_result = primitive_cmp_ge (lhs, self->alloc, rhs); break;
-                    case OP_CODE_CMP_GEQ: op_result = primitive_cmp_geq(lhs, self->alloc, rhs); break;
-                    case OP_CODE_ADD:     op_result = primitive_add    (lhs, self->alloc, rhs); break;
-
-                    case OP_CODE_SUB:     op_result = primitive_sub (lhs, rhs); break;
-                    case OP_CODE_MUL:     op_result = primitive_mul (lhs, rhs); break;
-                    case OP_CODE_DIV:     op_result = primitive_div (lhs, rhs); break;
-                    case OP_CODE_REM:     op_result = primitive_rem (lhs, rhs); break;
-                    case OP_CODE_POW:     op_result = primitive_pow (lhs, rhs); break;
-                    case OP_CODE_SHL:     op_result = primitive_shl (lhs, rhs); break;
-                    case OP_CODE_SHR:     op_result = primitive_shr (lhs, rhs); break;
-                    case OP_CODE_BAND:    op_result = primitive_band(lhs, rhs); break;
-                    case OP_CODE_BOR:     op_result = primitive_bor (lhs, rhs); break;
-                    case OP_CODE_XOR:     op_result = primitive_xor (lhs, rhs); break;
-
-                    default:              unreachable();
-                }
-                if (op_result.error != PRIMITIVE_OP_ERROR_NONE)
-                    return primitive_op_error(op_result);
-                primitive_deinit(rhs, self->alloc);
                 vec_base_pop_back_discard(&self->data_stack);
                 break;
             }
@@ -748,7 +771,7 @@ Interpreter_run_result interpreter_run(Allocator alloc, U8_slice bytecode, int a
     assert((argv || argc == 0) && "<argv> is only nullable if <argc> == 0");
 
     Interpreter_state state = {
-        .alloc                = alloc,
+        .alloc_infos          = ordered_umap_init(usize, enum Primitive_tag, alloc),
         .rand                 = xoshiro256_init((u64)time(NULL)),
         .argc                 = argc,
         .argv                 = argv,
@@ -763,9 +786,24 @@ Interpreter_run_result interpreter_run(Allocator alloc, U8_slice bytecode, int a
     static_assert(sizeof(i64) == sizeof(usize), "");
 
     if (
-        ordered_umap_base_push_back(&state.file_infos, state.alloc, &(usize){(usize)stdin }, &(File_info){.open_mode = FILE_INFO_OPEN_MODE_READ }).error == UMAP_INSERT_ERROR_OOM ||
-        ordered_umap_base_push_back(&state.file_infos, state.alloc, &(usize){(usize)stdout}, &(File_info){.open_mode = FILE_INFO_OPEN_MODE_WRITE}).error == UMAP_INSERT_ERROR_OOM ||
-        ordered_umap_base_push_back(&state.file_infos, state.alloc, &(usize){(usize)stderr}, &(File_info){.open_mode = FILE_INFO_OPEN_MODE_WRITE}).error == UMAP_INSERT_ERROR_OOM
+        ordered_umap_base_push_back(
+            &state.file_infos,
+            state.alloc_infos.m_alloc,
+            &(usize){(usize)stdin},
+            &(File_info){.open_mode = FILE_INFO_OPEN_MODE_READ}
+        ).error == UMAP_INSERT_ERROR_OOM ||
+        ordered_umap_base_push_back(
+            &state.file_infos,
+            state.alloc_infos.m_alloc,
+            &(usize){(usize)stdout},
+            &(File_info){.open_mode = FILE_INFO_OPEN_MODE_WRITE}
+        ).error == UMAP_INSERT_ERROR_OOM ||
+        ordered_umap_base_push_back(
+            &state.file_infos,
+            state.alloc_infos.m_alloc,
+            &(usize){(usize)stderr},
+            &(File_info){.open_mode = FILE_INFO_OPEN_MODE_WRITE}
+        ).error == UMAP_INSERT_ERROR_OOM
     )
         return interpreter_state_oom_error(&state);
 

@@ -103,9 +103,7 @@ int main(const int argc, const char *const *const argv){
     Interpreter_run_result run_result = interpreter_run(interpreter_alloc, bytecode_compile_result.bytecode, argc, argv);
     switch (run_result.error){
         case INTERPRETER_RUN_ERROR_NONE:
-            printf("\nresult:\n");
-            primitive_print(&run_result.result, stdout, true);
-            primitive_deinit(&run_result.result, interpreter_alloc);
+            printf("\nresult: " I64_PFMT "\n", run_result.result);
             break;
         case INTERPRETER_RUN_ERROR_OOM:
             goto oom_error;

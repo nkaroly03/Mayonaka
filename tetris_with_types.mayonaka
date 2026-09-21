@@ -1,0 +1,390 @@
+let TETRIS_WIDTH:     int = 10;
+let TETRIS_HEIGHT:    int = 20;
+let TETRIS_MOVE_TICK: int = 20;
+
+let TETROMINO_ROTATION_IDX_0:   int = 0;
+let TETROMINO_ROTATION_IDX_90:  int = 1;
+let TETROMINO_ROTATION_IDX_180: int = 2;
+let TETROMINO_ROTATION_IDX_270: int = 3;
+
+fn rgb_escape_sequence(r: char, g: char, b: char) str {
+    return "\x1b[38;2;" + r as int as str + ';' + g as int as str + ';' + b as int as str + "m#";
+}
+
+deftype Tetromino_shape_info{
+    table:  []int,
+    symbol: str
+}
+
+let TETROMINO_SHAPE_IDX_SQR:  int = 0;
+let TETROMINO_SHAPE_IDX_Z0:   int = 1;
+let TETROMINO_SHAPE_IDX_Z1:   int = 2;
+let TETROMINO_SHAPE_IDX_L0:   int = 3;
+let TETROMINO_SHAPE_IDX_L1:   int = 4;
+let TETROMINO_SHAPE_IDX_T:    int = 5;
+let TETROMINO_SHAPE_IDX_I:    int = 6;
+let TETROMINO_SHAPE_IDX_NONE: int = 7;
+
+let TETROMINO_SHAPE_INFOS: []Tetromino_shape_info = [
+    Tetromino_shape_info{
+        .table = [
+            1, 1,
+            1, 1
+        ],
+        .symbol = rgb_escape_sequence(255, 255, 0)
+    },
+    Tetromino_shape_info{
+        .table = [
+            0, 1, 1,
+            1, 1, 0,
+            0, 0, 0
+        ],
+        .symbol = rgb_escape_sequence(0, 255, 0)
+    },
+    Tetromino_shape_info{
+        .table = [
+            1, 1, 0,
+            0, 1, 1,
+            0, 0, 0
+        ],
+        .symbol = rgb_escape_sequence(255, 0, 0)
+    },
+    Tetromino_shape_info{
+        .table = [
+            0, 0, 1,
+            1, 1, 1,
+            0, 0, 0
+        ],
+        .symbol = rgb_escape_sequence(255, 127, 0)
+    },
+    Tetromino_shape_info{
+        .table = [
+            1, 0, 0,
+            1, 1, 1,
+            0, 0, 0
+        ],
+        .symbol = rgb_escape_sequence(255, 255, 255)
+    },
+    Tetromino_shape_info{
+        .table = [
+            0, 1, 0,
+            1, 1, 1,
+            0, 0, 0
+        ],
+        .symbol = rgb_escape_sequence(255, 0, 255)
+    },
+    Tetromino_shape_info{
+        .table = [
+            0, 0, 0, 0,
+            1, 1, 1, 1,
+            0, 0, 0, 0,
+            0, 0, 0, 0
+        ],
+        .symbol = rgb_escape_sequence(0, 255, 255)
+    },
+    Tetromino_shape_info{
+        .table = [],
+        .symbol = " "
+    }
+];
+
+fn rotate_idx(shape_idx: int, rotation_idx: int, x_idx: int, y_idx: int) int {
+    let result: int = 0;
+
+    let side_length: int = len(TETROMINO_SHAPE_INFOS[shape_idx].table) ** 0.5;
+
+    if (rotation_idx == TETROMINO_ROTATION_IDX_0)
+        result = y_idx * side_length + x_idx;
+    else if (rotation_idx == TETROMINO_ROTATION_IDX_90)
+        result = ((side_length - 1) * side_length) + y_idx - side_length * x_idx;
+    else if (rotation_idx == TETROMINO_ROTATION_IDX_180)
+        result = (side_length * side_length - 1) - side_length * y_idx - x_idx;
+    else
+        result = (side_length - 1) - y_idx + side_length * x_idx;
+
+    return result;
+}
+
+fn to_upper(c: char) char { return c - (c >= 'a' and c <= 'z') * ('a' - 'A'); }
+
+deftype Vec2_int{ x: int, y: int }
+
+deftype Tetromino{
+    shape_idx:    int,
+    rotation_idx: int,
+    pos:          Vec2_int
+}
+
+fn tetromino_init() Tetromino {
+    return Tetromino{
+        .shape_idx    = (rand() & ~0x8000000000000000) % TETROMINO_SHAPE_IDX_NONE,
+        .rotation_idx = TETROMINO_ROTATION_IDX_0,
+        .pos          = Vec2_int{.x = TETRIS_WIDTH / 2 - 1, .y = 0}
+    };
+}
+fn tetromino_init_cpy(self: Tetromino) Tetromino {
+    let pos: Vec2_int = self.pos;
+    return Tetromino{
+        .shape_idx    = self.shape_idx,
+        .rotation_idx = self.rotation_idx,
+        .pos          = Vec2_int{.x = pos.x, .y = pos.y}
+    };
+}
+
+fn tetromino_rotate_left(self: Tetromino) void {
+    let temp: int = self.rotation_idx;
+    if (temp != TETROMINO_ROTATION_IDX_0)
+        temp = temp - 1;
+    else
+        temp = TETROMINO_ROTATION_IDX_270;
+    self.rotation_idx = temp;
+}
+fn tetromino_rotate_right(self: Tetromino) void {
+    self.rotation_idx = (self.rotation_idx + 1) % (TETROMINO_ROTATION_IDX_270 + 1);
+}
+
+deftype Tetris{
+    shape_idx_field:      []int,
+    current_tetromino:    Tetromino,
+    next_tetromino:       Tetromino,
+    next_tetromino_table: str
+}
+
+fn tetris_init_next_tetromino_table(self: Tetris) void {
+    let next_tetromino_table: str = "";
+
+    let shape_idx: int = self.next_tetromino.shape_idx;
+
+    let shape_info: Tetromino_shape_info = TETROMINO_SHAPE_INFOS[shape_idx];
+
+    let table:  []int = shape_info.table;
+    let symbol:   str = shape_info.symbol;
+
+    let side_length: int = len(table) ** 0.5;
+
+    for (0..side_length) |y|{
+        for (0..side_length) |x|{
+            if (table[y * side_length + x])
+                next_tetromino_table = next_tetromino_table + symbol;
+            else
+                next_tetromino_table = next_tetromino_table + ' ';
+        }
+        for (side_length..4) |_|
+            next_tetromino_table = next_tetromino_table + ' ';
+        next_tetromino_table = next_tetromino_table + '\n';
+    }
+
+    for (side_length..4) |_|
+        next_tetromino_table = next_tetromino_table + '\n';
+    
+    self.next_tetromino_table = next_tetromino_table;
+}
+
+fn tetris_init() Tetris {
+    let shape_idx_field: []int = [];
+    for (0..TETRIS_WIDTH * TETRIS_HEIGHT) |_|
+        push_back(shape_idx_field, TETROMINO_SHAPE_IDX_NONE);
+    let tetris: Tetris = Tetris{
+        .shape_idx_field      = shape_idx_field,
+        .current_tetromino    = tetromino_init(),
+        .next_tetromino       = tetromino_init(),
+        .next_tetromino_table = ""
+    };
+    tetris_init_next_tetromino_table(tetris);
+    return tetris;
+}
+
+fn tetris_tetromino_fits(self: Tetris, tetromino: Tetromino) bool {
+    let shape_idx:    int = tetromino.shape_idx;
+    let rotation_idx: int = tetromino.rotation_idx;
+
+    let shape_info: Tetromino_shape_info = TETROMINO_SHAPE_INFOS[shape_idx];
+
+    let table: []int = shape_info.table;
+    let shape_idx_field: []int = self.shape_idx_field;
+
+    let side_length: int = len(table) ** 0.5;
+
+    for (0..side_length) |y|{
+        for (0..side_length) |x|{
+            if (table[rotate_idx(shape_idx, rotation_idx, x, y)]){
+                let pos: Vec2_int = tetromino.pos;
+                let x_pos: int = x + pos.x;
+                let y_pos: int = y + pos.y;
+                if (
+                    x_pos < 0 or x_pos >= TETRIS_WIDTH or
+                    y_pos < 0 or y_pos >= TETRIS_HEIGHT or
+                    shape_idx_field[y_pos * TETRIS_WIDTH + x_pos] != TETROMINO_SHAPE_IDX_NONE
+                )
+                    return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+fn tetris_setup_field_as(self: Tetris, shape_idx_as: int) void {
+    let current_tetromino: Tetromino = self.current_tetromino;
+
+    let shape_idx:    int = current_tetromino.shape_idx;
+    let rotation_idx: int = current_tetromino.rotation_idx;
+    
+    let shape_info: Tetromino_shape_info = TETROMINO_SHAPE_INFOS[shape_idx];
+
+    let table: []int = shape_info.table;
+
+    let side_length: int = len(table) ** 0.5;
+
+    let shape_idx_field: []int = self.shape_idx_field;
+
+    for (0..side_length) |y|{
+        for (0..side_length) |x|{
+            if (table[rotate_idx(shape_idx, rotation_idx, x, y)]){
+                let pos: Vec2_int = current_tetromino.pos;
+                shape_idx_field[(y + pos.y) * TETRIS_WIDTH + (x + pos.x)] = shape_idx_as;
+            }
+        }
+    }
+}
+
+fn tetris_row_is_full(self: Tetris, y_idx: int) bool {
+    let shape_idx_field: []int = self.shape_idx_field;
+    for (0..TETRIS_WIDTH) |x|
+        if (shape_idx_field[y_idx * TETRIS_WIDTH + x] == TETROMINO_SHAPE_IDX_NONE)
+            return false;
+    return true;
+}
+
+fn tetris_run(self: Tetris) void {
+    let shape_idx_field: []int = self.shape_idx_field;
+    let current_tetromino: Tetromino = self.current_tetromino;
+
+    let tick: int = 0;
+    while (true) : (tick = tick + 1){
+        let keypress: char = poll_keypress();
+        if (keypress){
+            let keypress_cpy: char = keypress;
+
+            keypress = to_upper(keypress);
+
+            let new_tetromino: Tetromino = tetromino_init_cpy(current_tetromino);
+            let new_tetromino_pos: Vec2_int = new_tetromino.pos;
+            let new_tetromino_pos_x: int = new_tetromino_pos.x;
+            let new_tetromino_pos_y: int = new_tetromino_pos.y;
+
+            if (keypress == 'S')
+                new_tetromino_pos_y = new_tetromino_pos_y + 1;
+            else if (keypress == 'A')
+                new_tetromino_pos_x = new_tetromino_pos_x - 1;
+            else if (keypress == 'D')
+                new_tetromino_pos_x = new_tetromino_pos_x + 1;
+            else if (keypress_cpy == 'r')
+                tetromino_rotate_right(new_tetromino);
+            else if (keypress_cpy == 'R')
+                tetromino_rotate_left(new_tetromino);
+            else if (keypress == ' '){
+                while (true){
+                    new_tetromino_pos.y = new_tetromino_pos_y = new_tetromino_pos_y + 1;
+                    if (not tetris_tetromino_fits(self, new_tetromino))
+                        break;
+                }
+                new_tetromino_pos_y = new_tetromino_pos_y - 1;
+                tick = TETRIS_MOVE_TICK - 1;
+            }
+            else if (keypress == '\x1b')
+                break;
+
+            new_tetromino_pos.x = new_tetromino_pos_x;
+            new_tetromino_pos.y = new_tetromino_pos_y;
+
+            if (tetris_tetromino_fits(self, new_tetromino))
+                self.current_tetromino = current_tetromino = new_tetromino;
+        }
+
+        let reached_end: bool = false;
+        if (not ((tick + 1) % TETRIS_MOVE_TICK)){
+            let current_tetromino_pos: Vec2_int = current_tetromino.pos;
+            current_tetromino_pos.y = current_tetromino_pos.y + 1;
+            reached_end = not tetris_tetromino_fits(self, self.current_tetromino);
+            current_tetromino_pos.y = current_tetromino_pos.y - reached_end;
+        }
+
+        tetris_setup_field_as(self, current_tetromino.shape_idx);
+
+        if (reached_end){
+            while (true){
+                let y_start: int = 0;
+                while (y_start < TETRIS_HEIGHT) : (y_start = y_start + 1)
+                    if (tetris_row_is_full(self, y_start))
+                        break;
+
+                if (y_start >= TETRIS_HEIGHT)
+                    break;
+
+                let y_end: int = y_start + 1;
+                while (y_end < TETRIS_HEIGHT and tetris_row_is_full(self, y_end))
+                    y_end = y_end + 1;
+
+                y_start = y_start * TETRIS_WIDTH;
+                y_end = y_end * TETRIS_WIDTH;
+
+                let diff: int = y_end - y_start;
+
+                while (y_start > 0){
+                    y_start = y_start - 1;
+                    y_end = y_end - 1;
+                    shape_idx_field[y_end] = shape_idx_field[y_start];
+                }
+                for (0..diff) |x|
+                    shape_idx_field[x] = TETROMINO_SHAPE_IDX_NONE;
+            }
+        }
+
+        let table: str = "";
+        for (0..TETRIS_HEIGHT) |y|{
+            table = table + '#';
+            for (0..TETRIS_WIDTH) |x|
+                table = table + TETROMINO_SHAPE_INFOS[shape_idx_field[y * TETRIS_WIDTH + x]].symbol;
+            table = table + "\x1b[0m#\n";
+        }
+        for (0..TETRIS_WIDTH + 2) |_|
+            table = table + '#';
+
+        print(stdout(), "next:\n" + self.next_tetromino_table + "\x1b[0m\n" + table + "\x1b[H", true);
+
+        if (reached_end){
+            self.current_tetromino = current_tetromino = self.next_tetromino;
+            self.next_tetromino = tetromino_init();
+            tetris_init_next_tetromino_table(self);
+            if (not tetris_tetromino_fits(self, current_tetromino))
+                break;
+        }
+        else
+            tetris_setup_field_as(self, TETROMINO_SHAPE_IDX_NONE);
+
+        nsleep(25000000);
+    }
+
+}
+
+fn main() void {
+    restart: while (true){
+        print(stdout(), "\x1b[?25l\x1b[2J\x1b[H", false);
+
+        let tetris: Tetris = tetris_init();
+        tetris_run(tetris);
+
+        print(stdout(), "\x1b[?25h\x1b[0m\x1b[2JDo you wish to restart? (y/n):", true);
+
+        while (true){
+            let keypress: char = to_upper(poll_keypress());
+            if (keypress == 'Y')
+                break;
+            if (keypress == 'N')
+                break restart;
+        }
+    }
+}
+
+main();

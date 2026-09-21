@@ -166,7 +166,6 @@ set_errno(3);
 print(stdout(), "errno: " + get_errno() as str + '\n', true);
 
 return 0;
-/*/
 
 deftype RGB{
     r: char,
@@ -193,3 +192,16 @@ rgb1.r = -1;
 
 rgb_print(rgb1);
 rgb_print(rgb2);
+/*/
+
+/*/
+deftype Foo{
+    f: []float
+}
+
+fn foo() []Foo {
+    return [Foo{.f = [3.14]}];
+}
+
+foo()[0].f[0];
+/*/

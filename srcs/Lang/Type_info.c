@@ -22,8 +22,8 @@ static bool type_info_tag_is_type_id(enum Type_info_tag tag){
 // ------------------------------------------------------------------------------------------------
 
 const Type_info TYPE_INFO_VOID  = {.m_tag = TYPE_INFO_TAG_VOID,  .m_dimensions = 0};
-const Type_info TYPE_INFO_BOOL  = {.m_tag = TYPE_INFO_TAG_CHAR,  .m_dimensions = 0};
-const Type_info TYPE_INFO_CHAR  = {.m_tag = TYPE_INFO_TAG_BOOL,  .m_dimensions = 0};
+const Type_info TYPE_INFO_BOOL  = {.m_tag = TYPE_INFO_TAG_BOOL,  .m_dimensions = 0};
+const Type_info TYPE_INFO_CHAR  = {.m_tag = TYPE_INFO_TAG_CHAR,  .m_dimensions = 0};
 const Type_info TYPE_INFO_INT   = {.m_tag = TYPE_INFO_TAG_INT,   .m_dimensions = 0};
 const Type_info TYPE_INFO_FLOAT = {.m_tag = TYPE_INFO_TAG_FLOAT, .m_dimensions = 0};
 const Type_info TYPE_INFO_STR   = {.m_tag = TYPE_INFO_TAG_STR,   .m_dimensions = 0};

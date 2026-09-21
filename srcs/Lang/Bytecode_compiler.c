@@ -202,7 +202,7 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
             const char *op_code_str;
             Str_view op_code_sv;
 
-            #define op_code_match(op_code_val) \
+            #define match_op_code(op_code_val) \
                 ( \
                     op_code = (op_code_val), \
                     op_code_str = op_code_to_str(op_code), \
@@ -225,19 +225,19 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
             else{
                 enum Op_code_arg_tag arg_tag;
 
-                if (op_code_match(OP_CODE_PUSH)){
+                if (match_op_code(OP_CODE_PUSH)){
                     if (rhs.m_size == 0 || rhs.m_str[0] == ';')
                         return syntax_error("Op code <%s> takes 1 argument", op_code_str);
 
                     if (!vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)op_code}))
                         return OOM_ERROR;
 
-                    const char *rhs_starts_with;
                     bool bool_val;
 
-                    if (str_view_starts_with(rhs, "'") || str_view_starts_with(rhs, "\"")){
+                    if (rhs.m_str[0] == '\'' || rhs.m_str[0] == '"'){
                         char quote = rhs.m_str[0];
-                        const char *quoted_lit_type_str = (quote == '\'') ? "char" : "str";
+                        bool is_single_quote = (quote == '\'');
+                        const char *quoted_lit_type_str = (is_single_quote) ? "char" : "str";
                         
                         usize quote_end_pos = 0;
                         while (++quote_end_pos < rhs.m_size && rhs.m_str[quote_end_pos] != quote)
@@ -259,7 +259,7 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                             case STR_UNESCAPE_ERROR_BAD_ESCAPE_SEQUENCE: return syntax_error("<%s> is escaped incorrectly", quoted_lit_type_str);
                         }
                         
-                        if (quote == '\''){
+                        if (is_single_quote){
                             if (unquoted_sv.m_size == 0 || str_base_size(&unescaped.result) > 1)
                                 return syntax_error("<char> literal must represent 1 character");
                             
@@ -321,18 +321,12 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                                     return OOM_ERROR;
                         }
                     }
-                    else if (
-                        arg_tag = OP_CODE_ARG_TAG_LIST, rhs_starts_with = "[",
-                        str_view_starts_with(rhs, rhs_starts_with) && (
-                            rhs_starts_with = "]", rhs = str_view_trim_left_while(str_view_trim_left(rhs, 1), isspace),
-                            str_view_starts_with(rhs, rhs_starts_with)
-                        )
-                    ){
-                        rhs = str_view_trim_left_while(str_view_trim_prefix(rhs, rhs_starts_with), isspace);
+                    else if (str_view_trim_prefix_in_place(&rhs, "[") && (rhs = str_view_trim_left_while(rhs, isspace), str_view_trim_prefix_in_place(&rhs, "]"))){
+                        rhs = str_view_trim_left_while(rhs, isspace);
                         if (rhs.m_size > 0 && rhs.m_str[0] != ';')
                             return syntax_error("Invalid or more than 1 argument");
 
-                        if (!vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)arg_tag}))
+                        if (!vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)OP_CODE_ARG_TAG_LIST}))
                             return OOM_ERROR;
                     }
                     else if (
@@ -347,10 +341,10 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                             return arg_case_fn_result;
                     }
                     else if (
-                        (bool_val = false, rhs_starts_with = token_type_to_str(TOKEN_TYPE_FALSE), str_view_starts_with(rhs, rhs_starts_with)) ||
-                        (bool_val = true,  rhs_starts_with = token_type_to_str(TOKEN_TYPE_TRUE ), str_view_starts_with(rhs, rhs_starts_with))
+                        (bool_val = false, str_view_trim_prefix_in_place(&rhs, token_type_to_str(TOKEN_TYPE_FALSE))) ||
+                        (bool_val = true,  str_view_trim_prefix_in_place(&rhs, token_type_to_str(TOKEN_TYPE_TRUE )))
                     ){
-                        rhs = str_view_trim_left_while(str_view_trim_prefix(rhs, rhs_starts_with), isspace);
+                        rhs = str_view_trim_left_while(rhs, isspace);
                         if (rhs.m_size > 0 && rhs.m_str[0] != ';')
                             return syntax_error("Invalid or more than 1 argument");
 
@@ -363,7 +357,7 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                     else
                         return syntax_error("Invalid argument <%.*s>", (int)rhs.m_size, rhs.m_str);
                 }
-                else if (op_code_match(OP_CODE_MOV)){
+                else if (match_op_code(OP_CODE_MOV)){
                     if (!vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)op_code}))
                         return OOM_ERROR;
 
@@ -380,7 +374,7 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                     if (arg_case_fn_result.error != COMPILE_ERROR_NONE)
                         return arg_case_fn_result;
                 }
-                else if (op_code_match(OP_CODE_CALL)){
+                else if (match_op_code(OP_CODE_CALL)){
                     if (rhs.m_size == 0 || rhs.m_str[0] == ';')
                         return syntax_error("Op code <%s> takes in a label", op_code_str);
 
@@ -413,7 +407,7 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                                 return OOM_ERROR;
                     }
                 }
-                else if (op_code_match(OP_CODE_POP) || op_code_match(OP_CODE_RET) || op_code_match(OP_CODE_RETV)){
+                else if (match_op_code(OP_CODE_POP) || match_op_code(OP_CODE_RET) || match_op_code(OP_CODE_RETV)){
                     rhs = str_view_trim_right_while(str_view_trim_right(rhs, str_view_trim_left_while_not(rhs, is_semicolon).m_size), isspace);
                     if (rhs.m_size == 0 || !str_view_all_of(rhs, isdigit))
                         return syntax_error("Op code <%s> takes in a positive integer literal", op_code_str);
@@ -429,7 +423,7 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                         if (!vec_base_push_back(&self->bytecode, self->alloc, &pop_count.as_u8s[i]))
                             return OOM_ERROR;
                 }
-                else if (op_code_match(OP_CODE_JMP) || op_code_match(OP_CODE_JMPZ)){
+                else if (match_op_code(OP_CODE_JMP) || match_op_code(OP_CODE_JMPZ)){
                     if (rhs.m_size == 0 || rhs.m_str[0] == ';')
                         return syntax_error("Op code <%s> takes in a label", op_code_str);
 
@@ -456,32 +450,32 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                             return OOM_ERROR;
                 }
                 else if (
-                    op_code_match(OP_CODE_TO_BOOL  ) ||
-                    op_code_match(OP_CODE_TO_CHAR  ) ||
-                    op_code_match(OP_CODE_TO_INT   ) ||
-                    op_code_match(OP_CODE_TO_FLOAT ) ||
-                    op_code_match(OP_CODE_TO_STR   ) ||
-                    op_code_match(OP_CODE_NEG      ) ||
-                    op_code_match(OP_CODE_BNEG     ) ||
-                    op_code_match(OP_CODE_MOV_DEREF) ||
-                    op_code_match(OP_CODE_DEREF    ) ||
-                    op_code_match(OP_CODE_CMP_EQ   ) ||
-                    op_code_match(OP_CODE_CMP_NEQ  ) ||
-                    op_code_match(OP_CODE_CMP_LE   ) ||
-                    op_code_match(OP_CODE_CMP_LEQ  ) ||
-                    op_code_match(OP_CODE_CMP_GE   ) ||
-                    op_code_match(OP_CODE_CMP_GEQ  ) ||
-                    op_code_match(OP_CODE_ADD      ) ||
-                    op_code_match(OP_CODE_SUB      ) ||
-                    op_code_match(OP_CODE_MUL      ) ||
-                    op_code_match(OP_CODE_DIV      ) ||
-                    op_code_match(OP_CODE_REM      ) ||
-                    op_code_match(OP_CODE_POW      ) ||
-                    op_code_match(OP_CODE_SHL      ) ||
-                    op_code_match(OP_CODE_SHR      ) ||
-                    op_code_match(OP_CODE_BAND     ) ||
-                    op_code_match(OP_CODE_BOR      ) ||
-                    op_code_match(OP_CODE_XOR      )
+                    match_op_code(OP_CODE_TO_BOOL  ) ||
+                    match_op_code(OP_CODE_TO_CHAR  ) ||
+                    match_op_code(OP_CODE_TO_INT   ) ||
+                    match_op_code(OP_CODE_TO_FLOAT ) ||
+                    match_op_code(OP_CODE_TO_STR   ) ||
+                    match_op_code(OP_CODE_NEG      ) ||
+                    match_op_code(OP_CODE_BNEG     ) ||
+                    match_op_code(OP_CODE_MOV_DEREF) ||
+                    match_op_code(OP_CODE_DEREF    ) ||
+                    match_op_code(OP_CODE_CMP_EQ   ) ||
+                    match_op_code(OP_CODE_CMP_NEQ  ) ||
+                    match_op_code(OP_CODE_CMP_LE   ) ||
+                    match_op_code(OP_CODE_CMP_LEQ  ) ||
+                    match_op_code(OP_CODE_CMP_GE   ) ||
+                    match_op_code(OP_CODE_CMP_GEQ  ) ||
+                    match_op_code(OP_CODE_ADD      ) ||
+                    match_op_code(OP_CODE_SUB      ) ||
+                    match_op_code(OP_CODE_MUL      ) ||
+                    match_op_code(OP_CODE_DIV      ) ||
+                    match_op_code(OP_CODE_REM      ) ||
+                    match_op_code(OP_CODE_POW      ) ||
+                    match_op_code(OP_CODE_SHL      ) ||
+                    match_op_code(OP_CODE_SHR      ) ||
+                    match_op_code(OP_CODE_BAND     ) ||
+                    match_op_code(OP_CODE_BOR      ) ||
+                    match_op_code(OP_CODE_XOR      )
                 ){
                     if (rhs.m_size > 0 && rhs.m_str[0] != ';')
                         return syntax_error("Op code <%s> takes no arguments", op_code_str);

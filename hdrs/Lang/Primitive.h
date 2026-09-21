@@ -9,6 +9,7 @@ extern "C"{
 #include <stdio.h>
 
 #include "../Allocator/Allocator.h"
+#include "../Data_structure/Ordered_umap.h"
 #include "../Data_structure/Str_base.h"
 #include "../Data_structure/Vec_base.h"
 #include "../Utils/Num.h"
@@ -33,6 +34,7 @@ typedef struct Primitive_list_data{
 } Primitive_list_data;
 
 typedef struct Primitive{
+    Ordered_umap *m_alloc_infos_ptr;
     enum Primitive_tag m_tag;
     union{
         bool m_bool_data;
@@ -54,7 +56,14 @@ typedef struct Primitive_op_result{
     const char *error_info;
 } Primitive_op_result;
 
-void primitive_deinit(const Primitive *self, Allocator alloc);
+typedef struct Primitive_result{
+    Primitive result;
+    bool success;
+} Primitive_result;
+
+Primitive_result primitive_init_str(Ordered_umap *alloc_infos, Str_base *data);
+Primitive_result primitive_init_list(Ordered_umap *alloc_infos, Vec_base *data);
+void primitive_deinit(const Primitive *self);
 
 enum Primitive_print_error{
     PRIMITIVE_PRINT_ERROR_NONE,
@@ -69,39 +78,36 @@ typedef struct Primitive_print_result{
 
 Primitive_print_result primitive_print(const Primitive *self, FILE *file, bool to_flush);
 
-Primitive_op_result primitive_to_bool (Primitive *self, Allocator alloc);
-Primitive_op_result primitive_to_char (Primitive *self, Allocator alloc);
-Primitive_op_result primitive_to_int  (Primitive *self, Allocator alloc);
-Primitive_op_result primitive_to_float(Primitive *self, Allocator alloc);
-Primitive_op_result primitive_to_str  (Primitive *self, Allocator alloc);
+Primitive_op_result primitive_to_bool (Primitive *self);
+Primitive_op_result primitive_to_char (Primitive *self);
+Primitive_op_result primitive_to_int  (Primitive *self);
+Primitive_op_result primitive_to_float(Primitive *self);
+Primitive_op_result primitive_to_str  (Primitive *self);
 
 Primitive_op_result primitive_neg (Primitive *self);
 Primitive_op_result primitive_bneg(Primitive *self);
 
-Primitive_op_result primitive_mov(Primitive *self, Allocator alloc, const Primitive *other);
-Primitive_op_result primitive_mov_deref(Primitive *self, Allocator alloc, const Primitive *idx, const Primitive *other);
+Primitive_op_result primitive_deref  (Primitive *self, const Primitive *other);
+Primitive_op_result primitive_pow    (Primitive *self, const Primitive *other);
+Primitive_op_result primitive_mul    (Primitive *self, const Primitive *other);
+Primitive_op_result primitive_div    (Primitive *self, const Primitive *other);
+Primitive_op_result primitive_rem    (Primitive *self, const Primitive *other);
+Primitive_op_result primitive_add    (Primitive *self, const Primitive *other);
+Primitive_op_result primitive_sub    (Primitive *self, const Primitive *other);
+Primitive_op_result primitive_shl    (Primitive *self, const Primitive *other);
+Primitive_op_result primitive_shr    (Primitive *self, const Primitive *other);
+Primitive_op_result primitive_cmp_le (Primitive *self, const Primitive *other);
+Primitive_op_result primitive_cmp_leq(Primitive *self, const Primitive *other);
+Primitive_op_result primitive_cmp_ge (Primitive *self, const Primitive *other);
+Primitive_op_result primitive_cmp_geq(Primitive *self, const Primitive *other);
+Primitive_op_result primitive_cmp_eq (Primitive *self, const Primitive *other);
+Primitive_op_result primitive_cmp_neq(Primitive *self, const Primitive *other);
+Primitive_op_result primitive_band   (Primitive *self, const Primitive *other);
+Primitive_op_result primitive_xor    (Primitive *self, const Primitive *other);
+Primitive_op_result primitive_bor    (Primitive *self, const Primitive *other);
 
-Primitive_op_result primitive_deref(Primitive *self, Allocator alloc, const Primitive *other);
-
-Primitive_op_result primitive_cmp_eq (Primitive *self, Allocator alloc, const Primitive *other);
-Primitive_op_result primitive_cmp_neq(Primitive *self, Allocator alloc, const Primitive *other);
-Primitive_op_result primitive_cmp_le (Primitive *self, Allocator alloc, const Primitive *other);
-Primitive_op_result primitive_cmp_leq(Primitive *self, Allocator alloc, const Primitive *other);
-Primitive_op_result primitive_cmp_ge (Primitive *self, Allocator alloc, const Primitive *other);
-Primitive_op_result primitive_cmp_geq(Primitive *self, Allocator alloc, const Primitive *other);
-
-Primitive_op_result primitive_add (Primitive *self, Allocator alloc, const Primitive *other);
-Primitive_op_result primitive_sub (Primitive *self, const Primitive *other);
-Primitive_op_result primitive_mul (Primitive *self, const Primitive *other);
-Primitive_op_result primitive_div (Primitive *self, const Primitive *other);
-Primitive_op_result primitive_rem (Primitive *self, const Primitive *other);
-Primitive_op_result primitive_pow (Primitive *self, const Primitive *other);
-
-Primitive_op_result primitive_shl (Primitive *self, const Primitive *other);
-Primitive_op_result primitive_shr (Primitive *self, const Primitive *other);
-Primitive_op_result primitive_band(Primitive *self, const Primitive *other);
-Primitive_op_result primitive_bor (Primitive *self, const Primitive *other);
-Primitive_op_result primitive_xor (Primitive *self, const Primitive *other);
+Primitive_op_result primitive_mov(Primitive *self, const Primitive *other);
+Primitive_op_result primitive_mov_deref(Primitive *self, const Primitive *idx, const Primitive *other);
 
 #ifdef __cplusplus
 }

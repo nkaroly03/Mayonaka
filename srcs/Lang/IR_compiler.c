@@ -38,11 +38,6 @@ typedef struct Var_id_info{
     bool is_global;
 } Var_id_info;
 
-typedef struct While_label_info{
-    const char *break_label_str, *continue_label_str;
-    usize id_count_stack_idx;
-} While_label_info;
-
 typedef struct Type_id_info_maps{
     Ordered_umap_base str_id_map;
     Ordered_umap_base type_info_tag_as_i32_id_map;
@@ -58,6 +53,11 @@ typedef struct Type_id_info{
     enum Type_info_tag type_info_tag_id;
     Ordered_umap_base *field_info_map_ptr;
 } Type_id_info;
+
+typedef struct While_label_info{
+    const char *break_label_str, *continue_label_str;
+    usize id_count_stack_idx;
+} While_label_info;
 
 typedef struct IR_compiler_state{
     Allocator alloc;
@@ -1559,29 +1559,26 @@ const char* op_code_to_str(enum Op_code op_code){
         case OP_CODE_BNEG:      return "bneg";
 
         case OP_CODE_DEREF:     return "deref";
-
-        case OP_CODE_MOV:       return "mov";
-        case OP_CODE_MOV_DEREF: return "mov_deref";
-
-        case OP_CODE_CMP_EQ:    return "cmp_eq";
-        case OP_CODE_CMP_NEQ:   return "cmp_neq";
+        case OP_CODE_POW:       return "pow";
+        case OP_CODE_MUL:       return "mul";
+        case OP_CODE_DIV:       return "div";
+        case OP_CODE_REM:       return "rem";
+        case OP_CODE_ADD:       return "add";
+        case OP_CODE_SUB:       return "sub";
+        case OP_CODE_SHL:       return "shl";
+        case OP_CODE_SHR:       return "shr";
         case OP_CODE_CMP_LE:    return "cmp_le";
         case OP_CODE_CMP_LEQ:   return "cmp_leq";
         case OP_CODE_CMP_GE:    return "cmp_ge";
         case OP_CODE_CMP_GEQ:   return "cmp_geq";
-
-        case OP_CODE_ADD:       return "add";
-        case OP_CODE_SUB:       return "sub";
-        case OP_CODE_MUL:       return "mul";
-        case OP_CODE_DIV:       return "div";
-        case OP_CODE_REM:       return "rem";
-        case OP_CODE_POW:       return "pow";
-
-        case OP_CODE_SHL:       return "shl";
-        case OP_CODE_SHR:       return "shr";
+        case OP_CODE_CMP_EQ:    return "cmp_eq";
+        case OP_CODE_CMP_NEQ:   return "cmp_neq";
         case OP_CODE_BAND:      return "band";
-        case OP_CODE_BOR:       return "bor";
         case OP_CODE_XOR:       return "xor";
+        case OP_CODE_BOR:       return "bor";
+
+        case OP_CODE_MOV:       return "mov";
+        case OP_CODE_MOV_DEREF: return "mov_deref";
 
         default:                return NULL;
     };

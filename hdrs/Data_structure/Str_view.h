@@ -31,6 +31,8 @@ Str_view str_view_trim_right_while_not_in_set(Str_view sv, const char *set);
 
 Str_view str_view_trim_prefix(Str_view sv, const char *prefix);
 Str_view str_view_trim_suffix(Str_view sv, const char *suffix);
+bool str_view_trim_prefix_in_place(Str_view *self, const char *prefix);
+bool str_view_trim_suffix_in_place(Str_view *self, const char *suffix);
 
 bool str_view_starts_with(Str_view sv, const char *prefix);
 bool str_view_ends_with(Str_view sv, const char *suffix);

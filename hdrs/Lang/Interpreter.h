@@ -19,7 +19,7 @@ enum Interpreter_run_error{
 
 typedef struct Interpreter_run_result{
     union{
-        Primitive result;
+        i64 result;
         Str_base error_info;
     };
     enum Interpreter_run_error error;

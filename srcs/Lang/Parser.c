@@ -36,8 +36,9 @@ typedef struct Binding_powers{
 
 static const u8 UNARY_BINDING_POWER = 120;
 
-static bool token_type_binary_op_to_ast_node_type(enum Token_type token_type, enum AST_node_type *out_ast_node_type){
+static bool token_type_non_unary_op_to_ast_node_type(enum Token_type token_type, enum AST_node_type *out_ast_node_type){
     switch (token_type){
+        case TOKEN_TYPE_LPAREN:                *out_ast_node_type = AST_NODE_TYPE_FN_CALL;                 break;
         case TOKEN_TYPE_DOT1:                  *out_ast_node_type = AST_NODE_TYPE_BINARY_OP_MEMBER_ACCESS; break;
         case TOKEN_TYPE_LBRACKET:              *out_ast_node_type = AST_NODE_TYPE_BINARY_OP_SUBSCRIPT;     break;
         case TOKEN_TYPE_ASTERISK2:             *out_ast_node_type = AST_NODE_TYPE_BINARY_OP_POW;           break;
@@ -54,7 +55,7 @@ static bool token_type_binary_op_to_ast_node_type(enum Token_type token_type, en
         case TOKEN_TYPE_GREATER_THAN1:         *out_ast_node_type = AST_NODE_TYPE_BINARY_OP_CMP_GE;        break;
         case TOKEN_TYPE_GREATER_THAN1_EQUALS1: *out_ast_node_type = AST_NODE_TYPE_BINARY_OP_CMP_GEQ;       break;
         case TOKEN_TYPE_EQUALS2:               *out_ast_node_type = AST_NODE_TYPE_BINARY_OP_CMP_EQ;        break;
-        case TOKEN_TYPE_NOT_EQUALS1:           *out_ast_node_type = AST_NODE_TYPE_BINARY_OP_CMP_NEQ;       break;
+        case TOKEN_TYPE_EXCL_EQUALS1:          *out_ast_node_type = AST_NODE_TYPE_BINARY_OP_CMP_NEQ;       break;
         case TOKEN_TYPE_AMPERSAND:             *out_ast_node_type = AST_NODE_TYPE_BINARY_OP_BAND;          break;
         case TOKEN_TYPE_CARET:                 *out_ast_node_type = AST_NODE_TYPE_BINARY_OP_XOR;           break;
         case TOKEN_TYPE_PIPE:                  *out_ast_node_type = AST_NODE_TYPE_BINARY_OP_BOR;           break;
@@ -66,10 +67,11 @@ static bool token_type_binary_op_to_ast_node_type(enum Token_type token_type, en
     return true;
 }
 
-static Binding_powers token_type_binding_powers(enum AST_node_type ast_node_type){
+static Binding_powers ast_node_type_to_binding_powers(enum AST_node_type ast_node_type){
     #define bps_init(lhs_bp, rhs_bp) (Binding_powers){.lhs = lhs_bp, .rhs = rhs_bp}
 
     switch (ast_node_type){
+        case AST_NODE_TYPE_FN_CALL:
         case AST_NODE_TYPE_BINARY_OP_MEMBER_ACCESS:
         case AST_NODE_TYPE_BINARY_OP_SUBSCRIPT:     return bps_init(140, 141); 
 
@@ -388,25 +390,22 @@ Parser_state_parse_result parser_state_parse_arithm_expr(Parser_state *self, u8 
             case TOKEN_TYPE_RBRACE:
             case TOKEN_TYPE_DOT2:
                 goto end;
-
-            case TOKEN_TYPE_LPAREN:
-                if (!vec_base_push_back(&op_node_sub_nodes, self->alloc, &lhs))
-                    return OOM_ERROR;
-                rhs_result = parse_and_push_back_ast_sub_node_arithm_enclosing(op_node, &op_node_sub_nodes, TOKEN_TYPE_RPAREN);
-                if (rhs_result.error != PARSE_ERROR_NONE)
-                    return rhs_result;
-                op_node_type = AST_NODE_TYPE_FN_CALL;
-                break;
-
             default:{
-                if (!token_type_binary_op_to_ast_node_type(op_tok->m_type, &op_node_type))
+                if (!token_type_non_unary_op_to_ast_node_type(op_tok->m_type, &op_node_type))
                     return syntax_error("Found invalid token <%s>", str_base_data_const(&op_tok->m_id));
 
-                Binding_powers bps = token_type_binding_powers(op_node_type);
+                Binding_powers bps = ast_node_type_to_binding_powers(op_node_type);
                 if (bps.lhs < prev_rhs_bp)
                     goto end;
 
-                if (op_node_type == AST_NODE_TYPE_BINARY_OP_SUBSCRIPT){
+                if (op_node_type == AST_NODE_TYPE_FN_CALL){
+                    if (!vec_base_push_back(&op_node_sub_nodes, self->alloc, &lhs))
+                        return OOM_ERROR;
+                    rhs_result = parse_and_push_back_ast_sub_node_arithm_enclosing(op_node, &op_node_sub_nodes, TOKEN_TYPE_RPAREN);
+                    if (rhs_result.error != PARSE_ERROR_NONE)
+                        return rhs_result;
+                }
+                else if (op_node_type == AST_NODE_TYPE_BINARY_OP_SUBSCRIPT){
                     Token *subscript_token = allocator_alloc(self->alloc, Token, 1);
                     Str_base_result subscript_token_id;
                     if (!subscript_token || !(subscript_token_id = str_base_init_raw(self->alloc, "[]")).success)
@@ -419,8 +418,6 @@ Parser_state_parse_result parser_state_parse_arithm_expr(Parser_state *self, u8 
                         if (self->tokens.m_data[self->token_idx].m_type != TOKEN_TYPE_RBRACKET)
                             return syntax_error("<[> must be closed by <]>");
                         ++self->token_idx;
-
-                        op_node_type = AST_NODE_TYPE_BINARY_OP_SUBSCRIPT;
                         op_node->m_token = subscript_token;
                     }
                 }
@@ -432,7 +429,7 @@ Parser_state_parse_result parser_state_parse_arithm_expr(Parser_state *self, u8 
             }
         }
 
-        if (op_tok->m_type != TOKEN_TYPE_LPAREN){
+        if (op_node_type != AST_NODE_TYPE_FN_CALL){
             if (rhs_result.error != PARSE_ERROR_NONE)
                 return rhs_result;
             if (!vec_base_push_back(&op_node_sub_nodes, self->alloc, &lhs) || !vec_base_push_back(&op_node_sub_nodes, self->alloc, &rhs_result.ast_node_ptr))
