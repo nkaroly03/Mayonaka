@@ -205,3 +205,33 @@ fn foo() []Foo {
 
 foo()[0].f[0];
 /*/
+
+deftype Node{
+    parent: []Node,
+    sub_nodes: []Node,
+    val: int
+}
+
+let root: Node = Node{.parent = [], .sub_nodes = [], .val = 0};
+let sub_node1: Node = Node{.parent = [root], .sub_nodes = [], .val = 1};
+let sub_node2: Node = Node{.parent = [root], .sub_nodes = [], .val = 2};
+push_back(root.sub_nodes, sub_node1);
+push_back(root.sub_nodes, sub_node2);
+let sub_node3: Node = Node{.parent = [sub_node1], .sub_nodes = [], .val = 3};
+let sub_node4: Node = Node{.parent = [sub_node1], .sub_nodes = [], .val = 3};
+push_back(sub_node1.sub_nodes, sub_node3);
+push_back(sub_node1.sub_nodes, sub_node4);
+
+fn node_print(self: Node) void {
+    fn node_print_(self: Node, indent: int) void {
+        let stdout: int = stdout();
+        for (0..indent) |_|
+            print(stdout, ' ', false);
+        print(stdout, self.val as str + '\n', true);
+        for (0..len(self.sub_nodes)) |i|
+            node_print_(self.sub_nodes[i], indent + 4);
+    }
+    node_print_(self, 0);
+}
+
+node_print(root);

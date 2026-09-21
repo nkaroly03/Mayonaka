@@ -594,6 +594,8 @@ Primitive_op_result primitive_to_bool(Primitive *self){
         }
         case PRIMITIVE_TAG_LIST:
             return runtime_error("Trying to convert <list> to <bool>");
+        default:
+            unreachable();
     }
 
     *self = (Primitive){.m_alloc_infos_ptr = self->m_alloc_infos_ptr, .m_tag = PRIMITIVE_TAG_BOOL, .m_bool_data = bool_data};
@@ -628,6 +630,8 @@ Primitive_op_result primitive_to_char(Primitive *self){
         }
         case PRIMITIVE_TAG_LIST:
             return runtime_error("Trying to convert <list> to <char>");
+        default:
+            unreachable();
     }
 
     *self = (Primitive){.m_alloc_infos_ptr = self->m_alloc_infos_ptr, .m_tag = PRIMITIVE_TAG_CHAR, .m_char_data = char_data};
@@ -658,6 +662,8 @@ Primitive_op_result primitive_to_int(Primitive *self){
         }
         case PRIMITIVE_TAG_LIST:
             return runtime_error("Trying to convert <list> to <int>");
+        default:
+            unreachable();
     }
 
     *self = (Primitive){.m_alloc_infos_ptr = self->m_alloc_infos_ptr, .m_tag = PRIMITIVE_TAG_INT, .m_int_data = int_data};
@@ -684,6 +690,8 @@ Primitive_op_result primitive_to_float(Primitive *self){
         }
         case PRIMITIVE_TAG_LIST:
             return runtime_error("Trying to convert <list> to <float>");
+        default:
+            unreachable();
     }
 
     *self = (Primitive){.m_alloc_infos_ptr = self->m_alloc_infos_ptr, .m_tag = PRIMITIVE_TAG_FLOAT, .m_float_data = float_data};
@@ -951,7 +959,6 @@ oom_error:
     primitive_deinit(&temp);
     return OOM_ERROR;
 }
-
 
 #define primitive_bin_op_generate(bin_op_type, bin_op) \
     Primitive_op_result primitive_##bin_op_type(Primitive *self, const Primitive *other){ \

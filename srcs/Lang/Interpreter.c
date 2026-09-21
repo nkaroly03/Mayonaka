@@ -58,16 +58,69 @@ typedef struct Interpreter_state{
     Vec_base return_address_stack;
 } Interpreter_state;
 
+static void primitive_tag_reachable(Primitive *self){
+    switch (self->m_tag){
+        case PRIMITIVE_TAG_BOOL:
+        case PRIMITIVE_TAG_CHAR:
+        case PRIMITIVE_TAG_INT:
+        case PRIMITIVE_TAG_FLOAT:
+            break;
+        case PRIMITIVE_TAG_STR:
+            self->m_str_data_ptr->m_ref_count |= USIZE_MSBIT;
+            break;
+        case PRIMITIVE_TAG_LIST:{
+            Primitive_list_data *list_data_ptr = self->m_list_data_ptr;
+            usize *ref_count_ptr = &list_data_ptr->m_ref_count;
+            Vec_base *list_ptr = &list_data_ptr->m_data;
+            if ((*ref_count_ptr & USIZE_MSBIT) == 0){
+                *ref_count_ptr |= USIZE_MSBIT;
+                vec_base_for_each(*list_ptr, it){
+                    primitive_tag_reachable(it);
+                }
+            }
+            break;
+        }
+        default:
+            unreachable();
+    }
+}
+
+static void interpreter_state_gc(Interpreter_state *self){
+    Vec_base *data_stack_ptr = &self->data_stack;
+    vec_base_for_each(*data_stack_ptr, it){
+        primitive_tag_reachable(it);
+    }
+    Ordered_umap *alloc_infos_ptr = &self->alloc_infos;
+    Allocator alloc = alloc_infos_ptr->m_alloc;
+    for (usize i = 0; i < alloc_infos_ptr->m_base.m_keys.m_size; ++i){
+        Umap_pair p = ordered_umap_at_idx(alloc_infos_ptr, i);
+        usize *ref_count_ptr = (usize*)*(const usize*)p.m_key;
+        if ((*ref_count_ptr & USIZE_MSBIT) != 0)
+            *ref_count_ptr &= ~USIZE_MSBIT;
+        else{
+            switch (*(enum Primitive_tag*)p.m_value){
+                case PRIMITIVE_TAG_STR:
+                    str_base_deinit(&((Primitive_str_data*)ref_count_ptr)->m_data, alloc);
+                    allocator_free(alloc, (Primitive_str_data*)ref_count_ptr, 1);
+                    break;
+                case PRIMITIVE_TAG_LIST:
+                    vec_base_deinit(&((Primitive_list_data*)ref_count_ptr)->m_data, alloc);
+                    allocator_free(alloc, (Primitive_list_data*)ref_count_ptr, 1);
+                    break;
+                default:
+                    unreachable();
+            }
+            ordered_umap_erase_idx_discard(alloc_infos_ptr, i--);
+        }
+    }
+}
+
 static void interpreter_state_deinit(Interpreter_state *self){
     Allocator alloc = self->alloc_infos.m_alloc;
     vec_base_deinit(&self->return_address_stack, alloc);
-    while (self->data_stack.m_size > 0){
-        Primitive popped;
-        vec_base_pop_back_to(&self->data_stack, &popped);
-        primitive_deinit(&popped);
-    }
+    vec_base_clear(&self->data_stack);
+    interpreter_state_gc(self);
     vec_base_deinit(&self->data_stack, alloc);
-    ordered_umap_deinit(&self->alloc_infos);
     while (self->file_infos.m_keys.m_size > 0){
         usize key;
         ordered_umap_base_pop_back_to(&self->file_infos, alloc, &key, &(File_info){0});
@@ -76,6 +129,7 @@ static void interpreter_state_deinit(Interpreter_state *self){
             fclose(file);
     }
     ordered_umap_base_deinit(&self->file_infos, alloc);
+    ordered_umap_deinit(&self->alloc_infos);
 }
 
 static Interpreter_run_result interpreter_state_oom_error(Interpreter_state *self){

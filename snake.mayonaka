@@ -172,7 +172,7 @@ while (not stop){
             }
         }
 
-        nsleep(50000000);
+        nsleep(25000000);
     }
 
     print(stdout(), "\x1b[0m\x1b[?25h\x1b[2JDo you wish to restart? (y/n): ", true);
