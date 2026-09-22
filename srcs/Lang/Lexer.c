@@ -255,7 +255,7 @@ Lex_result lex(Arena *arena, const char *path){
 
         enum Str_getline_error getline_error;
         while ((getline_error = str_base_getline(&line, state.alloc, state.file)) == STR_GETLINE_ERROR_NONE)
-            if (!str_base_append_str_base(&lines, state.alloc, &line) || !str_base_push_back(&lines, state.alloc, '\n'))
+            if (!(str_base_append_str_base(&lines, state.alloc, &line) && str_base_push_back(&lines, state.alloc, '\n')))
                 return oom_error();
 
         switch (getline_error){
@@ -346,14 +346,14 @@ Lex_result lex(Arena *arena, const char *path){
                 if (!str_base_append_str_view(&last->m_id, state.alloc, str_view_trim_left(quoted_sv, 1)))
                     return oom_error();
             }
-            else if (
-                !str_base_assign_str_view(&temp.result, state.alloc, quoted_sv) ||
-                !vec_base_push_back(
+            else if (!(
+                str_base_assign_str_view(&temp.result, state.alloc, quoted_sv) &&
+                vec_base_push_back(
                     &state.tokens,
                     state.alloc,
                     &(Token){.m_type = (is_single_quote) ? TOKEN_TYPE_CHAR_LIT : TOKEN_TYPE_STR_LIT, .m_id = temp.result, .m_pos = state.pos}
                 )
-            )
+            ))
                 return oom_error();
 
             state.pos.m_column += quoted_sv.m_size;
@@ -535,7 +535,7 @@ Lex_result lex(Arena *arena, const char *path){
             }
             else{
                 Str_base_result id = str_base_init_str_view(state.alloc, id_sv);
-                if (!id.success || !vec_base_push_back(&state.tokens, state.alloc, &(Token){.m_type = TOKEN_TYPE_ID, .m_id = id.result, .m_pos = state.pos}))
+                if (!(id.success && vec_base_push_back(&state.tokens, state.alloc, &(Token){.m_type = TOKEN_TYPE_ID, .m_id = id.result, .m_pos = state.pos})))
                     return oom_error();
                 usize id_size = str_base_size(&id.result);
                 state.pos.m_column += id_size;

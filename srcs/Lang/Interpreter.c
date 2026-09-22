@@ -272,14 +272,14 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                         Primitive_result primitive_init_result = primitive_init_str(&self->alloc_infos, &(Str_base){0});
                         if (!primitive_init_result.success)
                             return oom_error();
-                        if (
-                            !str_base_assign_str_view(
+                        if (!(
+                            str_base_assign_str_view(
                                 &primitive_init_result.result.m_str_data_ptr->m_data,
                                 self->alloc_infos.m_alloc,
                                 (Str_view){.m_size = i - new_pc, .m_str = (const char*)&self->bytecode.m_data[new_pc]}
-                            ) ||
-                            !vec_base_push_back(&self->data_stack, self->alloc_infos.m_alloc, &primitive_init_result.result)
-                        ){
+                            ) &&
+                            vec_base_push_back(&self->data_stack, self->alloc_infos.m_alloc, &primitive_init_result.result)
+                        )){
                             primitive_deinit(&primitive_init_result.result);
                             return oom_error();
                         }
@@ -352,10 +352,10 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                             primitive_init_result = primitive_init_str(&self->alloc_infos, &(Str_base){0});
                             if (!primitive_init_result.success)
                                 return oom_error();
-                            if (
-                                !str_base_assign_raw(&primitive_init_result.result.m_str_data_ptr->m_data, self->alloc_infos.m_alloc, self->argv[i]) ||
-                                !vec_base_push_back(&argv_ptr->m_list_data_ptr->m_data, self->alloc_infos.m_alloc, &primitive_init_result.result)
-                            ){
+                            if (!(
+                                str_base_assign_raw(&primitive_init_result.result.m_str_data_ptr->m_data, self->alloc_infos.m_alloc, self->argv[i]) &&
+                                vec_base_push_back(&argv_ptr->m_list_data_ptr->m_data, self->alloc_infos.m_alloc, &primitive_init_result.result)
+                            )){
                                 primitive_deinit(&primitive_init_result.result);
                                 return oom_error();
                             }
@@ -845,19 +845,19 @@ Interpreter_run_result interpreter_run(Allocator alloc, U8_slice bytecode, int a
             state.alloc_infos.m_alloc,
             &(usize){(usize)stdin},
             &(File_info){.open_mode = FILE_INFO_OPEN_MODE_READ}
-        ).error == UMAP_INSERT_ERROR_OOM ||
+        ).error != UMAP_INSERT_ERROR_NONE ||
         ordered_umap_base_push_back(
             &state.file_infos,
             state.alloc_infos.m_alloc,
             &(usize){(usize)stdout},
             &(File_info){.open_mode = FILE_INFO_OPEN_MODE_WRITE}
-        ).error == UMAP_INSERT_ERROR_OOM ||
+        ).error != UMAP_INSERT_ERROR_NONE ||
         ordered_umap_base_push_back(
             &state.file_infos,
             state.alloc_infos.m_alloc,
             &(usize){(usize)stderr},
             &(File_info){.open_mode = FILE_INFO_OPEN_MODE_WRITE}
-        ).error == UMAP_INSERT_ERROR_OOM
+        ).error != UMAP_INSERT_ERROR_NONE
     )
         return interpreter_state_oom_error(&state);
 

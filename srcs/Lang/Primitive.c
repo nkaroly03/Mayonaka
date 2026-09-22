@@ -21,7 +21,7 @@
 static const Primitive_op_result  NO_ERROR = {.error = PRIMITIVE_OP_ERROR_NONE};
 static const Primitive_op_result OOM_ERROR = {.error = PRIMITIVE_OP_ERROR_OOM, .error_info = "Out of memory"};
 
-#define runtime_error(error_info_) (Primitive_op_result){.error = PRIMITIVE_OP_ERROR_RUNTIME, .error_info = (error_info_)}
+#define runtime_error(error_info_val) (Primitive_op_result){.error = PRIMITIVE_OP_ERROR_RUNTIME, .error_info = (error_info_val)}
 
 static bool float_to_char_cast_is_safe(f64 f){
     return isfinite((f32)f) && f > -1.0 && f < 256.0;
@@ -881,9 +881,9 @@ Primitive_op_result primitive_add(Primitive *self, const Primitive *other){
                         return OOM_ERROR;
                     temp = primitive_init_result.result;
                     if (
-                        self->m_char_data != 0 && (
-                            !str_base_push_back(&temp.m_str_data_ptr->m_data, alloc, (char)self->m_char_data) ||
-                            !str_base_append_str_base(&temp.m_str_data_ptr->m_data, alloc, &other->m_str_data_ptr->m_data)
+                        self->m_char_data != 0 && !(
+                            str_base_push_back(&temp.m_str_data_ptr->m_data, alloc, (char)self->m_char_data) &&
+                            str_base_append_str_base(&temp.m_str_data_ptr->m_data, alloc, &other->m_str_data_ptr->m_data)
                         )
                     )
                         goto oom_error;
@@ -928,17 +928,18 @@ Primitive_op_result primitive_add(Primitive *self, const Primitive *other){
                         if (!primitive_init_result.success)
                             return OOM_ERROR;
                         temp = primitive_init_result.result;
-                        if (
-                            !str_base_assign_str_base(&temp.m_str_data_ptr->m_data, alloc, &self->m_str_data_ptr->m_data) ||
-                            !str_base_append_str_view(&temp.m_str_data_ptr->m_data, alloc, sv)
-                        )
+                        if (!(
+                            str_base_assign_str_base(&temp.m_str_data_ptr->m_data, alloc, &self->m_str_data_ptr->m_data) &&
+                            str_base_append_str_view(&temp.m_str_data_ptr->m_data, alloc, sv)
+                        ))
                             goto oom_error;
                         primitive_deinit(self);
                     }
                     else if (
-                        temp = *self,
-                        !str_base_assign_str_base(&temp.m_str_data_ptr->m_data, alloc, &self->m_str_data_ptr->m_data) ||
-                        !str_base_append_str_view(&temp.m_str_data_ptr->m_data, alloc, sv)
+                        temp = *self, !(
+                            str_base_assign_str_base(&temp.m_str_data_ptr->m_data, alloc, &self->m_str_data_ptr->m_data) &&
+                            str_base_append_str_view(&temp.m_str_data_ptr->m_data, alloc, sv)
+                        )
                     )
                         return OOM_ERROR;
                     break;

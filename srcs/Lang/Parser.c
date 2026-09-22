@@ -112,7 +112,6 @@ typedef struct Parser_state{
     Allocator alloc;
     Token_slice tokens;
     usize token_idx;
-    Vec_base ast_node_ptrs;
 } Parser_state;
 
 typedef struct Parser_state_parse_result{
@@ -150,7 +149,7 @@ static AST_node* parser_state_ast_node_alloc(Parser_state *self, const Token *to
 
 static bool parser_state_push_back_ast_node_from_token(Parser_state *self, const AST_node *parent, Vec_base *parent_sub_nodes, const Token *tok, enum AST_node_type ast_node_type){
     AST_node *id_node = ast_node_alloc(tok);
-    if (!id_node || !vec_base_push_back(parent_sub_nodes, self->alloc, &id_node))
+    if (!(id_node && vec_base_push_back(parent_sub_nodes, self->alloc, &id_node)))
         return false;
     id_node->m_parent = parent;
     id_node->m_type = ast_node_type;
@@ -302,7 +301,7 @@ Parser_state_parse_result parser_state_parse_arithm_expr(Parser_state *self, u8 
 
                 AST_node *member_id_node = ast_node_alloc(tok);
                 Vec_base member_id_node_sub_nodes = vec_base_init(AST_node*);
-                if (!member_id_node || !vec_base_push_back(&lhs_sub_nodes, self->alloc, &member_id_node))
+                if (!(member_id_node && vec_base_push_back(&lhs_sub_nodes, self->alloc, &member_id_node)))
                     return OOM_ERROR;
 
                 const Token *temp = tok;
@@ -408,7 +407,7 @@ Parser_state_parse_result parser_state_parse_arithm_expr(Parser_state *self, u8 
                 else if (op_node_type == AST_NODE_TYPE_BINARY_OP_SUBSCRIPT){
                     Token *subscript_token = allocator_alloc(self->alloc, Token, 1);
                     Str_base_result subscript_token_id;
-                    if (!subscript_token || !(subscript_token_id = str_base_init_raw(self->alloc, "[]")).success)
+                    if (!(subscript_token && (subscript_token_id = str_base_init_raw(self->alloc, "[]")).success))
                         return OOM_ERROR;
                     *subscript_token = (Token){.m_type = op_tok->m_type, .m_id = subscript_token_id.result, .m_pos = op_tok->m_pos};
 
@@ -432,7 +431,7 @@ Parser_state_parse_result parser_state_parse_arithm_expr(Parser_state *self, u8 
         if (op_node_type != AST_NODE_TYPE_FN_CALL){
             if (rhs_result.error != PARSE_ERROR_NONE)
                 return rhs_result;
-            if (!vec_base_push_back(&op_node_sub_nodes, self->alloc, &lhs) || !vec_base_push_back(&op_node_sub_nodes, self->alloc, &rhs_result.ast_node_ptr))
+            if (!(vec_base_push_back(&op_node_sub_nodes, self->alloc, &lhs) && vec_base_push_back(&op_node_sub_nodes, self->alloc, &rhs_result.ast_node_ptr)))
                 return OOM_ERROR;
             rhs_result.ast_node_ptr->m_parent = op_node;
         }
@@ -532,7 +531,7 @@ Parser_state_parse_result parser_state_parse_and_push_back_ast_sub_node_id_type_
 
         AST_node *id_node = ast_node_alloc(id_tok_it);
         Vec_base id_node_sub_nodes = vec_base_init(AST_node*);
-        if (!id_node || !vec_base_push_back(parent_sub_nodes, self->alloc, &id_node))
+        if (!(id_node && vec_base_push_back(parent_sub_nodes, self->alloc, &id_node)))
             return OOM_ERROR;
 
         ++self->token_idx;
@@ -818,26 +817,26 @@ Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
                 for_to_while_tokens_push_back(&for_to_while_tokens, token_type_to_str((token_type_val)), (token_type_val), for_capture_tok_pos)
             #define for_to_while_id_push_back(id_val) for_to_while_tokens_push_back(&for_to_while_tokens, (id_val), TOKEN_TYPE_ID, for_capture_tok_pos)
 
-            if (
-                !for_to_while_push_back(TOKEN_TYPE_LBRACE)  ||
-                !for_to_while_push_back(TOKEN_TYPE_LET)     ||
-                !for_to_while_id_push_back(start_var)       ||
-                !for_to_while_push_back(TOKEN_TYPE_COLON)   ||
-                !for_to_while_push_back(TOKEN_TYPE_INT)     ||
-                !for_to_while_push_back(TOKEN_TYPE_EQUALS1) 
-            )
+            if (!(
+                for_to_while_push_back(TOKEN_TYPE_LBRACE)  &&
+                for_to_while_push_back(TOKEN_TYPE_LET)     &&
+                for_to_while_id_push_back(start_var)       &&
+                for_to_while_push_back(TOKEN_TYPE_COLON)   &&
+                for_to_while_push_back(TOKEN_TYPE_INT)     &&
+                for_to_while_push_back(TOKEN_TYPE_EQUALS1) 
+            ))
                 return OOM_ERROR;
             for (usize i = for_start_expr_start_pos; i < dot2_pos; ++i)
                 if (!vec_base_push_back(&for_to_while_tokens, self->alloc, &self->tokens.m_data[i]))
                     return OOM_ERROR;
-            if (
-                !for_to_while_push_back(TOKEN_TYPE_SEMICOLON) ||
-                !for_to_while_push_back(TOKEN_TYPE_LET)       ||
-                !for_to_while_id_push_back(end_var)           ||
-                !for_to_while_push_back(TOKEN_TYPE_COLON)     ||
-                !for_to_while_push_back(TOKEN_TYPE_INT)       ||
-                !for_to_while_push_back(TOKEN_TYPE_EQUALS1)
-            )
+            if (!(
+                for_to_while_push_back(TOKEN_TYPE_SEMICOLON) &&
+                for_to_while_push_back(TOKEN_TYPE_LET)       &&
+                for_to_while_id_push_back(end_var)           &&
+                for_to_while_push_back(TOKEN_TYPE_COLON)     &&
+                for_to_while_push_back(TOKEN_TYPE_INT)       &&
+                for_to_while_push_back(TOKEN_TYPE_EQUALS1)
+            ))
                 return OOM_ERROR;
             for (usize i = dot2_pos + 1; i < for_end_expr_end_pos; ++i)
                 if (!vec_base_push_back(&for_to_while_tokens, self->alloc, &self->tokens.m_data[i]))
@@ -845,32 +844,29 @@ Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
             if (!for_to_while_push_back(TOKEN_TYPE_SEMICOLON))
                 return OOM_ERROR;
             if (loop_label_tok_ptr){
-                if (
-                    !for_to_while_id_push_back(str_base_data_const(&loop_label_tok_ptr->m_id)) ||
-                    !for_to_while_push_back(TOKEN_TYPE_COLON)
-                )
+                if (!(for_to_while_id_push_back(str_base_data_const(&loop_label_tok_ptr->m_id)) && for_to_while_push_back(TOKEN_TYPE_COLON)))
                     return OOM_ERROR;
             }
-            if (
-                !for_to_while_push_back(TOKEN_TYPE_WHILE)      ||
-                !for_to_while_push_back(TOKEN_TYPE_LPAREN)     ||
-                !for_to_while_id_push_back(start_var)          ||
-                !for_to_while_push_back(TOKEN_TYPE_LESS_THAN1) ||
-                !for_to_while_id_push_back(end_var)            ||
-                !for_to_while_push_back(TOKEN_TYPE_RPAREN)     ||
-                !for_to_while_push_back(TOKEN_TYPE_LBRACE)     ||
-                !for_to_while_push_back(TOKEN_TYPE_LET)        ||
-                !for_to_while_id_push_back(capture_id)         ||
-                !for_to_while_push_back(TOKEN_TYPE_COLON)      ||
-                !for_to_while_push_back(TOKEN_TYPE_INT)        ||
-                !for_to_while_push_back(TOKEN_TYPE_EQUALS1)    ||
-                !for_to_while_id_push_back(start_var)          ||
-                !for_to_while_push_back(TOKEN_TYPE_SEMICOLON)  ||
-                !for_to_while_id_push_back(start_var)          ||
-                !for_to_while_push_back(TOKEN_TYPE_EQUALS1)    ||
-                !for_to_while_id_push_back(start_var)          ||
-                !for_to_while_push_back(TOKEN_TYPE_PLUS)
-            )
+            if (!(
+                for_to_while_push_back(TOKEN_TYPE_WHILE)      &&
+                for_to_while_push_back(TOKEN_TYPE_LPAREN)     &&
+                for_to_while_id_push_back(start_var)          &&
+                for_to_while_push_back(TOKEN_TYPE_LESS_THAN1) &&
+                for_to_while_id_push_back(end_var)            &&
+                for_to_while_push_back(TOKEN_TYPE_RPAREN)     &&
+                for_to_while_push_back(TOKEN_TYPE_LBRACE)     &&
+                for_to_while_push_back(TOKEN_TYPE_LET)        &&
+                for_to_while_id_push_back(capture_id)         &&
+                for_to_while_push_back(TOKEN_TYPE_COLON)      &&
+                for_to_while_push_back(TOKEN_TYPE_INT)        &&
+                for_to_while_push_back(TOKEN_TYPE_EQUALS1)    &&
+                for_to_while_id_push_back(start_var)          &&
+                for_to_while_push_back(TOKEN_TYPE_SEMICOLON)  &&
+                for_to_while_id_push_back(start_var)          &&
+                for_to_while_push_back(TOKEN_TYPE_EQUALS1)    &&
+                for_to_while_id_push_back(start_var)          &&
+                for_to_while_push_back(TOKEN_TYPE_PLUS)
+            ))
                 return OOM_ERROR;
             if (!for_to_while_tokens_push_back(&for_to_while_tokens, "1", TOKEN_TYPE_INT_LIT, for_capture_tok_pos))
                 return OOM_ERROR;
@@ -880,10 +876,7 @@ Parser_state_parse_result parser_state_parse_expr(Parser_state *self){
                 for (usize i = for_body_start_pos; i < self->token_idx; ++i)
                     if (!vec_base_push_back(&for_to_while_tokens, self->alloc, &self->tokens.m_data[i]))
                         return OOM_ERROR;
-            if (
-                !for_to_while_push_back(TOKEN_TYPE_RBRACE) ||
-                !for_to_while_push_back(TOKEN_TYPE_RBRACE)
-            )
+            if (!(for_to_while_push_back(TOKEN_TYPE_RBRACE) && for_to_while_push_back(TOKEN_TYPE_RBRACE)))
                 return OOM_ERROR;
 
             usize current_token_idx = self->token_idx;
@@ -1093,8 +1086,9 @@ Parse_result parse(Arena *arena, Token_slice tokens){
         .alloc         = arena_allocator(arena),
         .tokens        = tokens,
         .token_idx     = 0,
-        .ast_node_ptrs = vec_base_init(AST_node*)
     };
+
+    Vec_base ast_node_ptrs = vec_base_init(AST_node*);
 
     while (state.token_idx < state.tokens.m_size){
         const Token *tok = &state.tokens.m_data[state.token_idx];
@@ -1102,12 +1096,12 @@ Parse_result parse(Arena *arena, Token_slice tokens){
             Parser_state_parse_result ast_node = parser_state_parse_expr(&state);
             if (ast_node.error != PARSE_ERROR_NONE)
                 return (Parse_result){.error_info = ast_node.error_info, .error = ast_node.error};
-            if (!vec_base_push_back(&state.ast_node_ptrs, state.alloc, &ast_node.ast_node_ptr))
+            if (!vec_base_push_back(&ast_node_ptrs, state.alloc, &ast_node.ast_node_ptr))
                 return (Parse_result){.error = PARSE_ERROR_OOM};
         }
         else
             ++state.token_idx;
     }
 
-    return (Parse_result){.ast_nodes = {.m_size = state.ast_node_ptrs.m_size, .m_data = state.ast_node_ptrs.m_data}, .error = PARSE_ERROR_NONE};
+    return (Parse_result){.ast_nodes = {.m_size = ast_node_ptrs.m_size, .m_data = ast_node_ptrs.m_data}, .error = PARSE_ERROR_NONE};
 }

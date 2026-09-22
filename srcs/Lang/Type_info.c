@@ -72,7 +72,7 @@ Type_info binary_op_type_info_result(enum Binary_op op, Type_info lhs, Type_info
                 if (
                     lhs.m_dimensions == 0 && rhs.m_dimensions == 0 &&
                     type_info_tag_is_arithmetic(lhs.m_tag) && type_info_tag_is_arithmetic(rhs.m_tag) &&
-                    (!type_info_tag_is_int_like(lhs.m_tag) || !type_info_tag_is_int_like(rhs.m_tag))
+                    !(type_info_tag_is_int_like(lhs.m_tag) && type_info_tag_is_int_like(rhs.m_tag))
                 )
                     result = TYPE_INFO_FLOAT;
                 break;
@@ -80,7 +80,7 @@ Type_info binary_op_type_info_result(enum Binary_op op, Type_info lhs, Type_info
             case BINARY_OP_AS:
                 if (
                     lhs.m_dimensions == rhs.m_dimensions && (
-                        lhs.m_tag == rhs.m_tag || (lhs.m_dimensions == 0 && !type_info_tag_is_type_id(lhs.m_tag) && !type_info_tag_is_type_id(rhs.m_tag))
+                        lhs.m_tag == rhs.m_tag || !(lhs.m_dimensions > 0 || type_info_tag_is_type_id(lhs.m_tag) || type_info_tag_is_type_id(rhs.m_tag))
                     )
                 )
                     result = rhs;
@@ -97,7 +97,7 @@ Type_info binary_op_type_info_result(enum Binary_op op, Type_info lhs, Type_info
             case BINARY_OP_ADD:
                 if (lhs.m_dimensions == 0 && rhs.m_dimensions == 0){
                     if (lhs.m_tag == TYPE_INFO_TAG_STR || rhs.m_tag == TYPE_INFO_TAG_STR){
-                        if (lhs.m_tag == rhs.m_tag || (lhs.m_tag == TYPE_INFO_TAG_CHAR || rhs.m_tag == TYPE_INFO_TAG_CHAR))
+                        if (lhs.m_tag == rhs.m_tag || lhs.m_tag == TYPE_INFO_TAG_CHAR || rhs.m_tag == TYPE_INFO_TAG_CHAR)
                             result = TYPE_INFO_STR;
                     }
                     else if (type_info_tag_is_arithmetic(lhs.m_tag) && type_info_tag_is_arithmetic(rhs.m_tag))
