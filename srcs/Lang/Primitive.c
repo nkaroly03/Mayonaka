@@ -104,21 +104,15 @@ static Primitive_op_result primitive_cmp(Primitive *self, const Primitive *other
     if (self->m_tag == PRIMITIVE_TAG_LIST || other->m_tag == PRIMITIVE_TAG_LIST)
         return runtime_error("Trying to use comparison on list(s)");
 
-    bool cmp;
+    bool result;
+
+    int cmp3;
 
     if (self->m_tag == PRIMITIVE_TAG_STR || other->m_tag == PRIMITIVE_TAG_STR){
         if (self->m_tag != PRIMITIVE_TAG_STR || other->m_tag != PRIMITIVE_TAG_STR)
             return runtime_error("Trying to compare <str> to non-str");
 
-        switch (cmp_op){
-            case BIN_OP_CMP_LE:  cmp = cmp_le_Str_base (&self->m_str_data_ptr->m_data, &other->m_str_data_ptr->m_data); break;
-            case BIN_OP_CMP_LEQ: cmp = cmp_leq_Str_base(&self->m_str_data_ptr->m_data, &other->m_str_data_ptr->m_data); break;
-            case BIN_OP_CMP_GE:  cmp = cmp_ge_Str_base (&self->m_str_data_ptr->m_data, &other->m_str_data_ptr->m_data); break;
-            case BIN_OP_CMP_GEQ: cmp = cmp_geq_Str_base(&self->m_str_data_ptr->m_data, &other->m_str_data_ptr->m_data); break;
-            case BIN_OP_CMP_EQ:  cmp = cmp_eq_Str_base (&self->m_str_data_ptr->m_data, &other->m_str_data_ptr->m_data); break;
-            case BIN_OP_CMP_NEQ: cmp = cmp_neq_Str_base(&self->m_str_data_ptr->m_data, &other->m_str_data_ptr->m_data); break;
-            default:             unreachable();
-        }
+        cmp3 = cmp_Str_base(&self->m_str_data_ptr->m_data, &other->m_str_data_ptr->m_data);
 
         primitive_deinit(self);
     }
@@ -136,15 +130,7 @@ static Primitive_op_result primitive_cmp(Primitive *self, const Primitive *other
                     case PRIMITIVE_TAG_INT:
                         (void)primitive_to_int(&lhs_temp);
                         (void)primitive_to_int(&rhs_temp);
-                        switch (cmp_op){
-                            case BIN_OP_CMP_LE:  cmp = cmp_le_i64 (&lhs_temp.m_int_data, &rhs_temp.m_int_data); break;
-                            case BIN_OP_CMP_LEQ: cmp = cmp_leq_i64(&lhs_temp.m_int_data, &rhs_temp.m_int_data); break;
-                            case BIN_OP_CMP_GE:  cmp = cmp_ge_i64 (&lhs_temp.m_int_data, &rhs_temp.m_int_data); break;
-                            case BIN_OP_CMP_GEQ: cmp = cmp_geq_i64(&lhs_temp.m_int_data, &rhs_temp.m_int_data); break;
-                            case BIN_OP_CMP_EQ:  cmp = cmp_eq_i64 (&lhs_temp.m_int_data, &rhs_temp.m_int_data); break;
-                            case BIN_OP_CMP_NEQ: cmp = cmp_neq_i64(&lhs_temp.m_int_data, &rhs_temp.m_int_data); break;
-                            default:             unreachable();
-                        }
+                        cmp3 = cmp_i64(&lhs_temp.m_int_data, &rhs_temp.m_int_data);
                         break;
                     case PRIMITIVE_TAG_FLOAT:
                         (void)primitive_to_float(&lhs_temp);
@@ -156,23 +142,29 @@ static Primitive_op_result primitive_cmp(Primitive *self, const Primitive *other
             case PRIMITIVE_TAG_FLOAT:
                 (void)primitive_to_float(&rhs_temp);
             float_cmp:
-                switch (cmp_op){
-                    case BIN_OP_CMP_LE:  cmp = cmp_le_f64 (&lhs_temp.m_float_data, &rhs_temp.m_float_data); break;
-                    case BIN_OP_CMP_LEQ: cmp = cmp_leq_f64(&lhs_temp.m_float_data, &rhs_temp.m_float_data); break;
-                    case BIN_OP_CMP_GE:  cmp = cmp_ge_f64 (&lhs_temp.m_float_data, &rhs_temp.m_float_data); break;
-                    case BIN_OP_CMP_GEQ: cmp = cmp_geq_f64(&lhs_temp.m_float_data, &rhs_temp.m_float_data); break;
-                    case BIN_OP_CMP_EQ:  cmp = cmp_eq_f64 (&lhs_temp.m_float_data, &rhs_temp.m_float_data); break;
-                    case BIN_OP_CMP_NEQ: cmp = cmp_neq_f64(&lhs_temp.m_float_data, &rhs_temp.m_float_data); break;
-                    default:             unreachable();
+                if (isunordered(lhs_temp.m_float_data, rhs_temp.m_float_data)){
+                    result = (cmp_op == BIN_OP_CMP_NEQ);
+                    goto end;
                 }
+                cmp3 = cmp_f64(&lhs_temp.m_float_data, &rhs_temp.m_float_data);
                 break;
             default:
                 unreachable();
         }
-
     }
 
-    *self = (Primitive){.m_alloc_infos_ptr = self->m_alloc_infos_ptr, .m_tag = PRIMITIVE_TAG_BOOL, .m_bool_data = cmp};
+    switch (cmp_op){
+        case BIN_OP_CMP_LE:  result = (cmp3 <  0); break;
+        case BIN_OP_CMP_LEQ: result = (cmp3 <= 0); break;
+        case BIN_OP_CMP_GE:  result = (cmp3 >  0); break;
+        case BIN_OP_CMP_GEQ: result = (cmp3 >= 0); break;
+        case BIN_OP_CMP_EQ:  result = (cmp3 == 0); break;
+        case BIN_OP_CMP_NEQ: result = (cmp3 != 0); break;
+        default:             unreachable();
+    }
+
+end:
+    *self = (Primitive){.m_alloc_infos_ptr = self->m_alloc_infos_ptr, .m_tag = PRIMITIVE_TAG_BOOL, .m_bool_data = result};
 
     return NO_ERROR;
 }
@@ -266,17 +258,7 @@ static Primitive_op_result primitive_bin_op(Primitive *self, const Primitive *ot
             }
             break;
         case PRIMITIVE_TAG_FLOAT:
-            switch (rhs_temp.m_tag){
-                case PRIMITIVE_TAG_BOOL:
-                case PRIMITIVE_TAG_CHAR:
-                case PRIMITIVE_TAG_INT:
-                    (void)primitive_to_float(&rhs_temp);
-                    break;
-                case PRIMITIVE_TAG_FLOAT:
-                    break;
-                default:
-                    unreachable();
-            }
+            (void)primitive_to_float(&rhs_temp);
             break;
         default:
             unreachable();
@@ -769,7 +751,7 @@ Primitive_op_result primitive_neg(Primitive *self){
     assert(self && "<self> is never null");
 
     switch (self->m_tag){
-        case PRIMITIVE_TAG_BOOL:  self->m_bool_data  = !self->m_bool_data;     break;
+        case PRIMITIVE_TAG_BOOL:  break;
         case PRIMITIVE_TAG_CHAR:  self->m_char_data  = (u8)-self->m_char_data; break;
         case PRIMITIVE_TAG_INT:   self->m_int_data   = -self->m_int_data;      break;
         case PRIMITIVE_TAG_FLOAT: self->m_float_data = -self->m_float_data;    break;
@@ -1183,4 +1165,3 @@ Primitive_op_result primitive_mov_deref(Primitive *self, const Primitive *idx, c
 
     return NO_ERROR;
 }
-

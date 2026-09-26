@@ -33,8 +33,6 @@ Type_info unary_op_type_info_result(enum Unary_op op, Type_info type_info){
 
     if (type_info.m_dimensions == 0){
         switch (op){
-            case UNARY_OP_NONE:
-                break;
             case UNARY_OP_PLUS:
             case UNARY_OP_MINUS:
             case UNARY_OP_NOT:
@@ -56,9 +54,6 @@ Type_info binary_op_type_info_result(enum Binary_op op, Type_info lhs, Type_info
 
     if (type_info_tag_for_bin_op_is_valid(lhs.m_tag) && type_info_tag_for_bin_op_is_valid(rhs.m_tag)){
         switch (op){
-            case BINARY_OP_NONE:
-                break;
-
             case BINARY_OP_SUBSCRIPT:
                 if (rhs.m_dimensions == 0 && type_info_tag_is_int_like(rhs.m_tag)){
                     if (lhs.m_dimensions > 0)

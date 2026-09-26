@@ -359,51 +359,6 @@ Lex_result lex(Arena *arena, const char *path){
             state.pos.m_column += quoted_sv.m_size;
             sv = str_view_trim_left(sv, quoted_sv.m_size);
         }
-        else if (
-            match_punct(TOKEN_TYPE_LPAREN               ) ||
-            match_punct(TOKEN_TYPE_RPAREN               ) ||
-            match_punct(TOKEN_TYPE_LBRACKET             ) ||
-            match_punct(TOKEN_TYPE_RBRACKET             ) ||
-            match_punct(TOKEN_TYPE_LBRACE               ) ||
-            match_punct(TOKEN_TYPE_RBRACE               ) ||
-            match_punct(TOKEN_TYPE_COMMA                ) ||
-            match_punct(TOKEN_TYPE_COLON                ) ||
-            match_punct(TOKEN_TYPE_SEMICOLON            ) ||
-            match_punct(TOKEN_TYPE_DOT2                 ) ||
-            match_punct(TOKEN_TYPE_DOT1                 ) ||
-            match_punct(TOKEN_TYPE_PLUS                 ) ||
-            match_punct(TOKEN_TYPE_MINUS                ) ||
-            match_punct(TOKEN_TYPE_ASTERISK2            ) ||
-            match_punct(TOKEN_TYPE_ASTERISK1            ) ||
-            match_punct(TOKEN_TYPE_SLASH                ) ||
-            match_punct(TOKEN_TYPE_PERCENT              ) ||
-            match_punct(TOKEN_TYPE_LESS_THAN2           ) ||
-            match_punct(TOKEN_TYPE_GREATER_THAN2        ) ||
-            match_punct(TOKEN_TYPE_AMPERSAND            ) ||
-            match_punct(TOKEN_TYPE_PIPE                 ) ||
-            match_punct(TOKEN_TYPE_CARET                ) ||
-            match_punct(TOKEN_TYPE_TILDE                ) ||
-            match_punct(TOKEN_TYPE_EQUALS2              ) ||
-            match_punct(TOKEN_TYPE_EXCL_EQUALS1         ) ||
-            match_punct(TOKEN_TYPE_LESS_THAN1_EQUALS1   ) ||
-            match_punct(TOKEN_TYPE_LESS_THAN1           ) ||
-            match_punct(TOKEN_TYPE_GREATER_THAN1_EQUALS1) ||
-            match_punct(TOKEN_TYPE_GREATER_THAN1        ) ||
-            match_punct(TOKEN_TYPE_EQUALS1              )
-        ){
-            lparen_count   += (punct_token_type == TOKEN_TYPE_LPAREN  );
-            rparen_count   += (punct_token_type == TOKEN_TYPE_RPAREN  );
-            lbracket_count += (punct_token_type == TOKEN_TYPE_LBRACKET);
-            rbracket_count += (punct_token_type == TOKEN_TYPE_RBRACKET);
-            lbrace_count   += (punct_token_type == TOKEN_TYPE_LBRACE  );
-            rbrace_count   += (punct_token_type == TOKEN_TYPE_RBRACE  );
-
-            if (!token_push_back(punct_token_type, punct_token_id))
-                return oom_error();
-
-            usize punct_token_id_len = (usize)strlen(punct_token_id);
-            state.pos.m_column += punct_token_id_len;
-        }
         else if (isdigit(sv.m_str[0])){
             if (sv.m_size >= 2 && (tolower(sv.m_str[1]) == 'x' || tolower(sv.m_str[1]) == 'b')){
                 bool is_hex = (tolower(sv.m_str[1]) == 'x');
@@ -457,8 +412,8 @@ Lex_result lex(Arena *arena, const char *path){
                         char next = sv.m_str[i + 1];
                         if (next == '.')
                             break;
-                        if (!next || next == '_' || sv.m_str[i - 1] == '_' || ++dot_count > 1)
-                            return syntax_error("Digit separator <_> must not come before or after <.>");
+                        if (!isdigit(next) || sv.m_str[i - 1] == '_' || ++dot_count > 1)
+                            return syntax_error("Invalid <float> literal");
                         if (!str_base_push_back(&decimal_buf, state.alloc, '.'))
                             return oom_error();
                     }
@@ -472,23 +427,72 @@ Lex_result lex(Arena *arena, const char *path){
 
                 char *data = str_base_data(&decimal_buf);
 
+                enum Token_type literal_token_type;
+
                 if (dot_count > 0){
                     (void)(errno = 0, strtod(data, NULL));
                     if (errno == ERANGE)
                         return syntax_error("<float> literal out of range");
+                    literal_token_type = TOKEN_TYPE_FLOAT_LIT;
                 }
                 else{
                     u64 temp = (errno = 0, (u64)strtoull(data, NULL, 10));
                     if (errno == ERANGE || temp > I64_MAX)
                         return syntax_error("<int> literal out of range");
+                    literal_token_type = TOKEN_TYPE_INT_LIT;
                 }
 
-                if (!token_push_back((dot_count > 0) ? TOKEN_TYPE_FLOAT_LIT : TOKEN_TYPE_INT_LIT, data))
+                if (!token_push_back(literal_token_type, data))
                     return oom_error();
 
                 state.pos.m_column += i;
                 sv = str_view_trim_left(sv, i);
             }
+        }
+        else if (
+            match_punct(TOKEN_TYPE_LPAREN               ) ||
+            match_punct(TOKEN_TYPE_RPAREN               ) ||
+            match_punct(TOKEN_TYPE_LBRACKET             ) ||
+            match_punct(TOKEN_TYPE_RBRACKET             ) ||
+            match_punct(TOKEN_TYPE_LBRACE               ) ||
+            match_punct(TOKEN_TYPE_RBRACE               ) ||
+            match_punct(TOKEN_TYPE_COMMA                ) ||
+            match_punct(TOKEN_TYPE_COLON                ) ||
+            match_punct(TOKEN_TYPE_SEMICOLON            ) ||
+            match_punct(TOKEN_TYPE_DOT2                 ) ||
+            match_punct(TOKEN_TYPE_DOT1                 ) ||
+            match_punct(TOKEN_TYPE_PLUS                 ) ||
+            match_punct(TOKEN_TYPE_MINUS                ) ||
+            match_punct(TOKEN_TYPE_ASTERISK2            ) ||
+            match_punct(TOKEN_TYPE_ASTERISK1            ) ||
+            match_punct(TOKEN_TYPE_SLASH                ) ||
+            match_punct(TOKEN_TYPE_PERCENT              ) ||
+            match_punct(TOKEN_TYPE_LESS_THAN2           ) ||
+            match_punct(TOKEN_TYPE_GREATER_THAN2        ) ||
+            match_punct(TOKEN_TYPE_AMPERSAND            ) ||
+            match_punct(TOKEN_TYPE_PIPE                 ) ||
+            match_punct(TOKEN_TYPE_CARET                ) ||
+            match_punct(TOKEN_TYPE_TILDE                ) ||
+            match_punct(TOKEN_TYPE_EQUALS2              ) ||
+            match_punct(TOKEN_TYPE_EXCL_EQUALS1         ) ||
+            match_punct(TOKEN_TYPE_LESS_THAN1_EQUALS1   ) ||
+            match_punct(TOKEN_TYPE_LESS_THAN1           ) ||
+            match_punct(TOKEN_TYPE_GREATER_THAN1_EQUALS1) ||
+            match_punct(TOKEN_TYPE_GREATER_THAN1        ) ||
+            match_punct(TOKEN_TYPE_EQUALS1              )
+        ){
+            lparen_count   += (punct_token_type == TOKEN_TYPE_LPAREN  );
+            rparen_count   += (punct_token_type == TOKEN_TYPE_RPAREN  );
+            lbracket_count += (punct_token_type == TOKEN_TYPE_LBRACKET);
+            rbracket_count += (punct_token_type == TOKEN_TYPE_RBRACKET);
+            lbrace_count   += (punct_token_type == TOKEN_TYPE_LBRACE  );
+            rbrace_count   += (punct_token_type == TOKEN_TYPE_RBRACE  );
+
+            if (!token_push_back(punct_token_type, punct_token_id))
+                return oom_error();
+
+            usize punct_token_id_len = (usize)strlen(punct_token_id);
+            state.pos.m_column += punct_token_id_len;
         }
         else if (isalpha(sv.m_str[0]) || sv.m_str[0] == '_'){
             usize id_end_pos = 0;

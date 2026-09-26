@@ -30,12 +30,6 @@ static bool token_type_unary_op_to_ast_node_type(enum Token_type token_type, enu
     return true;
 }
 
-typedef struct Binding_powers{
-    u8 lhs, rhs;
-} Binding_powers;
-
-static const u8 UNARY_BINDING_POWER = 120;
-
 static bool token_type_non_unary_op_to_ast_node_type(enum Token_type token_type, enum AST_node_type *out_ast_node_type){
     switch (token_type){
         case TOKEN_TYPE_LPAREN:                *out_ast_node_type = AST_NODE_TYPE_FN_CALL;                 break;
@@ -67,6 +61,12 @@ static bool token_type_non_unary_op_to_ast_node_type(enum Token_type token_type,
     return true;
 }
 
+typedef struct Binding_powers{
+    u8 lhs, rhs;
+} Binding_powers;
+
+static const u8 UNARY_BINDING_POWER = 120;
+
 static Binding_powers ast_node_type_to_binding_powers(enum AST_node_type ast_node_type){
     #define bps_init(lhs_bp, rhs_bp) (Binding_powers){.lhs = lhs_bp, .rhs = rhs_bp}
 
@@ -77,7 +77,7 @@ static Binding_powers ast_node_type_to_binding_powers(enum AST_node_type ast_nod
 
         case AST_NODE_TYPE_BINARY_OP_POW:           return bps_init(131, 130); 
 
-        case AST_NODE_TYPE_BINARY_OP_AS:            return bps_init(UNARY_BINDING_POWER + 1, UNARY_BINDING_POWER); 
+        case AST_NODE_TYPE_BINARY_OP_AS:            return bps_init(UNARY_BINDING_POWER, UNARY_BINDING_POWER + 1); 
 
         case AST_NODE_TYPE_BINARY_OP_MUL:
         case AST_NODE_TYPE_BINARY_OP_DIV:
@@ -398,7 +398,7 @@ bool parser_state_parse_arithm_expr(Parser_state *self, u8 prev_rhs_bp){
                 }
                 else{
                     ++self->token_idx;
-                    rhs_success = (op_tok->m_type != TOKEN_TYPE_AS) ? parse_arithm_expr(bps.rhs) : parse_type(false);
+                    rhs_success = (op_node_type != AST_NODE_TYPE_BINARY_OP_AS) ? parse_arithm_expr(bps.rhs) : parse_type(false);
                 }
                 break;
             }

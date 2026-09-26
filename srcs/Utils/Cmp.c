@@ -7,6 +7,7 @@
 #include "../../hdrs/Data_structure/Str_base.h"
 #include "../../hdrs/Data_structure/Str_view.h"
 #include "../../hdrs/Utils/Cmp.h"
+#include "../../hdrs/Utils/Num.h"
 
 #define basic_cmp_generate(type) \
     bool cmp_eq_##type(const void *type##_ptr1, const void *type##_ptr2){ \

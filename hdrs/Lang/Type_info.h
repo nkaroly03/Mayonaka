@@ -35,7 +35,6 @@ typedef struct Type_info_slice{
 } Type_info_slice;
 
 enum Unary_op{
-    UNARY_OP_NONE,
     UNARY_OP_PLUS,
     UNARY_OP_MINUS,
     UNARY_OP_BNEG,
@@ -45,7 +44,6 @@ enum Unary_op{
 Type_info unary_op_type_info_result(enum Unary_op op, Type_info type_info);
 
 enum Binary_op{
-    BINARY_OP_NONE,
     BINARY_OP_SUBSCRIPT,
     BINARY_OP_POW,
     BINARY_OP_AS,

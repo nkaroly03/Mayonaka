@@ -583,17 +583,22 @@ static bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *a
 
             *last_type_info_ptr = un_op_result;
 
-            if (un_op == UNARY_OP_BNEG){
-                if (!add_instruction("%s", op_code_to_str(OP_CODE_BNEG)))
-                    return oom_error();
+            switch (un_op){
+                case UNARY_OP_PLUS:
+                    break;
+                case UNARY_OP_MINUS:
+                    if (!add_instruction("%s", op_code_to_str(OP_CODE_NEG)))
+                        return oom_error();
+                    break;
+                case UNARY_OP_NOT:
+                    if (!add_instruction("%s", op_code_to_str(OP_CODE_TO_BOOL)))
+                        return oom_error();
+                    FALLTHROUGH;
+                case UNARY_OP_BNEG:
+                    if (!add_instruction("%s", op_code_to_str(OP_CODE_BNEG)))
+                        return oom_error();
+                    break;
             }
-            else if (
-                un_op != UNARY_OP_PLUS && !(
-                    (un_op != UNARY_OP_NOT || add_instruction("%s", op_code_to_str(OP_CODE_TO_BOOL))) &&
-                    add_instruction("%s", op_code_to_str(OP_CODE_NEG))
-                )
-            )
-                return oom_error();
 
             if (!pop_on_discarded_expression(ast_node))
                 return oom_error();
@@ -718,7 +723,7 @@ static bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *a
                 add_instruction("%s", op_code_to_str(OP_CODE_TO_BOOL)) &&
                 vec_base_push_back(&self->type_info_stack, self->alloc, &lhs_type_info) &&
                 add_instruction("%s " SP_SYMBOL "[-1]", op_code_to_str(OP_CODE_PUSH)) &&
-                (ast_node->m_type != AST_NODE_TYPE_BINARY_OP_OR || add_instruction("%s", op_code_to_str(OP_CODE_NEG))) &&
+                (ast_node->m_type != AST_NODE_TYPE_BINARY_OP_OR || add_instruction("%s", op_code_to_str(OP_CODE_BNEG))) &&
                 (vec_base_pop_back_discard(&self->type_info_stack), add_instruction("%s %s", op_code_to_str(OP_CODE_JMPZ), and_or_label_str_buf)) &&
                 (vec_base_pop_back_discard(&self->type_info_stack), add_instruction("%s 1", op_code_to_str(OP_CODE_POP)))
             ))
