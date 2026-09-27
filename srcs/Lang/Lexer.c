@@ -37,8 +37,6 @@ typedef struct Lexer_state{
     Vec_base tokens;
 } Lexer_state;
 
-#define BIN_DIGIT_MAX_COUNT 64
-#define HEX_DIGIT_MAX_COUNT (BIN_DIGIT_MAX_COUNT / 4)
 #define U64_MAX_STRLEN 20
 
 static const char  MULTI_LINE_COMMENT_SYMBOL[] = "/*/";
@@ -360,41 +358,41 @@ Lex_result lex(Arena *arena, const char *path){
             sv = str_view_trim_left(sv, quoted_sv.m_size);
         }
         else if (isdigit(sv.m_str[0])){
-            if (sv.m_size >= 2 && (tolower(sv.m_str[1]) == 'x' || tolower(sv.m_str[1]) == 'b')){
-                bool is_hex = (tolower(sv.m_str[1]) == 'x');
+            char next_tolowered = (char)tolower(sv.m_str[1]);
+            if (sv.m_str[0] == '0' && (next_tolowered == 'x' || next_tolowered == 'b')){
+                bool is_hex = (next_tolowered == 'x');
 
-                int (*is_fn)(int)     = isxdigit;
-                usize digit_max_count = HEX_DIGIT_MAX_COUNT;
-                int base              = 16;
+                int (*is_fn)(int) = isxdigit;
+                u64 shift_count   = 4;
 
-                if (!is_hex){
-                    is_fn           = is_bin_digit;
-                    digit_max_count = BIN_DIGIT_MAX_COUNT;
-                    base            = 2;
+                if (!is_hex){     
+                    is_fn         = is_bin_digit;
+                    shift_count   = 1;
                 }
 
                 state.pos.m_column += 2;
                 sv = str_view_trim_left(sv, 2);
 
-                if (sv.m_size == 0 || !is_fn(sv.m_str[0]))
+                if (!is_fn(sv.m_str[0]))
                     return syntax_error((is_hex) ? "Hexadecimal prefix followed by non-hex digit(s)" : "Binary prefix followed by non-binary digit(s)");
 
-                char digit_buf[BIN_DIGIT_MAX_COUNT + 1] = {0};
+                u64 sum = 0;
+                u64 mask = ~((U64_MSBIT >> (shift_count - 1)) - 1);
 
-                usize digit_count = 0;
                 usize i = 0;
-                for (; is_fn(sv.m_str[i]) || sv.m_str[i] == '_'; ++i){
-                    if (digit_count >= digit_max_count)
-                        return syntax_error("%s <int> literal out of range", (is_hex) ? "Hexadecimal" : "Binary");
-                    if (sv.m_str[i] != '_')
-                        digit_buf[digit_count++] = sv.m_str[i];
+                for (char c = sv.m_str[i]; is_fn(c) || c == '_'; c = sv.m_str[++i]){
+                    if (c != '_'){
+                        if ((sum & mask) != 0)
+                            return syntax_error("%s <int> literal out of range", (is_hex) ? "Hexadecimal" : "Binary");
+                        sum = (sum << shift_count) + (u64)((isalpha(c)) ? tolower(c) - 'a' + 10 : c - '0');
+                    }
                 }
 
                 if (sv.m_str[i - 1] == '_' || isalnum(sv.m_str[i]))
                     return syntax_error("%s <int> literal followed by digit separator(s) <_> or alphanumeric character(s)", (is_hex) ? "Hexadecimal" : "Binary");
 
                 char int_buf[U64_MAX_STRLEN + 1];
-                sprintf(int_buf, I64_PFMT, (i64)strtoull(digit_buf, NULL, base));
+                sprintf(int_buf, I64_PFMT, (i64)sum);
 
                 if (!token_push_back(TOKEN_TYPE_INT_LIT, int_buf))
                     return oom_error();
@@ -407,18 +405,18 @@ Lex_result lex(Arena *arena, const char *path){
 
                 usize dot_count = 0;
                 usize i = 0;
-                for (; i < sv.m_size && (isdigit(sv.m_str[i]) || sv.m_str[i] == '_' || sv.m_str[i] == '.'); ++i){
-                    if (sv.m_str[i] == '.'){
-                        char next = sv.m_str[i + 1];
-                        if (next == '.')
-                            break;
-                        if (!isdigit(next) || sv.m_str[i - 1] == '_' || ++dot_count > 1)
-                            return syntax_error("Invalid <float> literal");
-                        if (!str_base_push_back(&decimal_buf, state.alloc, '.'))
+                for (char c = sv.m_str[i]; isdigit(c) || c == '_' || c == '.'; c = sv.m_str[++i]){
+                    if (c != '_'){
+                        if (c == '.'){
+                            char next = sv.m_str[i + 1];
+                            if (next == '.')
+                                break;
+                            if (!isdigit(next) || sv.m_str[i - 1] == '_' || ++dot_count > 1)
+                                return syntax_error("Invalid <float> literal");
+                        }
+                        if (!str_base_push_back(&decimal_buf, state.alloc, c))
                             return oom_error();
                     }
-                    else if (isdigit(sv.m_str[i]) && !str_base_push_back(&decimal_buf, state.alloc, sv.m_str[i]))
-                        return oom_error();
                 }
 
                 char temp = sv.m_str[i - 1];
@@ -496,7 +494,7 @@ Lex_result lex(Arena *arena, const char *path){
         }
         else if (isalpha(sv.m_str[0]) || sv.m_str[0] == '_'){
             usize id_end_pos = 0;
-            while (++id_end_pos < sv.m_size && (isalnum(sv.m_str[id_end_pos]) || sv.m_str[id_end_pos] == '_'));
+            while (isalnum(sv.m_str[++id_end_pos]) || sv.m_str[id_end_pos] == '_');
             Str_view id_sv = str_view_trim_right(sv, sv.m_size - id_end_pos);
 
             enum Token_type keyword_token_type;

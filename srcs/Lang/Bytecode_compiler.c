@@ -20,8 +20,8 @@
 
 #include "../../hdrs/Lang/Builtin_fn.h"
 #include "../../hdrs/Lang/Bytecode_compiler.h"
-#include "../../hdrs/Lang/Lexer.h"
 #include "../../hdrs/Lang/IR_compiler.h"
+#include "../../hdrs/Lang/Lexer.h"
 
 // ------------------------------------------------------------------------------------------------
 
@@ -169,7 +169,7 @@ static Bytecode_compile_result bytecode_compiler_state_label_to_str(Bytecode_com
     Str_base label_str = {0};
 
     for (usize i = 0; i < label_sv_cpy.m_size; ++i)
-        if (!isspace(label_sv_cpy.m_str[i]) && !str_base_push_back(&label_str, self->alloc, label_sv_cpy.m_str[i]))
+        if (!(isspace(label_sv_cpy.m_str[i]) || str_base_push_back(&label_str, self->alloc, label_sv_cpy.m_str[i])))
             return OOM_ERROR;
 
     *out_label_str = label_str;
@@ -242,7 +242,6 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                         usize quote_end_pos = 0;
                         while (++quote_end_pos < rhs.m_size && rhs.m_str[quote_end_pos] != quote)
                             quote_end_pos += (rhs.m_str[quote_end_pos] == '\\');
-
                         if (quote_end_pos >= rhs.m_size)
                             return syntax_error("Unclosed <%s> literal", quoted_lit_type_str);
 

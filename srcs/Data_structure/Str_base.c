@@ -72,8 +72,7 @@ static Str_base_unescape_result str_base_unescape(Allocator alloc, const char *r
         else{
             if (size-- == 0)
                 goto bad_escape_sequence_error;
-            char oct_buf[4] = {0};
-            char hex_buf[CHAR_BIT / 4 + 1] = {0};
+            char sum = 0;
             switch (*++raw_str){
                 case '\'':
                 case '"':
@@ -100,28 +99,27 @@ static Str_base_unescape_result str_base_unescape(Allocator alloc, const char *r
                 case '7':
                     ++size;
                     for (usize i = 0; size > 0 && i < 3 && *raw_str >= '0' && *raw_str <= '7'; --size, ++raw_str, ++i){
-                        if (i == 2 && oct_buf[0] > '3')
+                        if ((sum & 0xe0) != 0)
                             goto bad_escape_sequence_error;
-                        oct_buf[i] = *raw_str;
+                        sum = (char)((sum << 3) + (*raw_str - '0'));
                     }
-                    *it = (char)strtol(oct_buf, NULL, 8);
-                    escaped_0 |= !*it;
-                    --raw_str;
-                    break;
+                    goto set_char;
                 case 'x':
                     if (size == 0 || !isxdigit(*++raw_str))
                         goto bad_escape_sequence_error;
-                    for (usize i = 0; size > 0 && isxdigit(*raw_str); --size, ++raw_str, ++i){
-                        if (i == array_size(hex_buf) - 1)
+                    for (; size > 0 && isxdigit(*raw_str); --size, ++raw_str){
+                        if ((sum & 0xf0) != 0)
                             goto bad_escape_sequence_error;
-                        hex_buf[i] = *raw_str;
+                        char c = *raw_str;
+                        sum = (char)((sum << 4) + ((isalpha(c)) ? tolower(c) - 'a' + 10 : c - '0'));
                     }
-                    *it = (char)strtoumax(hex_buf, NULL, 16);
-                    escaped_0 |= !*it;
-                    --raw_str;
-                    break;
+                    goto set_char;
                 default:
                     goto bad_escape_sequence_error;
+                set_char:
+                    *it = sum;
+                    escaped_0 |= !sum;
+                    --raw_str;
             }
         }
     }
