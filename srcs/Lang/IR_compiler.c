@@ -38,11 +38,6 @@ typedef struct Var_id_info{
     bool is_global;
 } Var_id_info;
 
-typedef struct Type_id_info_maps{
-    Ordered_umap_base str_id_map;
-    Ordered_umap_base type_info_tag_as_i32_id_map;
-} Type_id_info_maps;
-
 typedef struct Field_info{
     usize idx;
     Type_info type_info;
@@ -51,8 +46,13 @@ typedef struct Field_info{
 typedef struct Type_id_info{
     Str_base str_id;
     enum Type_info_tag type_info_tag_id;
-    Ordered_umap_base *field_info_map_ptr;
+    const Ordered_umap_base *field_info_map_ptr;
 } Type_id_info;
+
+typedef struct Type_id_info_maps{
+    Ordered_umap_base str_id_map;
+    Ordered_umap_base type_info_tag_as_i32_id_map;
+} Type_id_info_maps;
 
 typedef struct While_label_info{
     const char *break_label_str, *continue_label_str;
@@ -87,13 +87,16 @@ static Str_base_result IR_compiler_state_type_info_to_str_base(IR_compiler_state
 
     const char *type_info_tag_str;
     switch (type_info.m_tag){
-        case TYPE_INFO_TAG_NONE:  unreachable();
-        case TYPE_INFO_TAG_VOID:  type_info_tag_str = "void";  break;
-        case TYPE_INFO_TAG_BOOL:  type_info_tag_str = "bool";  break;
-        case TYPE_INFO_TAG_CHAR:  type_info_tag_str = "char";  break;
-        case TYPE_INFO_TAG_INT:   type_info_tag_str = "int";   break;
-        case TYPE_INFO_TAG_FLOAT: type_info_tag_str = "float"; break;
-        case TYPE_INFO_TAG_STR:   type_info_tag_str = "str";   break;
+        case TYPE_INFO_TAG_NONE:
+            unreachable();
+        case TYPE_INFO_TAG_VOID:
+        case TYPE_INFO_TAG_BOOL:
+        case TYPE_INFO_TAG_CHAR:
+        case TYPE_INFO_TAG_INT:
+        case TYPE_INFO_TAG_FLOAT:
+        case TYPE_INFO_TAG_STR:
+            type_info_tag_str = token_type_to_str((enum Token_type)(TOKEN_TYPE_VOID + (type_info.m_tag - TYPE_INFO_TAG_VOID)));
+            break;
         default:
             type_info_tag_str = str_base_data(
                 &((Type_id_info*)ordered_umap_base_at_key(&self->type_id_info_maps_ptr->type_info_tag_as_i32_id_map, &(i32){(i32)type_info.m_tag}).m_value)->str_id
@@ -400,7 +403,7 @@ static bool IR_compiler_state_init_list_type_info_from_context(IR_compiler_state
             const AST_node *obj_init_node = parent->m_parent;
             if (obj_init_node && obj_init_node->m_type == AST_NODE_TYPE_ATOM_OBJ_INIT){
                 *out_init_list_type_info = (
-                    (Field_info*)ordered_umap_base_at_key(
+                    (Field_info*)ordered_umap_base_at_key_const(
                         ((Type_id_info*)ordered_umap_base_at_key(&self->type_id_info_maps_ptr->str_id_map, &obj_init_node->m_token->m_id).m_value)->field_info_map_ptr,
                         &parent->m_token->m_id
                     ).m_value
@@ -487,7 +490,7 @@ static bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *a
                 const AST_node *field_id_node = ast_node->m_sub_nodes.m_data[i];
                 const AST_node *field_expr_node = field_id_node->m_sub_nodes.m_data[0];
 
-                Field_info *field_info_ptr = ordered_umap_base_at_key(type_id_info_ptr->field_info_map_ptr, &field_id_node->m_token->m_id).m_value;
+                const Field_info *field_info_ptr = ordered_umap_base_at_key_const(type_id_info_ptr->field_info_map_ptr, &field_id_node->m_token->m_id).m_value;
                 if (!field_info_ptr){
                     return syntax_error(
                         field_id_node,
@@ -627,7 +630,7 @@ static bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *a
             if (rhs_node->m_type != AST_NODE_TYPE_ATOM_ID)
                 return syntax_error(rhs_node, "Member access with non-identifier");
 
-            Field_info *field_info_ptr = ordered_umap_base_at_key(type_id_info_ptr->field_info_map_ptr, &rhs_node->m_token->m_id).m_value;
+            const Field_info *field_info_ptr = ordered_umap_base_at_key_const(type_id_info_ptr->field_info_map_ptr, &rhs_node->m_token->m_id).m_value;
             if (!field_info_ptr)
                 return syntax_error(rhs_node, "Use of undeclared field identifier <%s>", str_base_data_const(&rhs_node->m_token->m_id));
 
@@ -753,47 +756,17 @@ static bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *a
 
             bool push_back_after_assignment = false;
             if (ast_node->m_parent){
+                push_back_after_assignment = true;
                 const AST_node *parent = ast_node->m_parent;
                 enum AST_node_type parent_token_type = parent->m_type;
                 switch (parent_token_type){
                     case AST_NODE_TYPE_STATEMENT_IF:
                     case AST_NODE_TYPE_STATEMENT_WHILE:
-                        if (parent->m_sub_nodes.m_data[parent_token_type == AST_NODE_TYPE_STATEMENT_WHILE] != ast_node)
+                        if (parent->m_sub_nodes.m_data[parent_token_type == AST_NODE_TYPE_STATEMENT_WHILE] == ast_node)
                             break;
                         FALLTHROUGH;
-                    case AST_NODE_TYPE_ATOM_OBJ_INIT:
-                    case AST_NODE_TYPE_ATOM_INIT_LIST:
-                    case AST_NODE_TYPE_UNARY_OP_PLUS:
-                    case AST_NODE_TYPE_UNARY_OP_MINUS:
-                    case AST_NODE_TYPE_UNARY_OP_BNEG:
-                    case AST_NODE_TYPE_UNARY_OP_NOT:
-                    case AST_NODE_TYPE_BINARY_OP_MEMBER_ACCESS:
-                    case AST_NODE_TYPE_BINARY_OP_SUBSCRIPT:
-                    case AST_NODE_TYPE_BINARY_OP_POW:
-                    case AST_NODE_TYPE_BINARY_OP_AS:
-                    case AST_NODE_TYPE_BINARY_OP_MUL:
-                    case AST_NODE_TYPE_BINARY_OP_DIV:
-                    case AST_NODE_TYPE_BINARY_OP_REM:
-                    case AST_NODE_TYPE_BINARY_OP_ADD:
-                    case AST_NODE_TYPE_BINARY_OP_SUB:
-                    case AST_NODE_TYPE_BINARY_OP_SHL:
-                    case AST_NODE_TYPE_BINARY_OP_SHR:
-                    case AST_NODE_TYPE_BINARY_OP_CMP_LE:
-                    case AST_NODE_TYPE_BINARY_OP_CMP_LEQ:
-                    case AST_NODE_TYPE_BINARY_OP_CMP_GE:
-                    case AST_NODE_TYPE_BINARY_OP_CMP_GEQ:
-                    case AST_NODE_TYPE_BINARY_OP_CMP_EQ:
-                    case AST_NODE_TYPE_BINARY_OP_CMP_NEQ:
-                    case AST_NODE_TYPE_BINARY_OP_BAND:
-                    case AST_NODE_TYPE_BINARY_OP_XOR:
-                    case AST_NODE_TYPE_BINARY_OP_BOR:
-                    case AST_NODE_TYPE_BINARY_OP_AND:
-                    case AST_NODE_TYPE_BINARY_OP_OR:
-                    case AST_NODE_TYPE_BINARY_OP_ASSIGNMENT:
-                    case AST_NODE_TYPE_FN_CALL:
-                    case AST_NODE_TYPE_DECL_VAR:
-                    case AST_NODE_TYPE_STATEMENT_RETURN:
-                        push_back_after_assignment = true;
+                    case AST_NODE_TYPE_STATEMENT_BLOCK:
+                        push_back_after_assignment = false;
                         break;
                     default:
                         break;
@@ -870,7 +843,7 @@ static bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *a
                     if (member_access_rhs_node->m_type != AST_NODE_TYPE_ATOM_ID)
                         return syntax_error(member_access_rhs_node, "Member access with non-identifier");
 
-                    Field_info *field_info_ptr = ordered_umap_base_at_key(type_id_info_ptr->field_info_map_ptr, &member_access_rhs_node->m_token->m_id).m_value;
+                    const Field_info *field_info_ptr = ordered_umap_base_at_key_const(type_id_info_ptr->field_info_map_ptr, &member_access_rhs_node->m_token->m_id).m_value;
                     if (!field_info_ptr)
                         return syntax_error(member_access_rhs_node, "Use of undeclared field identifier <%s>", str_base_data_const(&member_access_rhs_node->m_token->m_id));
 
@@ -1204,9 +1177,9 @@ static bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *a
                 self->alloc,
                 &type_id_node->m_token->m_id,
                 &(Type_id_info){
-                    .str_id              = type_id_node->m_token->m_id,
-                    .type_info_tag_id    = type_id_type_info_tag,
-                    .field_info_map_ptr  = field_info_map_ptr
+                    .str_id             = type_id_node->m_token->m_id,
+                    .type_info_tag_id   = type_id_type_info_tag,
+                    .field_info_map_ptr = field_info_map_ptr
                 }
             );
             switch (type_insert_result.error){

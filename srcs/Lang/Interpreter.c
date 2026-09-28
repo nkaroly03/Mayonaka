@@ -32,6 +32,8 @@
 
 // ------------------------------------------------------------------------------------------------
 
+#define USIZE_MSB msb(usize)
+
 enum File_info_open_mode{
     FILE_INFO_OPEN_MODE_READ,
     FILE_INFO_OPEN_MODE_READ_EXT,
@@ -66,14 +68,14 @@ static void primitive_tag_reachable(Primitive *self){
         case PRIMITIVE_TAG_FLOAT:
             break;
         case PRIMITIVE_TAG_STR:
-            self->m_str_data_ptr->m_ref_count |= USIZE_MSBIT;
+            self->m_str_data_ptr->m_ref_count |= USIZE_MSB;
             break;
         case PRIMITIVE_TAG_LIST:{
             Primitive_list_data *list_data_ptr = self->m_list_data_ptr;
             usize *ref_count_ptr = &list_data_ptr->m_ref_count;
             Vec_base *list_ptr = &list_data_ptr->m_data;
-            if ((*ref_count_ptr & USIZE_MSBIT) == 0){
-                *ref_count_ptr |= USIZE_MSBIT;
+            if ((*ref_count_ptr & USIZE_MSB) == 0){
+                *ref_count_ptr |= USIZE_MSB;
                 vec_base_for_each(*list_ptr, it){
                     primitive_tag_reachable(it);
                 }
@@ -95,8 +97,8 @@ static void interpreter_state_gc(Interpreter_state *self){
     for (usize i = 0; i < alloc_infos_ptr->m_base.m_keys.m_size; ++i){
         Umap_pair p = ordered_umap_at_idx(alloc_infos_ptr, i);
         usize *ref_count_ptr = (usize*)*(const usize*)p.m_key;
-        if ((*ref_count_ptr & USIZE_MSBIT) != 0)
-            *ref_count_ptr &= ~USIZE_MSBIT;
+        if ((*ref_count_ptr & USIZE_MSB) != 0)
+            *ref_count_ptr &= ~USIZE_MSB;
         else{
             switch (*(enum Primitive_tag*)p.m_value){
                 case PRIMITIVE_TAG_STR:

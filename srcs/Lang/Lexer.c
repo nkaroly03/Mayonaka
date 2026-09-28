@@ -166,7 +166,7 @@ const char* token_type_to_str(enum Token_type token_type){
         case TOKEN_TYPE_AS:                    return "as";
         case TOKEN_TYPE_EQUALS1:               return "=";
         case TOKEN_TYPE_EQUALS2:               return "==";
-        case TOKEN_TYPE_EXCL_EQUALS1:           return "!=";
+        case TOKEN_TYPE_EXCL_EQUALS1:          return "!=";
         case TOKEN_TYPE_LESS_THAN1:            return "<";
         case TOKEN_TYPE_LESS_THAN1_EQUALS1:    return "<=";
         case TOKEN_TYPE_GREATER_THAN1:         return ">";
@@ -377,7 +377,7 @@ Lex_result lex(Arena *arena, const char *path){
                     return syntax_error((is_hex) ? "Hexadecimal prefix followed by non-hex digit(s)" : "Binary prefix followed by non-binary digit(s)");
 
                 u64 sum = 0;
-                u64 mask = ~((U64_MSBIT >> (shift_count - 1)) - 1);
+                u64 mask = ~((msb(u64) >> (shift_count - 1)) - 1);
 
                 usize i = 0;
                 for (char c = sv.m_str[i]; is_fn(c) || c == '_'; c = sv.m_str[++i]){
@@ -532,17 +532,15 @@ Lex_result lex(Arena *arena, const char *path){
             ){
                 if (!token_push_back(keyword_token_type, keyword_token_sv.m_str))
                     return oom_error();
-                state.pos.m_column += id_sv.m_size;
-                sv = str_view_trim_left(sv, id_sv.m_size);
             }
             else{
                 Str_base_result id = str_base_init_str_view(state.alloc, id_sv);
                 if (!(id.success && vec_base_push_back(&state.tokens, state.alloc, &(Token){.m_type = TOKEN_TYPE_ID, .m_id = id.result, .m_pos = state.pos})))
                     return oom_error();
-                usize id_size = str_base_size(&id.result);
-                state.pos.m_column += id_size;
-                sv = str_view_trim_left(sv, id_size);
             }
+
+            state.pos.m_column += id_sv.m_size;
+            sv = str_view_trim_left(sv, id_sv.m_size);
         }
         else{
             Str_base_result temp = str_base_init_fmt(state.alloc, "Found unknown token <%c>", sv.m_str[0]);

@@ -388,7 +388,7 @@ static Primitive_op_result primitive_bin_op(Primitive *self, const Primitive *ot
                     if (rhs_temp.m_int_data > 0){
                         lhs_temp.m_int_data =
                             (lhs_temp.m_int_data >> rhs_temp.m_int_data) |
-                            ((lhs_temp.m_int_data < 0) * (i64)~((U64_MSBIT >> ((u64)rhs_temp.m_int_data - 1)) - 1))
+                            ((lhs_temp.m_int_data < 0) * (i64)~((msb(u64) >> ((u64)rhs_temp.m_int_data - 1)) - 1))
                         ;
                     }
                     break;

@@ -17,13 +17,16 @@
 
 // ------------------------------------------------------------------------------------------------
 
+#define UCHAR_MSB msb(unsigned char)
+#define USIZE_MSB msb(usize)
+
 typedef struct Str_base_info{
     usize capacity;
     char *str;
 } Str_base_info;
 
 static bool str_base_is_alloced(const Str_base *self){
-    return self->m_size_info & USIZE_MSBIT;
+    return self->m_size_info & USIZE_MSB;
 }
 
 static Str_base_info str_base_info(const Str_base *self){
@@ -34,7 +37,7 @@ static Str_base_info str_base_info(const Str_base *self){
 }
 
 static void str_base_set_size(Str_base *self, usize size){
-    self->m_size_info = (self->m_size_info & USIZE_MSBIT) | size;
+    self->m_size_info = (self->m_size_info & USIZE_MSB) | size;
 }
 
 static Str_base_result str_base_init(Allocator alloc, const char *raw_str, usize size){
@@ -46,7 +49,7 @@ static Str_base_result str_base_init(Allocator alloc, const char *raw_str, usize
         if (!location)
             return (Str_base_result){0};
 
-        result.m_size_info |= USIZE_MSBIT;
+        result.m_size_info |= USIZE_MSB;
         result.m_alloced_capacity = size;
         result.m_alloced_str = location;
     }
@@ -99,7 +102,7 @@ static Str_base_unescape_result str_base_unescape(Allocator alloc, const char *r
                 case '7':
                     ++size;
                     for (usize i = 0; size > 0 && i < 3 && *raw_str >= '0' && *raw_str <= '7'; --size, ++raw_str, ++i){
-                        if ((sum & 0xe0) != 0)
+                        if ((sum & ~((UCHAR_MSB >> 2) - 1)) != 0)
                             goto bad_escape_sequence_error;
                         sum = (char)((sum << 3) + (*raw_str - '0'));
                     }
@@ -108,7 +111,7 @@ static Str_base_unescape_result str_base_unescape(Allocator alloc, const char *r
                     if (size == 0 || !isxdigit(*++raw_str))
                         goto bad_escape_sequence_error;
                     for (; size > 0 && isxdigit(*raw_str); --size, ++raw_str){
-                        if ((sum & 0xf0) != 0)
+                        if ((sum & ~((UCHAR_MSB >> 3) - 1)) != 0)
                             goto bad_escape_sequence_error;
                         char c = *raw_str;
                         sum = (char)((sum << 4) + ((isalpha(c)) ? tolower(c) - 'a' + 10 : c - '0'));
@@ -151,7 +154,7 @@ static bool str_base_assign(Str_base *self, Allocator alloc, const char *raw_str
                 if (cap >= STR_BASE_BUFSIZE)
                     allocator_free(alloc, location, cap + 1);
 
-                self->m_size_info |= USIZE_MSBIT;
+                self->m_size_info |= USIZE_MSB;
                 self->m_alloced_str = location = new_location;
             }
             self->m_alloced_capacity = new_cap;
@@ -187,7 +190,7 @@ static bool str_base_append(Str_base *self, Allocator alloc, const char *raw_str
             if (cap >= STR_BASE_BUFSIZE)
                 allocator_free(alloc, location, cap + 1);
 
-            self->m_size_info |= USIZE_MSBIT;
+            self->m_size_info |= USIZE_MSB;
             self->m_alloced_str = location = new_location;
         }
         self->m_alloced_capacity = new_cap;
@@ -305,7 +308,7 @@ usize str_base_empty(const Str_base *self){
 usize str_base_size(const Str_base *self){
     assert(self && "<self> is never null");
 
-    return self->m_size_info & ~USIZE_MSBIT;
+    return self->m_size_info & ~USIZE_MSB;
 }
 usize str_base_capacity(const Str_base *self){
     assert(self && "<self> is never null");
@@ -572,7 +575,7 @@ bool str_base_reserve(Str_base *self, Allocator alloc, usize reserve_size){
             if (cap >= STR_BASE_BUFSIZE)
                 allocator_free(alloc, location, cap + 1);
 
-            self->m_size_info |= USIZE_MSBIT;
+            self->m_size_info |= USIZE_MSB;
             self->m_alloced_str = new_location;
         }
         self->m_alloced_capacity = reserve_size;
@@ -593,7 +596,7 @@ bool str_base_shrink_to_fit(Str_base *self, Allocator alloc){
             if (size < STR_BASE_BUFSIZE){
                 strcpy(self->m_buffered_str, location);
                 allocator_free(alloc, location, cap + 1);
-                self->m_size_info &= ~USIZE_MSBIT;
+                self->m_size_info &= ~USIZE_MSB;
             }
             else{
                 if (!allocator_resize(alloc, location, cap + 1, size + 1)){

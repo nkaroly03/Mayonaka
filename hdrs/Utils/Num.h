@@ -44,17 +44,7 @@ typedef double f64;
 
 #define USIZE_MAX ((usize)UINTPTR_MAX)
 
-#define  U8_LSBIT ( (u8)1ull)
-#define U16_LSBIT ((u16)1ull)
-#define U32_LSBIT ((u32)1ull)
-#define U64_LSBIT ((u64)1ull)
-#define  U8_MSBIT ( (u8)(1ull << (sizeof( u8) * CHAR_BIT - 1)))
-#define U16_MSBIT ((u16)(1ull << (sizeof(u16) * CHAR_BIT - 1)))
-#define U32_MSBIT ((u32)(1ull << (sizeof(u32) * CHAR_BIT - 1)))
-#define U64_MSBIT ((u64)(1ull << (sizeof(u64) * CHAR_BIT - 1)))
-
-#define USIZE_LSBIT ((usize)1ull)
-#define USIZE_MSBIT ((usize)(1ull << (sizeof(usize) * CHAR_BIT - 1)))
+#define msb(int_type) ((int_type)(1ull << (((void)((int_type){0} << 1), sizeof(int_type)) * CHAR_BIT - 1)))
 
 #define  I8_PFMT "%" PRId8
 #define I16_PFMT "%" PRId16
