@@ -64,8 +64,8 @@ static Lex_result lexer_state_syntax_error(Lexer_state *self, const char *fmt, .
         return lexer_state_oom_error(self);
 
     Token_positiion_info pos = self->pos;
-    if (pos.m_line > 0){
-        Str_base_result temp = str_base_init_fmt(self->alloc, "<" USIZE_PFMT ":" USIZE_PFMT ">: %s", pos.m_line, pos.m_column, str_base_data(&error_info.result));
+    if (pos.m_row > 0){
+        Str_base_result temp = str_base_init_fmt(self->alloc, "<" USIZE_PFMT ":" USIZE_PFMT ">: %s", pos.m_row, pos.m_col, str_base_data(&error_info.result));
         if (!temp.success)
             return lexer_state_oom_error(self);
         error_info = temp;
@@ -90,38 +90,38 @@ static const char* token_type_enum_to_str(enum Token_type token_type){
         generate_case(TOKEN_TYPE_INT_LIT);
         generate_case(TOKEN_TYPE_FLOAT_LIT);
         generate_case(TOKEN_TYPE_STR_LIT);
-        generate_case(TOKEN_TYPE_COMMA);
-        generate_case(TOKEN_TYPE_COLON);
-        generate_case(TOKEN_TYPE_SEMICOLON);
         generate_case(TOKEN_TYPE_LPAREN);
         generate_case(TOKEN_TYPE_RPAREN);
         generate_case(TOKEN_TYPE_LBRACKET);
         generate_case(TOKEN_TYPE_RBRACKET);
         generate_case(TOKEN_TYPE_LBRACE);
         generate_case(TOKEN_TYPE_RBRACE);
-        generate_case(TOKEN_TYPE_TILDE);
-        generate_case(TOKEN_TYPE_NOT);
-        generate_case(TOKEN_TYPE_DOT1);
-        generate_case(TOKEN_TYPE_DOT2);
-        generate_case(TOKEN_TYPE_AS);
-        generate_case(TOKEN_TYPE_EQUALS1);
-        generate_case(TOKEN_TYPE_EQUALS2);
-        generate_case(TOKEN_TYPE_EXCL_EQUALS1);
-        generate_case(TOKEN_TYPE_LESS_THAN1);
-        generate_case(TOKEN_TYPE_LESS_THAN1_EQUALS1);
-        generate_case(TOKEN_TYPE_GREATER_THAN1);
-        generate_case(TOKEN_TYPE_GREATER_THAN1_EQUALS1);
+        generate_case(TOKEN_TYPE_COMMA);
+        generate_case(TOKEN_TYPE_COLON);
+        generate_case(TOKEN_TYPE_SEMICOLON);
         generate_case(TOKEN_TYPE_PLUS);
         generate_case(TOKEN_TYPE_MINUS);
+        generate_case(TOKEN_TYPE_TILDE);
+        generate_case(TOKEN_TYPE_DOT2);
+        generate_case(TOKEN_TYPE_DOT1);
+        generate_case(TOKEN_TYPE_ASTERISK2);
         generate_case(TOKEN_TYPE_ASTERISK1);
         generate_case(TOKEN_TYPE_SLASH);
         generate_case(TOKEN_TYPE_PERCENT);
-        generate_case(TOKEN_TYPE_ASTERISK2);
-        generate_case(TOKEN_TYPE_LESS_THAN2);
-        generate_case(TOKEN_TYPE_GREATER_THAN2);
+        generate_case(TOKEN_TYPE_LE2);
+        generate_case(TOKEN_TYPE_LE1_EQ1);
+        generate_case(TOKEN_TYPE_LE1);
+        generate_case(TOKEN_TYPE_GE2);
+        generate_case(TOKEN_TYPE_GE1_EQ1);
+        generate_case(TOKEN_TYPE_GE1);
+        generate_case(TOKEN_TYPE_EQ2);
+        generate_case(TOKEN_TYPE_EQ1);
+        generate_case(TOKEN_TYPE_EXCL_EQ1);
         generate_case(TOKEN_TYPE_AMPERSAND);
-        generate_case(TOKEN_TYPE_PIPE);
         generate_case(TOKEN_TYPE_CARET);
+        generate_case(TOKEN_TYPE_PIPE);
+        generate_case(TOKEN_TYPE_NOT);
+        generate_case(TOKEN_TYPE_AS);
         generate_case(TOKEN_TYPE_AND);
         generate_case(TOKEN_TYPE_OR);
         generate_case(TOKEN_TYPE_FN);
@@ -148,59 +148,59 @@ static const char* token_type_enum_to_str(enum Token_type token_type){
 
 const char* token_type_to_str(enum Token_type token_type){
     switch (token_type){
-        case TOKEN_TYPE_FALSE:                 return "false";
-        case TOKEN_TYPE_TRUE:                  return "true";
-        case TOKEN_TYPE_COMMA:                 return ",";
-        case TOKEN_TYPE_COLON:                 return ":";
-        case TOKEN_TYPE_SEMICOLON:             return ";";
-        case TOKEN_TYPE_LPAREN:                return "(";
-        case TOKEN_TYPE_RPAREN:                return ")";
-        case TOKEN_TYPE_LBRACKET:              return "[";
-        case TOKEN_TYPE_RBRACKET:              return "]";
-        case TOKEN_TYPE_LBRACE:                return "{";
-        case TOKEN_TYPE_RBRACE:                return "}";
-        case TOKEN_TYPE_TILDE:                 return "~";
-        case TOKEN_TYPE_NOT:                   return "not";
-        case TOKEN_TYPE_DOT1:                  return ".";
-        case TOKEN_TYPE_DOT2:                  return "..";
-        case TOKEN_TYPE_AS:                    return "as";
-        case TOKEN_TYPE_EQUALS1:               return "=";
-        case TOKEN_TYPE_EQUALS2:               return "==";
-        case TOKEN_TYPE_EXCL_EQUALS1:          return "!=";
-        case TOKEN_TYPE_LESS_THAN1:            return "<";
-        case TOKEN_TYPE_LESS_THAN1_EQUALS1:    return "<=";
-        case TOKEN_TYPE_GREATER_THAN1:         return ">";
-        case TOKEN_TYPE_GREATER_THAN1_EQUALS1: return ">=";
-        case TOKEN_TYPE_PLUS:                  return "+";
-        case TOKEN_TYPE_MINUS:                 return "-";
-        case TOKEN_TYPE_ASTERISK1:             return "*";
-        case TOKEN_TYPE_SLASH:                 return "/";
-        case TOKEN_TYPE_PERCENT:               return "%";
-        case TOKEN_TYPE_ASTERISK2:             return "**";
-        case TOKEN_TYPE_LESS_THAN2:            return "<<";
-        case TOKEN_TYPE_GREATER_THAN2:         return ">>";
-        case TOKEN_TYPE_AMPERSAND:             return "&";
-        case TOKEN_TYPE_PIPE:                  return "|";
-        case TOKEN_TYPE_CARET:                 return "^";
-        case TOKEN_TYPE_AND:                   return "and";
-        case TOKEN_TYPE_OR:                    return "or";
-        case TOKEN_TYPE_FN:                    return "fn";
-        case TOKEN_TYPE_LET:                   return "let";
-        case TOKEN_TYPE_DEFTYPE:               return "deftype";
-        case TOKEN_TYPE_VOID:                  return "void";
-        case TOKEN_TYPE_BOOL:                  return "bool";
-        case TOKEN_TYPE_CHAR:                  return "char";
-        case TOKEN_TYPE_INT:                   return "int";
-        case TOKEN_TYPE_FLOAT:                 return "float";
-        case TOKEN_TYPE_STR:                   return "str";
-        case TOKEN_TYPE_IF:                    return "if";
-        case TOKEN_TYPE_ELSE:                  return "else";
-        case TOKEN_TYPE_WHILE:                 return "while";
-        case TOKEN_TYPE_FOR:                   return "for";
-        case TOKEN_TYPE_BREAK:                 return "break";
-        case TOKEN_TYPE_CONTINUE:              return "continue";
-        case TOKEN_TYPE_RETURN:                return "return";
-        default:                               return NULL;
+        case TOKEN_TYPE_FALSE:     return "false";
+        case TOKEN_TYPE_TRUE:      return "true";
+        case TOKEN_TYPE_LPAREN:    return "(";
+        case TOKEN_TYPE_RPAREN:    return ")";
+        case TOKEN_TYPE_LBRACKET:  return "[";
+        case TOKEN_TYPE_RBRACKET:  return "]";
+        case TOKEN_TYPE_LBRACE:    return "{";
+        case TOKEN_TYPE_RBRACE:    return "}";
+        case TOKEN_TYPE_COMMA:     return ",";
+        case TOKEN_TYPE_COLON:     return ":";
+        case TOKEN_TYPE_SEMICOLON: return ";";
+        case TOKEN_TYPE_PLUS:      return "+";
+        case TOKEN_TYPE_MINUS:     return "-";
+        case TOKEN_TYPE_TILDE:     return "~";
+        case TOKEN_TYPE_DOT2:      return "..";
+        case TOKEN_TYPE_DOT1:      return ".";
+        case TOKEN_TYPE_ASTERISK2: return "**";
+        case TOKEN_TYPE_ASTERISK1: return "*";
+        case TOKEN_TYPE_SLASH:     return "/";
+        case TOKEN_TYPE_PERCENT:   return "%";
+        case TOKEN_TYPE_LE2:       return "<<";
+        case TOKEN_TYPE_LE1_EQ1:   return "<=";
+        case TOKEN_TYPE_LE1:       return "<";
+        case TOKEN_TYPE_GE2:       return ">>";
+        case TOKEN_TYPE_GE1_EQ1:   return ">=";
+        case TOKEN_TYPE_GE1:       return ">";
+        case TOKEN_TYPE_EQ2:       return "==";
+        case TOKEN_TYPE_EQ1:       return "=";
+        case TOKEN_TYPE_EXCL_EQ1:  return "!=";
+        case TOKEN_TYPE_AMPERSAND: return "&";
+        case TOKEN_TYPE_CARET:     return "^";
+        case TOKEN_TYPE_PIPE:      return "|";
+        case TOKEN_TYPE_NOT:       return "not";
+        case TOKEN_TYPE_AS:        return "as";
+        case TOKEN_TYPE_AND:       return "and";
+        case TOKEN_TYPE_OR:        return "or";
+        case TOKEN_TYPE_FN:        return "fn";
+        case TOKEN_TYPE_LET:       return "let";
+        case TOKEN_TYPE_DEFTYPE:   return "deftype";
+        case TOKEN_TYPE_VOID:      return "void";
+        case TOKEN_TYPE_BOOL:      return "bool";
+        case TOKEN_TYPE_CHAR:      return "char";
+        case TOKEN_TYPE_INT:       return "int";
+        case TOKEN_TYPE_FLOAT:     return "float";
+        case TOKEN_TYPE_STR:       return "str";
+        case TOKEN_TYPE_IF:        return "if";
+        case TOKEN_TYPE_ELSE:      return "else";
+        case TOKEN_TYPE_WHILE:     return "while";
+        case TOKEN_TYPE_FOR:       return "for";
+        case TOKEN_TYPE_BREAK:     return "break";
+        case TOKEN_TYPE_CONTINUE:  return "continue";
+        case TOKEN_TYPE_RETURN:    return "return";
+        default:                   return NULL;
     }
 }
 
@@ -216,8 +216,8 @@ i64 token_slice_print(Token_slice tokens_slice, FILE *file){
             "{.type = %s, .id = %s, .pos = <" USIZE_PFMT ":" USIZE_PFMT ">}\n",
             token_type_enum_to_str(t->m_type),
             str_base_data_const(&t->m_id),
-            t->m_pos.m_line,
-            t->m_pos.m_column
+            t->m_pos.m_row,
+            t->m_pos.m_col
         );
         if (temp < 0)
             return temp;
@@ -234,7 +234,7 @@ Lex_result lex(Arena *arena, const char *path){
     Lexer_state state = {
         .alloc       = arena_allocator(arena),
         .file        = fopen(path, "r"),
-        .pos         = {.m_line = 1, .m_column = 1},
+        .pos         = {.m_row = 1, .m_col = 1},
         .tokens      = vec_base_init(Token)
     };
     #define oom_error() lexer_state_oom_error(&state)
@@ -278,34 +278,25 @@ Lex_result lex(Arena *arena, const char *path){
 
     for (
         Str_view sv = str_base_to_str_view(&lines), sv_temp;
-        (sv_temp = str_view_trim_left_while(sv, is_space_not_newline), state.pos.m_column += (sv.m_size - sv_temp.m_size), sv = sv_temp).m_size > 0;
+        (sv_temp = str_view_trim_left_while(sv, is_space_not_newline), state.pos.m_col += (sv.m_size - sv_temp.m_size), sv = sv_temp).m_size > 0;
     ){
-        enum Token_type punct_token_type;
-        const char *punct_token_id;
-        #define match_punct(punct_token_type_val) \
-            ( \
-                punct_token_type = (punct_token_type_val), \
-                punct_token_id = token_type_to_str(punct_token_type), \
-                str_view_trim_prefix_in_place(&sv, punct_token_id) \
-            )
-
         if (str_view_trim_prefix_in_place(&sv, "\n"))
-            state.pos = (Token_positiion_info){.m_line = state.pos.m_line + 1, .m_column = 1};
+            state.pos = (Token_positiion_info){.m_row = state.pos.m_row + 1, .m_col = 1};
         else if (str_view_trim_prefix_in_place(&sv, MULTI_LINE_COMMENT_SYMBOL)){
             Token_positiion_info new_pos = state.pos;
-            new_pos.m_column += MULTI_LINE_COMMENT_SYMBOL_SIZE;
+            new_pos.m_col += MULTI_LINE_COMMENT_SYMBOL_SIZE;
 
             usize i = 0;
             for (; i < sv.m_size && !str_view_starts_with(str_view_trim_left(sv, i), MULTI_LINE_COMMENT_SYMBOL); ++i){
                 if (sv.m_str[i] == '\n')
-                    new_pos = (Token_positiion_info){.m_line = new_pos.m_line + 1, .m_column = 0};
-                ++new_pos.m_column;
+                    new_pos = (Token_positiion_info){.m_row = new_pos.m_row + 1, .m_col = 0};
+                ++new_pos.m_col;
             }
             if (i >= sv.m_size)
                 return syntax_error("Unclosed multi line comment");
 
             state.pos = new_pos;
-            state.pos.m_column += MULTI_LINE_COMMENT_SYMBOL_SIZE;
+            state.pos.m_col += MULTI_LINE_COMMENT_SYMBOL_SIZE;
 
             sv = str_view_trim_left(sv, i + MULTI_LINE_COMMENT_SYMBOL_SIZE);
         }
@@ -354,7 +345,7 @@ Lex_result lex(Arena *arena, const char *path){
             ))
                 return oom_error();
 
-            state.pos.m_column += quoted_sv.m_size;
+            state.pos.m_col += quoted_sv.m_size;
             sv = str_view_trim_left(sv, quoted_sv.m_size);
         }
         else if (isdigit(sv.m_str[0])){
@@ -370,7 +361,7 @@ Lex_result lex(Arena *arena, const char *path){
                     shift_count   = 1;
                 }
 
-                state.pos.m_column += 2;
+                state.pos.m_col += 2;
                 sv = str_view_trim_left(sv, 2);
 
                 if (!is_fn(sv.m_str[0]))
@@ -397,7 +388,7 @@ Lex_result lex(Arena *arena, const char *path){
                 if (!token_push_back(TOKEN_TYPE_INT_LIT, int_buf))
                     return oom_error();
 
-                state.pos.m_column += i;
+                state.pos.m_col += i;
                 sv = str_view_trim_left(sv, i);
             }
             else{
@@ -443,42 +434,56 @@ Lex_result lex(Arena *arena, const char *path){
                 if (!token_push_back(literal_token_type, data))
                     return oom_error();
 
-                state.pos.m_column += i;
+                state.pos.m_col += i;
                 sv = str_view_trim_left(sv, i);
             }
         }
-        else if (
-            match_punct(TOKEN_TYPE_LPAREN               ) ||
-            match_punct(TOKEN_TYPE_RPAREN               ) ||
-            match_punct(TOKEN_TYPE_LBRACKET             ) ||
-            match_punct(TOKEN_TYPE_RBRACKET             ) ||
-            match_punct(TOKEN_TYPE_LBRACE               ) ||
-            match_punct(TOKEN_TYPE_RBRACE               ) ||
-            match_punct(TOKEN_TYPE_COMMA                ) ||
-            match_punct(TOKEN_TYPE_COLON                ) ||
-            match_punct(TOKEN_TYPE_SEMICOLON            ) ||
-            match_punct(TOKEN_TYPE_DOT2                 ) ||
-            match_punct(TOKEN_TYPE_DOT1                 ) ||
-            match_punct(TOKEN_TYPE_PLUS                 ) ||
-            match_punct(TOKEN_TYPE_MINUS                ) ||
-            match_punct(TOKEN_TYPE_ASTERISK2            ) ||
-            match_punct(TOKEN_TYPE_ASTERISK1            ) ||
-            match_punct(TOKEN_TYPE_SLASH                ) ||
-            match_punct(TOKEN_TYPE_PERCENT              ) ||
-            match_punct(TOKEN_TYPE_LESS_THAN2           ) ||
-            match_punct(TOKEN_TYPE_GREATER_THAN2        ) ||
-            match_punct(TOKEN_TYPE_AMPERSAND            ) ||
-            match_punct(TOKEN_TYPE_PIPE                 ) ||
-            match_punct(TOKEN_TYPE_CARET                ) ||
-            match_punct(TOKEN_TYPE_TILDE                ) ||
-            match_punct(TOKEN_TYPE_EQUALS2              ) ||
-            match_punct(TOKEN_TYPE_EXCL_EQUALS1         ) ||
-            match_punct(TOKEN_TYPE_LESS_THAN1_EQUALS1   ) ||
-            match_punct(TOKEN_TYPE_LESS_THAN1           ) ||
-            match_punct(TOKEN_TYPE_GREATER_THAN1_EQUALS1) ||
-            match_punct(TOKEN_TYPE_GREATER_THAN1        ) ||
-            match_punct(TOKEN_TYPE_EQUALS1              )
-        ){
+        else if (!isalpha(sv.m_str[0]) && sv.m_str[0] != '_'){
+            enum Token_type punct_token_type;
+            const char *punct_token_id;
+            #define match_punct(punct_token_type_val) \
+                ( \
+                    punct_token_type = (punct_token_type_val), \
+                    punct_token_id = token_type_to_str(punct_token_type), \
+                    str_view_trim_prefix_in_place(&sv, punct_token_id) \
+                )
+
+            if (!(
+                match_punct(TOKEN_TYPE_LPAREN   ) ||
+                match_punct(TOKEN_TYPE_RPAREN   ) ||
+                match_punct(TOKEN_TYPE_LBRACKET ) ||
+                match_punct(TOKEN_TYPE_RBRACKET ) ||
+                match_punct(TOKEN_TYPE_LBRACE   ) ||
+                match_punct(TOKEN_TYPE_RBRACE   ) ||
+                match_punct(TOKEN_TYPE_COMMA    ) ||
+                match_punct(TOKEN_TYPE_COLON    ) ||
+                match_punct(TOKEN_TYPE_SEMICOLON) ||
+                match_punct(TOKEN_TYPE_PLUS     ) ||
+                match_punct(TOKEN_TYPE_MINUS    ) ||
+                match_punct(TOKEN_TYPE_TILDE    ) ||
+                match_punct(TOKEN_TYPE_DOT2     ) ||
+                match_punct(TOKEN_TYPE_DOT1     ) ||
+                match_punct(TOKEN_TYPE_ASTERISK2) ||
+                match_punct(TOKEN_TYPE_ASTERISK1) ||
+                match_punct(TOKEN_TYPE_SLASH    ) ||
+                match_punct(TOKEN_TYPE_PERCENT  ) ||
+                match_punct(TOKEN_TYPE_LE2      ) ||
+                match_punct(TOKEN_TYPE_LE1_EQ1  ) ||
+                match_punct(TOKEN_TYPE_LE1      ) ||
+                match_punct(TOKEN_TYPE_GE2      ) ||
+                match_punct(TOKEN_TYPE_GE1_EQ1  ) ||
+                match_punct(TOKEN_TYPE_GE1      ) ||
+                match_punct(TOKEN_TYPE_EQ2      ) ||
+                match_punct(TOKEN_TYPE_EQ1      ) ||
+                match_punct(TOKEN_TYPE_EXCL_EQ1 ) ||
+                match_punct(TOKEN_TYPE_AMPERSAND) ||
+                match_punct(TOKEN_TYPE_CARET    ) ||
+                match_punct(TOKEN_TYPE_PIPE     )
+            )){
+                Str_base_result temp = str_base_init_fmt(state.alloc, "Found unknown token <%c>", sv.m_str[0]);
+                return (temp.success) ? syntax_error(str_base_data(&temp.result)) : oom_error();
+            }
+
             lparen_count   += (punct_token_type == TOKEN_TYPE_LPAREN  );
             rparen_count   += (punct_token_type == TOKEN_TYPE_RPAREN  );
             lbracket_count += (punct_token_type == TOKEN_TYPE_LBRACKET);
@@ -490,9 +495,9 @@ Lex_result lex(Arena *arena, const char *path){
                 return oom_error();
 
             usize punct_token_id_len = (usize)strlen(punct_token_id);
-            state.pos.m_column += punct_token_id_len;
+            state.pos.m_col += punct_token_id_len;
         }
-        else if (isalpha(sv.m_str[0]) || sv.m_str[0] == '_'){
+        else{
             usize id_end_pos = 0;
             while (isalnum(sv.m_str[++id_end_pos]) || sv.m_str[id_end_pos] == '_');
             Str_view id_sv = str_view_trim_right(sv, sv.m_size - id_end_pos);
@@ -509,10 +514,10 @@ Lex_result lex(Arena *arena, const char *path){
             if (
                 match_keyword(TOKEN_TYPE_FALSE   ) ||
                 match_keyword(TOKEN_TYPE_TRUE    ) ||
+                match_keyword(TOKEN_TYPE_NOT     ) ||
                 match_keyword(TOKEN_TYPE_AS      ) ||
                 match_keyword(TOKEN_TYPE_AND     ) ||
                 match_keyword(TOKEN_TYPE_OR      ) ||
-                match_keyword(TOKEN_TYPE_NOT     ) ||
                 match_keyword(TOKEN_TYPE_FN      ) ||
                 match_keyword(TOKEN_TYPE_LET     ) ||
                 match_keyword(TOKEN_TYPE_DEFTYPE ) ||
@@ -539,16 +544,12 @@ Lex_result lex(Arena *arena, const char *path){
                     return oom_error();
             }
 
-            state.pos.m_column += id_sv.m_size;
+            state.pos.m_col += id_sv.m_size;
             sv = str_view_trim_left(sv, id_sv.m_size);
-        }
-        else{
-            Str_base_result temp = str_base_init_fmt(state.alloc, "Found unknown token <%c>", sv.m_str[0]);
-            return (temp.success) ? syntax_error(str_base_data(&temp.result)) : oom_error();
         }
     }
 
-    state.pos.m_line = 0;
+    state.pos.m_row = 0;
     if (lparen_count != rparen_count)
         return syntax_error("Number of opening and closing parentheses must match");
     if (lbracket_count != rbracket_count)

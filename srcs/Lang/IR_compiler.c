@@ -161,7 +161,7 @@ static bool IR_compiler_state_syntax_error(IR_compiler_state *self, const AST_no
     self->result.error_info = self->result.IR;
     self->result.error = COMPILE_ERROR_SYNTAX;
 
-    if (!str_base_assign_fmt(&self->result.error_info, self->alloc, "<" USIZE_PFMT ":" USIZE_PFMT ">: ", pos.m_line, pos.m_column))
+    if (!str_base_assign_fmt(&self->result.error_info, self->alloc, "<" USIZE_PFMT ":" USIZE_PFMT ">: ", pos.m_row, pos.m_col))
         return oom_error();
 
     va_list args;
@@ -323,11 +323,7 @@ static bool IR_compiler_state_pop_ids_in_current_scope(IR_compiler_state *self){
 #define pop_ids_in_current_scope() IR_compiler_state_pop_ids_in_current_scope(self)
 
 static bool IR_compiler_state_ast_node_to_type_info(IR_compiler_state *self, const AST_node *type_node, Type_info *out_type_info){
-    Type_info result = {.m_tag = TYPE_INFO_TAG_NONE};
-    while (type_node->m_type == AST_NODE_TYPE_TYPE_LIST){
-        type_node = type_node->m_sub_nodes.m_data[0];
-        ++result.m_dimensions;
-    }
+    Type_info result = {.m_tag = TYPE_INFO_TAG_NONE, .m_dimensions = type_node->m_sub_nodes.m_size};
     if (type_node->m_type != AST_NODE_TYPE_TYPE_ID)
         result.m_tag = (enum Type_info_tag)(TYPE_INFO_TAG_VOID + (type_node->m_type - AST_NODE_TYPE_TYPE_VOID));
     else{
