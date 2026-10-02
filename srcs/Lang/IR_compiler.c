@@ -1371,7 +1371,7 @@ static bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *a
             ).m_value;
             if (!while_label_info_ptr){
                 const AST_node *label_id_node = ast_node->m_sub_nodes.m_data[0];
-                return syntax_error(label_id_node, "Use of undeclared identifier <%s>", str_base_data_const(&label_id_node->m_token->m_id));
+                return syntax_error(label_id_node, "Use of undeclared label identifier <%s>", str_base_data_const(&label_id_node->m_token->m_id));
             }
             usize type_info_stack_size = self->type_info_stack.m_size;
             for (usize i = self->id_count_stack.m_size; i-- > while_label_info_ptr->id_count_stack_idx;)
