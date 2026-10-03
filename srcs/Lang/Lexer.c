@@ -227,7 +227,7 @@ i64 token_slice_print(Token_slice tokens_slice, FILE *file){
     return chars_written;
 }
 
-Lex_result lex(Arena *arena, const char *path){
+Lex_result lexer_lex(Arena *arena, const char *path){
     assert(arena && "<arena> is not nullable");
     assert(path && "<path> is not nullable");
 

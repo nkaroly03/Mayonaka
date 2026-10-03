@@ -106,7 +106,7 @@ typedef struct Parse_result{
     enum Parse_error error;
 } Parse_result;
 
-Parse_result parse(Arena *arena, Token_slice tokens);
+Parse_result parser_parse(Arena *arena, Token_slice tokens);
 
 #ifdef __cplusplus
 }

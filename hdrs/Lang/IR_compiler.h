@@ -73,7 +73,7 @@ typedef struct IR_compile_result{
     enum Compile_error error;
 } IR_compile_result;
 
-IR_compile_result IR_compile(Arena *arena, AST_node_ptr_slice ast_nodes);
+IR_compile_result IR_compiler_compile(Arena *arena, AST_node_ptr_slice ast_nodes);
 
 #ifdef __cplusplus
 }

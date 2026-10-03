@@ -507,7 +507,7 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
 
 // ------------------------------------------------------------------------------------------------
 
-Bytecode_compile_result bytecode_compile(Arena *arena, const Str_base *IR){
+Bytecode_compile_result bytecode_compiler_compile(Arena *arena, const Str_base *IR){
     assert(arena && "<arena> is not nullable");
     assert(IR && "<IR> is not nullable");
 

@@ -53,63 +53,63 @@ int main(const int argc, const char *const *const argv){
 
     Str_base error_info;
 
-    Lex_result lex_result = lex(&arena, argv[1]);
-    switch (lex_result.error){
+    Lex_result lexer_lex_result = lexer_lex(&arena, argv[1]);
+    switch (lexer_lex_result.error){
         case LEX_ERROR_NONE:   break;
         case LEX_ERROR_OOM:    goto oom_error;
-        case LEX_ERROR_FILE:   error_info = lex_result.error_info; goto file_error;
-        case LEX_ERROR_SYNTAX: error_info = lex_result.error_info; goto syntax_error;
+        case LEX_ERROR_FILE:   error_info = lexer_lex_result.error_info; goto file_error;
+        case LEX_ERROR_SYNTAX: error_info = lexer_lex_result.error_info; goto syntax_error;
     }
 
-    token_slice_print(lex_result.tokens, stderr);
+    token_slice_print(lexer_lex_result.tokens, stderr);
     fprintf(stderr, "------------------------------------------------------------------------------------------------\n");
 
-    Parse_result parse_result = parse(&arena, lex_result.tokens);
-    switch (parse_result.error){
+    Parse_result parser_parse_result = parser_parse(&arena, lexer_lex_result.tokens);
+    switch (parser_parse_result.error){
         case PARSE_ERROR_NONE:   break;
         case PARSE_ERROR_OOM:    goto oom_error;
-        case PARSE_ERROR_SYNTAX: error_info = parse_result.error_info; goto syntax_error;
+        case PARSE_ERROR_SYNTAX: error_info = parser_parse_result.error_info; goto syntax_error;
     }
 
-    ast_node_ptr_slice_print(parse_result.ast_nodes, stderr);
+    ast_node_ptr_slice_print(parser_parse_result.ast_nodes, stderr);
     fprintf(stderr, "------------------------------------------------------------------------------------------------\n");
 
-    IR_compile_result IR_compile_result = IR_compile(&arena, parse_result.ast_nodes);
-    switch (IR_compile_result.error){
+    IR_compile_result IR_compiler_compile_result = IR_compiler_compile(&arena, parser_parse_result.ast_nodes);
+    switch (IR_compiler_compile_result.error){
         case COMPILE_ERROR_NONE:   break;
         case COMPILE_ERROR_OOM:    goto oom_error;
-        case COMPILE_ERROR_SYNTAX: error_info = IR_compile_result.error_info; goto syntax_error;
+        case COMPILE_ERROR_SYNTAX: error_info = IR_compiler_compile_result.error_info; goto syntax_error;
     }
 
-    fprintf(stderr, "%s", str_base_data(&IR_compile_result.IR));
+    fprintf(stderr, "%s", str_base_data(&IR_compiler_compile_result.IR));
     fprintf(stderr, "------------------------------------------------------------------------------------------------\n");
 
-    Bytecode_compile_result bytecode_compile_result = bytecode_compile(&arena, &IR_compile_result.IR);
-    switch (bytecode_compile_result.error){
+    Bytecode_compile_result bytecode_compiler_compile_result = bytecode_compiler_compile(&arena, &IR_compiler_compile_result.IR);
+    switch (bytecode_compiler_compile_result.error){
         case COMPILE_ERROR_NONE:   break;
         case COMPILE_ERROR_OOM:    goto oom_error;
-        case COMPILE_ERROR_SYNTAX: error_info = bytecode_compile_result.error_info; goto syntax_error;
+        case COMPILE_ERROR_SYNTAX: error_info = bytecode_compiler_compile_result.error_info; goto syntax_error;
     }
 
-    for (usize i = 0; i < bytecode_compile_result.bytecode.m_size; ++i){
+    for (usize i = 0; i < bytecode_compiler_compile_result.bytecode.m_size; ++i){
         if (i % 10 == 0)
             fputc('\n', stderr);
-        fprintf(stderr, U8_PFMT ", ", bytecode_compile_result.bytecode.m_data[i]);
+        fprintf(stderr, U8_PFMT ", ", bytecode_compiler_compile_result.bytecode.m_data[i]);
     }
     fprintf(stderr, "\n------------------------------------------------------------------------------------------------\n");
 
     Allocator interpreter_alloc = raw_malloc_allocator();
 
-    Interpreter_run_result run_result = interpreter_run(interpreter_alloc, bytecode_compile_result.bytecode, argc, argv);
-    switch (run_result.error){
+    Interpreter_run_result interpreter_run_result = interpreter_run(interpreter_alloc, bytecode_compiler_compile_result.bytecode, argc, argv);
+    switch (interpreter_run_result.error){
         case INTERPRETER_RUN_ERROR_NONE:
-            printf("\nresult: " I64_PFMT "\n", run_result.result);
+            printf("\nresult: " I64_PFMT "\n", interpreter_run_result.result);
             break;
         case INTERPRETER_RUN_ERROR_OOM:
             goto oom_error;
         case INTERPRETER_RUN_ERROR_RUNTIME:
-            fprintf(stderr, "\x1b[38;2;255;0;0m%s\n\x1b[0m", str_base_data(&run_result.error_info));
-            str_base_deinit(&run_result.error_info, interpreter_alloc);
+            fprintf(stderr, "\x1b[38;2;255;0;0m%s\n\x1b[0m", str_base_data(&interpreter_run_result.error_info));
+            str_base_deinit(&interpreter_run_result.error_info, interpreter_alloc);
             arena_deinit(&arena);
             return 1;
     }

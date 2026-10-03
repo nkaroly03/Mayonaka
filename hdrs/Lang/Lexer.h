@@ -107,7 +107,7 @@ typedef struct Lex_result{
     enum Lex_error error;
 } Lex_result;
 
-Lex_result lex(Arena *arena, const char *path);
+Lex_result lexer_lex(Arena *arena, const char *path);
 
 #ifdef __cplusplus
 }

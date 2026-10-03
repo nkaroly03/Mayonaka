@@ -161,15 +161,16 @@ static bool IR_compiler_state_syntax_error(IR_compiler_state *self, const AST_no
     self->result.error_info = self->result.IR;
     self->result.error = COMPILE_ERROR_SYNTAX;
 
-    if (!str_base_assign_fmt(&self->result.error_info, self->alloc, "<" USIZE_PFMT ":" USIZE_PFMT ">: ", pos.m_row, pos.m_col))
-        return oom_error();
+    if (str_base_assign_fmt(&self->result.error_info, self->alloc, "<" USIZE_PFMT ":" USIZE_PFMT ">: ", pos.m_row, pos.m_col)){
+        va_list args;
+        va_start(args, fmt);
+        bool success = str_base_append_fmt_va_list(&self->result.error_info, self->alloc, fmt, args);
+        va_end(args);
+        if (success)
+            return false;
+    }
 
-    va_list args;
-    va_start(args, fmt);
-    bool success = str_base_append_fmt_va_list(&self->result.error_info, self->alloc, fmt, args);
-    va_end(args);
-
-    return (success) ? false : oom_error();
+    return oom_error();
 }
 #define syntax_error(ast_node_val, ...) IR_compiler_state_syntax_error(self, (ast_node_val), __VA_ARGS__)
 
@@ -1508,7 +1509,7 @@ const char* op_code_to_str(enum Op_code op_code){
     };
 }
 
-IR_compile_result IR_compile(Arena *arena, AST_node_ptr_slice ast_nodes){
+IR_compile_result IR_compiler_compile(Arena *arena, AST_node_ptr_slice ast_nodes){
     assert(arena && "<arena> is not nullable");
 
     Allocator alloc = arena_allocator(arena);

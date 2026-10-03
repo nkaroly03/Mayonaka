@@ -35,7 +35,7 @@ typedef struct Bytecode_compile_result{
     enum Compile_error error;
 } Bytecode_compile_result;
 
-Bytecode_compile_result bytecode_compile(Arena *arena, const Str_base *IR);
+Bytecode_compile_result bytecode_compiler_compile(Arena *arena, const Str_base *IR);
 
 #ifdef __cplusplus
 }
