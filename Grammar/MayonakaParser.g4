@@ -16,7 +16,7 @@ decl_fn : KEYWORD_FN IDENTIFIER PUNCT_LPAREN id_colon_type_list? PUNCT_RPAREN (t
 decl_var : KEYWORD_LET IDENTIFIER PUNCT_COLON type PUNCT_EQ1 expr PUNCT_SEMICOLON ;
 decl_type : KEYWORD_DEFTYPE IDENTIFIER PUNCT_LBRACE id_colon_type_list? PUNCT_RBRACE ;
 
-selection_stmt : KEYWORD_IF PUNCT_LPAREN expr PUNCT_RPAREN (KEYWORD_ELSE stmt)? ;
+selection_stmt : KEYWORD_IF PUNCT_LPAREN expr PUNCT_RPAREN stmt (KEYWORD_ELSE stmt)? ;
 iteration_stmt : while_stmt | for_stmt ;
 
 while_stmt : label? KEYWORD_WHILE PUNCT_LPAREN expr PUNCT_RPAREN (PUNCT_COLON PUNCT_LPAREN (expr | block_stmt) PUNCT_RPAREN)? stmt ;
