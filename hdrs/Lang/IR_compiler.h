@@ -43,10 +43,10 @@ enum Op_code{
     OP_CODE_SUB,
     OP_CODE_SHL,
     OP_CODE_SHR,
+    OP_CODE_CMP_LT,
     OP_CODE_CMP_LE,
-    OP_CODE_CMP_LEQ,
+    OP_CODE_CMP_GT,
     OP_CODE_CMP_GE,
-    OP_CODE_CMP_GEQ,
     OP_CODE_CMP_EQ,
     OP_CODE_CMP_NEQ,
     OP_CODE_BAND,
@@ -65,15 +65,15 @@ enum Compile_error{
     COMPILE_ERROR_SYNTAX
 };
 
-typedef struct IR_compile_result{
+typedef struct IR_compiler_compile_result{
     union{
         Str_base IR;
         Str_base error_info;
     };
     enum Compile_error error;
-} IR_compile_result;
+} IR_compiler_compile_result;
 
-IR_compile_result IR_compiler_compile(Arena *arena, AST_node_ptr_slice ast_nodes);
+IR_compiler_compile_result IR_compiler_compile(Arena *arena, AST_node_ptr_slice ast_nodes);
 
 #ifdef __cplusplus
 }

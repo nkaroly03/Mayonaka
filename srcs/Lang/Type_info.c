@@ -109,10 +109,10 @@ Type_info binary_op_type_info_result(enum Binary_op op, Type_info lhs, Type_info
                     result = (Type_info){.m_tag = max(lhs.m_tag, rhs.m_tag), .m_dimensions = 0};
                 break;
 
+            case BINARY_OP_CMP_LT:
             case BINARY_OP_CMP_LE:
-            case BINARY_OP_CMP_LEQ:
+            case BINARY_OP_CMP_GT:
             case BINARY_OP_CMP_GE:
-            case BINARY_OP_CMP_GEQ:
             case BINARY_OP_CMP_EQ:
             case BINARY_OP_CMP_NEQ:
                 if (

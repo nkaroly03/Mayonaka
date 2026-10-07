@@ -69,7 +69,7 @@ typedef struct IR_compiler_state{
     usize *label_counter_ptr;
     Ordered_umap_base while_labels;
     Str_base fn_IRs;
-    IR_compile_result result;
+    IR_compiler_compile_result result;
 } IR_compiler_state;
 
 static const AST_node* ast_node_find_fn_node(const AST_node *ast_node){
@@ -652,10 +652,10 @@ static bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *a
         case AST_NODE_TYPE_BINARY_OP_SUB:       bin_op = BINARY_OP_SUB;       bin_op_code = OP_CODE_SUB;     goto bin_op_case;
         case AST_NODE_TYPE_BINARY_OP_SHL:       bin_op = BINARY_OP_SHL;       bin_op_code = OP_CODE_SHL;     goto bin_op_case;
         case AST_NODE_TYPE_BINARY_OP_SHR:       bin_op = BINARY_OP_SHR;       bin_op_code = OP_CODE_SHR;     goto bin_op_case;
+        case AST_NODE_TYPE_BINARY_OP_CMP_LT:    bin_op = BINARY_OP_CMP_LT;    bin_op_code = OP_CODE_CMP_LT;  goto bin_op_case;
         case AST_NODE_TYPE_BINARY_OP_CMP_LE:    bin_op = BINARY_OP_CMP_LE;    bin_op_code = OP_CODE_CMP_LE;  goto bin_op_case;
-        case AST_NODE_TYPE_BINARY_OP_CMP_LEQ:   bin_op = BINARY_OP_CMP_LEQ;   bin_op_code = OP_CODE_CMP_LEQ; goto bin_op_case;
+        case AST_NODE_TYPE_BINARY_OP_CMP_GT:    bin_op = BINARY_OP_CMP_GT;    bin_op_code = OP_CODE_CMP_GT;  goto bin_op_case;
         case AST_NODE_TYPE_BINARY_OP_CMP_GE:    bin_op = BINARY_OP_CMP_GE;    bin_op_code = OP_CODE_CMP_GE;  goto bin_op_case;
-        case AST_NODE_TYPE_BINARY_OP_CMP_GEQ:   bin_op = BINARY_OP_CMP_GEQ;   bin_op_code = OP_CODE_CMP_GEQ; goto bin_op_case;
         case AST_NODE_TYPE_BINARY_OP_CMP_EQ:    bin_op = BINARY_OP_CMP_EQ;    bin_op_code = OP_CODE_CMP_EQ;  goto bin_op_case;
         case AST_NODE_TYPE_BINARY_OP_CMP_NEQ:   bin_op = BINARY_OP_CMP_NEQ;   bin_op_code = OP_CODE_CMP_NEQ; goto bin_op_case;
         case AST_NODE_TYPE_BINARY_OP_BAND:      bin_op = BINARY_OP_BAND;      bin_op_code = OP_CODE_BAND;    goto bin_op_case;
@@ -1492,10 +1492,10 @@ const char* op_code_to_str(enum Op_code op_code){
         case OP_CODE_SUB:       return "sub";
         case OP_CODE_SHL:       return "shl";
         case OP_CODE_SHR:       return "shr";
+        case OP_CODE_CMP_LT:    return "cmp_lt";
         case OP_CODE_CMP_LE:    return "cmp_le";
-        case OP_CODE_CMP_LEQ:   return "cmp_leq";
+        case OP_CODE_CMP_GT:    return "cmp_gt";
         case OP_CODE_CMP_GE:    return "cmp_ge";
-        case OP_CODE_CMP_GEQ:   return "cmp_geq";
         case OP_CODE_CMP_EQ:    return "cmp_eq";
         case OP_CODE_CMP_NEQ:   return "cmp_neq";
         case OP_CODE_BAND:      return "band";
@@ -1509,7 +1509,7 @@ const char* op_code_to_str(enum Op_code op_code){
     };
 }
 
-IR_compile_result IR_compiler_compile(Arena *arena, AST_node_ptr_slice ast_nodes){
+IR_compiler_compile_result IR_compiler_compile(Arena *arena, AST_node_ptr_slice ast_nodes){
     assert(arena && "<arena> is not nullable");
 
     Allocator alloc = arena_allocator(arena);
@@ -1545,5 +1545,5 @@ IR_compile_result IR_compiler_compile(Arena *arena, AST_node_ptr_slice ast_nodes
     return state.result;
 
 oom_error:
-    return (IR_compile_result){.error = COMPILE_ERROR_OOM};
+    return (IR_compiler_compile_result){.error = COMPILE_ERROR_OOM};
 }

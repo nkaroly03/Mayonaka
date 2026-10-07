@@ -53,7 +53,7 @@ int main(const int argc, const char *const *const argv){
 
     Str_base error_info;
 
-    Lex_result lexer_lex_result = lexer_lex(&arena, argv[1]);
+    Lexer_lex_result lexer_lex_result = lexer_lex(&arena, argv[1]);
     switch (lexer_lex_result.error){
         case LEX_ERROR_NONE:   break;
         case LEX_ERROR_OOM:    goto oom_error;
@@ -64,7 +64,7 @@ int main(const int argc, const char *const *const argv){
     token_slice_print(lexer_lex_result.tokens, stderr);
     fprintf(stderr, "------------------------------------------------------------------------------------------------\n");
 
-    Parse_result parser_parse_result = parser_parse(&arena, lexer_lex_result.tokens);
+    Parser_parse_result parser_parse_result = parser_parse(&arena, lexer_lex_result.tokens);
     switch (parser_parse_result.error){
         case PARSE_ERROR_NONE:   break;
         case PARSE_ERROR_OOM:    goto oom_error;
@@ -74,7 +74,7 @@ int main(const int argc, const char *const *const argv){
     ast_node_ptr_slice_print(parser_parse_result.ast_nodes, stderr);
     fprintf(stderr, "------------------------------------------------------------------------------------------------\n");
 
-    IR_compile_result IR_compiler_compile_result = IR_compiler_compile(&arena, parser_parse_result.ast_nodes);
+    IR_compiler_compile_result IR_compiler_compile_result = IR_compiler_compile(&arena, parser_parse_result.ast_nodes);
     switch (IR_compiler_compile_result.error){
         case COMPILE_ERROR_NONE:   break;
         case COMPILE_ERROR_OOM:    goto oom_error;
@@ -84,7 +84,7 @@ int main(const int argc, const char *const *const argv){
     fprintf(stderr, "%s", str_base_data(&IR_compiler_compile_result.IR));
     fprintf(stderr, "------------------------------------------------------------------------------------------------\n");
 
-    Bytecode_compile_result bytecode_compiler_compile_result = bytecode_compiler_compile(&arena, &IR_compiler_compile_result.IR);
+    Bytecode_compiler_compile_result bytecode_compiler_compile_result = bytecode_compiler_compile(&arena, &IR_compiler_compile_result.IR);
     switch (bytecode_compiler_compile_result.error){
         case COMPILE_ERROR_NONE:   break;
         case COMPILE_ERROR_OOM:    goto oom_error;

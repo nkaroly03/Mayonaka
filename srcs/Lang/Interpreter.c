@@ -713,10 +713,10 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
             case OP_CODE_SUB:
             case OP_CODE_SHL:
             case OP_CODE_SHR:
+            case OP_CODE_CMP_LT:
             case OP_CODE_CMP_LE:
-            case OP_CODE_CMP_LEQ:
+            case OP_CODE_CMP_GT:
             case OP_CODE_CMP_GE:
-            case OP_CODE_CMP_GEQ:
             case OP_CODE_CMP_EQ:
             case OP_CODE_CMP_NEQ:
             case OP_CODE_BAND:
@@ -736,10 +736,10 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                     case OP_CODE_SUB:     op_result = primitive_sub    (lhs, rhs); break;
                     case OP_CODE_SHL:     op_result = primitive_shl    (lhs, rhs); break;
                     case OP_CODE_SHR:     op_result = primitive_shr    (lhs, rhs); break;
+                    case OP_CODE_CMP_LT:  op_result = primitive_cmp_lt (lhs, rhs); break;
                     case OP_CODE_CMP_LE:  op_result = primitive_cmp_le (lhs, rhs); break;
-                    case OP_CODE_CMP_LEQ: op_result = primitive_cmp_leq(lhs, rhs); break;
+                    case OP_CODE_CMP_GT:  op_result = primitive_cmp_gt (lhs, rhs); break;
                     case OP_CODE_CMP_GE:  op_result = primitive_cmp_ge (lhs, rhs); break;
-                    case OP_CODE_CMP_GEQ: op_result = primitive_cmp_geq(lhs, rhs); break;
                     case OP_CODE_CMP_EQ:  op_result = primitive_cmp_eq (lhs, rhs); break;
                     case OP_CODE_CMP_NEQ: op_result = primitive_cmp_neq(lhs, rhs); break;
                     case OP_CODE_BAND:    op_result = primitive_band   (lhs, rhs); break;

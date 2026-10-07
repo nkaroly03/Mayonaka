@@ -89,10 +89,10 @@ enum Bin_op{
     BIN_OP_SUB,
     BIN_OP_SHL,
     BIN_OP_SHR,
+    BIN_OP_CMP_LT,
     BIN_OP_CMP_LE,
-    BIN_OP_CMP_LEQ,
+    BIN_OP_CMP_GT,
     BIN_OP_CMP_GE,
-    BIN_OP_CMP_GEQ,
     BIN_OP_CMP_EQ,
     BIN_OP_CMP_NEQ,
     BIN_OP_BAND,
@@ -154,10 +154,10 @@ static Primitive_op_result primitive_cmp(Primitive *self, const Primitive *other
     }
 
     switch (cmp_op){
-        case BIN_OP_CMP_LE:  result = (cmp3 <  0); break;
-        case BIN_OP_CMP_LEQ: result = (cmp3 <= 0); break;
-        case BIN_OP_CMP_GE:  result = (cmp3 >  0); break;
-        case BIN_OP_CMP_GEQ: result = (cmp3 >= 0); break;
+        case BIN_OP_CMP_LT:  result = (cmp3 <  0); break;
+        case BIN_OP_CMP_LE:  result = (cmp3 <= 0); break;
+        case BIN_OP_CMP_GT:  result = (cmp3 >  0); break;
+        case BIN_OP_CMP_GE:  result = (cmp3 >= 0); break;
         case BIN_OP_CMP_EQ:  result = (cmp3 == 0); break;
         case BIN_OP_CMP_NEQ: result = (cmp3 != 0); break;
         default:             unreachable();
@@ -170,7 +170,7 @@ end:
 }
 
 static Primitive_op_result primitive_bin_op(Primitive *self, const Primitive *other, enum Bin_op op){
-    if (op >= BIN_OP_CMP_LE && op <= BIN_OP_CMP_NEQ)
+    if (op >= BIN_OP_CMP_LT && op <= BIN_OP_CMP_NEQ)
         return primitive_cmp(self, other, op);
 
     if (self->m_tag == PRIMITIVE_TAG_LIST || other->m_tag == PRIMITIVE_TAG_LIST){
@@ -957,10 +957,10 @@ primitive_bin_op_generate(rem,     BIN_OP_REM)
 primitive_bin_op_generate(sub,     BIN_OP_SUB)
 primitive_bin_op_generate(shl,     BIN_OP_SHL)
 primitive_bin_op_generate(shr,     BIN_OP_SHR)
+primitive_bin_op_generate(cmp_lt,  BIN_OP_CMP_LT)
 primitive_bin_op_generate(cmp_le,  BIN_OP_CMP_LE)
-primitive_bin_op_generate(cmp_leq, BIN_OP_CMP_LEQ)
+primitive_bin_op_generate(cmp_gt,  BIN_OP_CMP_GT)
 primitive_bin_op_generate(cmp_ge,  BIN_OP_CMP_GE)
-primitive_bin_op_generate(cmp_geq, BIN_OP_CMP_GEQ)
 primitive_bin_op_generate(cmp_eq,  BIN_OP_CMP_EQ)
 primitive_bin_op_generate(cmp_neq, BIN_OP_CMP_NEQ)
 primitive_bin_op_generate(band,    BIN_OP_BAND)

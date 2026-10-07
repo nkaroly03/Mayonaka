@@ -27,15 +27,15 @@ typedef struct U8_slice{
     const u8 *m_data;
 } U8_slice;
 
-typedef struct Bytecode_compile_result{
+typedef struct Bytecode_compiler_compile_result{
     union{
         U8_slice bytecode;
         Str_base error_info;
     };
     enum Compile_error error;
-} Bytecode_compile_result;
+} Bytecode_compiler_compile_result;
 
-Bytecode_compile_result bytecode_compiler_compile(Arena *arena, const Str_base *IR);
+Bytecode_compiler_compile_result bytecode_compiler_compile(Arena *arena, const Str_base *IR);
 
 #ifdef __cplusplus
 }

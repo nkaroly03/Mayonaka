@@ -77,10 +77,10 @@ typedef struct Bytecode_compiler_state{
     Vec_base bytecode;
 } Bytecode_compiler_state;
 
-static const Bytecode_compile_result  NO_ERROR = {.error = COMPILE_ERROR_NONE};
-static const Bytecode_compile_result OOM_ERROR = {.error = COMPILE_ERROR_OOM};
+static const Bytecode_compiler_compile_result  NO_ERROR = {.error = COMPILE_ERROR_NONE};
+static const Bytecode_compiler_compile_result OOM_ERROR = {.error = COMPILE_ERROR_OOM};
 
-static Bytecode_compile_result bytecode_compiler_syntax_error(Bytecode_compiler_state *self, const char *fmt, ...){
+static Bytecode_compiler_compile_result bytecode_compiler_syntax_error(Bytecode_compiler_state *self, const char *fmt, ...){
     Str_base_result error_info = str_base_init_fmt(self->alloc, "On line <" USIZE_PFMT ">: ", self->instruction_idx + 1);
 
     if (error_info.success){
@@ -90,11 +90,11 @@ static Bytecode_compile_result bytecode_compiler_syntax_error(Bytecode_compiler_
         va_end(args);
     }
     
-    return (error_info.success) ? (Bytecode_compile_result){.error_info = error_info.result, .error = COMPILE_ERROR_SYNTAX} : OOM_ERROR;
+    return (error_info.success) ? (Bytecode_compiler_compile_result){.error_info = error_info.result, .error = COMPILE_ERROR_SYNTAX} : OOM_ERROR;
 }
 #define syntax_error(...) bytecode_compiler_syntax_error(self, __VA_ARGS__)
 
-static Bytecode_compile_result bytecode_compiler_state_arg_bp(Bytecode_compiler_state *self, Str_view rhs){
+static Bytecode_compiler_compile_result bytecode_compiler_state_arg_bp(Bytecode_compiler_state *self, Str_view rhs){
     Usize_u8s_union bp_offset;
 
     if (errno = 0, sscanf(rhs.m_str, BP_SYMBOL " [" USIZE_SFMT " ]", &bp_offset.as_usize) != 1)
@@ -112,7 +112,7 @@ static Bytecode_compile_result bytecode_compiler_state_arg_bp(Bytecode_compiler_
 
     return NO_ERROR;
 }
-static Bytecode_compile_result bytecode_compiler_state_arg_sp(Bytecode_compiler_state *self, Str_view rhs){
+static Bytecode_compiler_compile_result bytecode_compiler_state_arg_sp(Bytecode_compiler_state *self, Str_view rhs){
     Usize_u8s_union sp_offset;
 
     if (errno = 0, sscanf(rhs.m_str, SP_SYMBOL " [ - " USIZE_SFMT " ]", &sp_offset.as_usize) != 1)
@@ -131,12 +131,12 @@ static Bytecode_compile_result bytecode_compiler_state_arg_sp(Bytecode_compiler_
     return NO_ERROR;
 }
 
-static Bytecode_compile_result (*const ARG_FNS[])(Bytecode_compiler_state*, Str_view) = {
+static Bytecode_compiler_compile_result (*const ARG_FNS[])(Bytecode_compiler_state*, Str_view) = {
     [OP_CODE_ARG_TAG_BP] = bytecode_compiler_state_arg_bp,
     [OP_CODE_ARG_TAG_SP] = bytecode_compiler_state_arg_sp
 };
 
-static Bytecode_compile_result bytecode_compiler_state_label_to_str(Bytecode_compiler_state *self, bool is_label_decl, Str_view label_sv, Str_base *out_label_str){
+static Bytecode_compiler_compile_result bytecode_compiler_state_label_to_str(Bytecode_compiler_state *self, bool is_label_decl, Str_view label_sv, Str_base *out_label_str){
     label_sv = str_view_trim_right_while(
         str_view_trim_left_while(
             str_view_trim_right(label_sv, str_view_trim_left_while_not(label_sv, is_semicolon).m_size),
@@ -177,7 +177,7 @@ static Bytecode_compile_result bytecode_compiler_state_label_to_str(Bytecode_com
     return NO_ERROR;
 }
 
-static Bytecode_compile_result bytecode_compiler_state_add_label(Bytecode_compiler_state *self, const Str_base *label_str){
+static Bytecode_compiler_compile_result bytecode_compiler_state_add_label(Bytecode_compiler_state *self, const Str_base *label_str){
     Umap_insert_result ires = umap_base_insert(&self->label_offset_map, self->alloc, label_str, &(usize){self->bytecode.m_size});
     switch (ires.error){
         case UMAP_INSERT_ERROR_NONE:             break;
@@ -187,7 +187,7 @@ static Bytecode_compile_result bytecode_compiler_state_add_label(Bytecode_compil
     return NO_ERROR;
 }
 
-static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler_state *self){
+static Bytecode_compiler_compile_result bytecode_compiler_state_compile(Bytecode_compiler_state *self){
     for (usize instruction_count = self->instruction_views.m_size; self->instruction_idx < instruction_count; ++self->instruction_idx){
         Str_view sv = *(Str_view*)vec_base_at(&self->instruction_views, self->instruction_idx);
 
@@ -213,7 +213,7 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
             if (str_view_starts_with(sv, LOCAL_LABEL_PREFIX_SYMBOL) || (rhs.m_size > 0 && rhs.m_str[0] == ':')){
                 Str_base label_str;
 
-                Bytecode_compile_result temp = bytecode_compiler_state_label_to_str(self, true, sv, &label_str);
+                Bytecode_compiler_compile_result temp = bytecode_compiler_state_label_to_str(self, true, sv, &label_str);
                 if (temp.error != COMPILE_ERROR_NONE || (temp = bytecode_compiler_state_add_label(self, &label_str)).error != COMPILE_ERROR_NONE)
                     return temp;
 
@@ -335,7 +335,7 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                         if (!vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)arg_tag}))
                             return OOM_ERROR;
 
-                        Bytecode_compile_result arg_case_fn_result = ARG_FNS[arg_tag](self, rhs);
+                        Bytecode_compiler_compile_result arg_case_fn_result = ARG_FNS[arg_tag](self, rhs);
                         if (arg_case_fn_result.error != COMPILE_ERROR_NONE)
                             return arg_case_fn_result;
                     }
@@ -369,7 +369,7 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                     if (!vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)arg_tag}))
                         return OOM_ERROR;
 
-                    Bytecode_compile_result arg_case_fn_result = ARG_FNS[arg_tag](self, rhs);
+                    Bytecode_compiler_compile_result arg_case_fn_result = ARG_FNS[arg_tag](self, rhs);
                     if (arg_case_fn_result.error != COMPILE_ERROR_NONE)
                         return arg_case_fn_result;
                 }
@@ -379,7 +379,7 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
 
                     Str_base label_str;
 
-                    Bytecode_compile_result label_to_str_result = bytecode_compiler_state_label_to_str(self, false, rhs, &label_str);
+                    Bytecode_compiler_compile_result label_to_str_result = bytecode_compiler_state_label_to_str(self, false, rhs, &label_str);
                     if (label_to_str_result.error != COMPILE_ERROR_NONE)
                         return label_to_str_result;
 
@@ -428,7 +428,7 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
 
                     Str_base label_str;
 
-                    Bytecode_compile_result label_to_str_result = bytecode_compiler_state_label_to_str(self, false, rhs, &label_str);
+                    Bytecode_compiler_compile_result label_to_str_result = bytecode_compiler_state_label_to_str(self, false, rhs, &label_str);
                     if (label_to_str_result.error != COMPILE_ERROR_NONE)
                         return label_to_str_result;
 
@@ -456,25 +456,25 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
                     match_op_code(OP_CODE_TO_STR   ) ||
                     match_op_code(OP_CODE_NEG      ) ||
                     match_op_code(OP_CODE_BNEG     ) ||
-                    match_op_code(OP_CODE_MOV_DEREF) ||
                     match_op_code(OP_CODE_DEREF    ) ||
-                    match_op_code(OP_CODE_CMP_EQ   ) ||
-                    match_op_code(OP_CODE_CMP_NEQ  ) ||
-                    match_op_code(OP_CODE_CMP_LE   ) ||
-                    match_op_code(OP_CODE_CMP_LEQ  ) ||
-                    match_op_code(OP_CODE_CMP_GE   ) ||
-                    match_op_code(OP_CODE_CMP_GEQ  ) ||
-                    match_op_code(OP_CODE_ADD      ) ||
-                    match_op_code(OP_CODE_SUB      ) ||
+                    match_op_code(OP_CODE_POW      ) ||
                     match_op_code(OP_CODE_MUL      ) ||
                     match_op_code(OP_CODE_DIV      ) ||
                     match_op_code(OP_CODE_REM      ) ||
-                    match_op_code(OP_CODE_POW      ) ||
+                    match_op_code(OP_CODE_ADD      ) ||
+                    match_op_code(OP_CODE_SUB      ) ||
                     match_op_code(OP_CODE_SHL      ) ||
                     match_op_code(OP_CODE_SHR      ) ||
+                    match_op_code(OP_CODE_CMP_LT   ) ||
+                    match_op_code(OP_CODE_CMP_LE   ) ||
+                    match_op_code(OP_CODE_CMP_GT   ) ||
+                    match_op_code(OP_CODE_CMP_GE   ) ||
+                    match_op_code(OP_CODE_CMP_EQ   ) ||
+                    match_op_code(OP_CODE_CMP_NEQ  ) ||
                     match_op_code(OP_CODE_BAND     ) ||
+                    match_op_code(OP_CODE_XOR      ) ||
                     match_op_code(OP_CODE_BOR      ) ||
-                    match_op_code(OP_CODE_XOR      )
+                    match_op_code(OP_CODE_MOV_DEREF)
                 ){
                     if (rhs.m_size > 0 && rhs.m_str[0] != ';')
                         return syntax_error("Op code <%s> takes no arguments", op_code_str);
@@ -502,12 +502,12 @@ static Bytecode_compile_result bytecode_compiler_state_compile(Bytecode_compiler
         memcpy(vec_base_at(&self->bytecode, jmp_info->bytecode_offset), label_bytecode_offset.as_u8s, sizeof(label_bytecode_offset.as_u8s));
     }
 
-    return (Bytecode_compile_result){.bytecode = {.m_size = self->bytecode.m_size, .m_data = self->bytecode.m_data}, .error = COMPILE_ERROR_NONE};
+    return (Bytecode_compiler_compile_result){.bytecode = {.m_size = self->bytecode.m_size, .m_data = self->bytecode.m_data}, .error = COMPILE_ERROR_NONE};
 }
 
 // ------------------------------------------------------------------------------------------------
 
-Bytecode_compile_result bytecode_compiler_compile(Arena *arena, const Str_base *IR){
+Bytecode_compiler_compile_result bytecode_compiler_compile(Arena *arena, const Str_base *IR){
     assert(arena && "<arena> is not nullable");
     assert(IR && "<IR> is not nullable");
 
@@ -524,7 +524,7 @@ Bytecode_compile_result bytecode_compiler_compile(Arena *arena, const Str_base *
         temp = str_view_trim_right(sv, str_view_trim_left_while_not(sv, is_newline).m_size);
         Str_view trimmed = str_view_trim_right_while(str_view_trim_left_while(temp, isspace), isspace);
         if (!vec_base_push_back(&state.instruction_views, state.alloc, &trimmed))
-            return (Bytecode_compile_result){.error = COMPILE_ERROR_OOM};
+            return (Bytecode_compiler_compile_result){.error = COMPILE_ERROR_OOM};
     }
 
     return bytecode_compiler_state_compile(&state);

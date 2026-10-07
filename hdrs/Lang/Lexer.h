@@ -38,12 +38,12 @@ enum Token_type{
     TOKEN_TYPE_ASTERISK1,
     TOKEN_TYPE_SLASH,
     TOKEN_TYPE_PERCENT,
-    TOKEN_TYPE_LE2,
-    TOKEN_TYPE_LE1_EQ1,
-    TOKEN_TYPE_LE1,
-    TOKEN_TYPE_GE2,
-    TOKEN_TYPE_GE1_EQ1,
-    TOKEN_TYPE_GE1,
+    TOKEN_TYPE_LT2,
+    TOKEN_TYPE_LT1_EQ1,
+    TOKEN_TYPE_LT1,
+    TOKEN_TYPE_GT2,
+    TOKEN_TYPE_GT1_EQ1,
+    TOKEN_TYPE_GT1,
     TOKEN_TYPE_EQ2,
     TOKEN_TYPE_EQ1,
     TOKEN_TYPE_EXCL_EQ1,
@@ -92,22 +92,22 @@ typedef struct Token_slice{
 
 i64 token_slice_print(Token_slice tokens_slice, FILE *file);
 
-enum Lex_error{
+enum Lexer_lex_error{
     LEX_ERROR_NONE,
     LEX_ERROR_OOM,
     LEX_ERROR_SYNTAX,
     LEX_ERROR_FILE
 };
 
-typedef struct Lex_result{
+typedef struct Lexer_lex_result{
     union{
         Token_slice tokens;
         Str_base error_info;
     };
-    enum Lex_error error;
-} Lex_result;
+    enum Lexer_lex_error error;
+} Lexer_lex_result;
 
-Lex_result lexer_lex(Arena *arena, const char *path);
+Lexer_lex_result lexer_lex(Arena *arena, const char *path);
 
 #ifdef __cplusplus
 }

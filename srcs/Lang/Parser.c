@@ -42,12 +42,12 @@ static bool token_type_non_unary_op_to_ast_node_type(enum Token_type token_type,
         case TOKEN_TYPE_PERCENT:   *out_ast_node_type = AST_NODE_TYPE_BINARY_OP_REM;           break;
         case TOKEN_TYPE_PLUS:      *out_ast_node_type = AST_NODE_TYPE_BINARY_OP_ADD;           break;
         case TOKEN_TYPE_MINUS:     *out_ast_node_type = AST_NODE_TYPE_BINARY_OP_SUB;           break;
-        case TOKEN_TYPE_LE2:       *out_ast_node_type = AST_NODE_TYPE_BINARY_OP_SHL;           break;
-        case TOKEN_TYPE_GE2:       *out_ast_node_type = AST_NODE_TYPE_BINARY_OP_SHR;           break;
-        case TOKEN_TYPE_LE1:       *out_ast_node_type = AST_NODE_TYPE_BINARY_OP_CMP_LE;        break;
-        case TOKEN_TYPE_LE1_EQ1:   *out_ast_node_type = AST_NODE_TYPE_BINARY_OP_CMP_LEQ;       break;
-        case TOKEN_TYPE_GE1:       *out_ast_node_type = AST_NODE_TYPE_BINARY_OP_CMP_GE;        break;
-        case TOKEN_TYPE_GE1_EQ1:   *out_ast_node_type = AST_NODE_TYPE_BINARY_OP_CMP_GEQ;       break;
+        case TOKEN_TYPE_LT2:       *out_ast_node_type = AST_NODE_TYPE_BINARY_OP_SHL;           break;
+        case TOKEN_TYPE_GT2:       *out_ast_node_type = AST_NODE_TYPE_BINARY_OP_SHR;           break;
+        case TOKEN_TYPE_LT1:       *out_ast_node_type = AST_NODE_TYPE_BINARY_OP_CMP_LT;        break;
+        case TOKEN_TYPE_LT1_EQ1:   *out_ast_node_type = AST_NODE_TYPE_BINARY_OP_CMP_LE;        break;
+        case TOKEN_TYPE_GT1:       *out_ast_node_type = AST_NODE_TYPE_BINARY_OP_CMP_GT;        break;
+        case TOKEN_TYPE_GT1_EQ1:   *out_ast_node_type = AST_NODE_TYPE_BINARY_OP_CMP_GE;        break;
         case TOKEN_TYPE_EQ2:       *out_ast_node_type = AST_NODE_TYPE_BINARY_OP_CMP_EQ;        break;
         case TOKEN_TYPE_EXCL_EQ1:  *out_ast_node_type = AST_NODE_TYPE_BINARY_OP_CMP_NEQ;       break;
         case TOKEN_TYPE_AMPERSAND: *out_ast_node_type = AST_NODE_TYPE_BINARY_OP_BAND;          break;
@@ -89,10 +89,10 @@ static Binding_powers ast_node_type_to_binding_powers(enum AST_node_type ast_nod
         case AST_NODE_TYPE_BINARY_OP_SHL:
         case AST_NODE_TYPE_BINARY_OP_SHR:           return bps_init(90, 91);
 
+        case AST_NODE_TYPE_BINARY_OP_CMP_LT:
         case AST_NODE_TYPE_BINARY_OP_CMP_LE:
-        case AST_NODE_TYPE_BINARY_OP_CMP_LEQ:
-        case AST_NODE_TYPE_BINARY_OP_CMP_GE:
-        case AST_NODE_TYPE_BINARY_OP_CMP_GEQ:       return bps_init(80, 81);
+        case AST_NODE_TYPE_BINARY_OP_CMP_GT:
+        case AST_NODE_TYPE_BINARY_OP_CMP_GE:        return bps_init(80, 81);
 
         case AST_NODE_TYPE_BINARY_OP_CMP_EQ:
         case AST_NODE_TYPE_BINARY_OP_CMP_NEQ:       return bps_init(70, 71);
@@ -113,7 +113,7 @@ typedef struct Parser_state_parse_result{
         AST_node *ast_node_ptr;
         Str_base error_info;
     };
-    enum Parse_error error;
+    enum Parser_parse_error error;
 } Parser_state_parse_result;
 
 typedef struct Parser_state{
@@ -223,7 +223,7 @@ bool parser_state_parse_type(Parser_state *self, bool void_is_allowed){
                 if (self->token_idx >= self->tokens.m_size || self->tokens.m_data[self->token_idx].m_type != TOKEN_TYPE_RBRACKET)
                     return syntax_error("Expected <]>");
                 ++self->token_idx;
-                if (!ast_node_push_back(type_node, &type_node_sub_nodes, AST_NODE_TYPE_TYPE_QUALIFIER_LIST, tok))
+                if (!ast_node_push_back(type_node, &type_node_sub_nodes, AST_NODE_TYPE_TYPE_MODIFIER_LIST, tok))
                     return false;
                 void_is_allowed = false;
                 break;
@@ -597,7 +597,7 @@ bool parser_state_parse_statement(Parser_state *self){
             if (!parse_arithm_expr(0))
                 return false;
             if (self->tokens.m_data[self->token_idx].m_type != TOKEN_TYPE_SEMICOLON)
-                return syntax_error("Statement must end with <;>");
+                return syntax_error("Expression statement must end with <;>");
             ++self->token_idx;
             statement_node = self->result.ast_node_ptr;
             break;
@@ -806,7 +806,7 @@ bool parser_state_parse_statement(Parser_state *self){
                 for_to_while_push_back(TOKEN_TYPE_WHILE)     &&
                 for_to_while_push_back(TOKEN_TYPE_LPAREN)    &&
                 for_to_while_id_push_back(capture_id_start)  &&
-                for_to_while_push_back(TOKEN_TYPE_LE1)       &&
+                for_to_while_push_back(TOKEN_TYPE_LT1)       &&
                 for_to_while_id_push_back(capture_id_end)    &&
                 for_to_while_push_back(TOKEN_TYPE_RPAREN)    &&
                 for_to_while_push_back(TOKEN_TYPE_LBRACE)    &&
@@ -908,7 +908,7 @@ static const char* ast_node_type_enum_to_str(enum AST_node_type ast_node_type){
         generate_case(AST_NODE_TYPE_TYPE_INT);
         generate_case(AST_NODE_TYPE_TYPE_FLOAT);
         generate_case(AST_NODE_TYPE_TYPE_STR);
-        generate_case(AST_NODE_TYPE_TYPE_QUALIFIER_LIST);
+        generate_case(AST_NODE_TYPE_TYPE_MODIFIER_LIST);
         generate_case(AST_NODE_TYPE_UNARY_OP_PLUS);
         generate_case(AST_NODE_TYPE_UNARY_OP_MINUS);
         generate_case(AST_NODE_TYPE_UNARY_OP_BNEG);
@@ -924,10 +924,10 @@ static const char* ast_node_type_enum_to_str(enum AST_node_type ast_node_type){
         generate_case(AST_NODE_TYPE_BINARY_OP_SUB);
         generate_case(AST_NODE_TYPE_BINARY_OP_SHL);
         generate_case(AST_NODE_TYPE_BINARY_OP_SHR);
+        generate_case(AST_NODE_TYPE_BINARY_OP_CMP_LT);
         generate_case(AST_NODE_TYPE_BINARY_OP_CMP_LE);
-        generate_case(AST_NODE_TYPE_BINARY_OP_CMP_LEQ);
+        generate_case(AST_NODE_TYPE_BINARY_OP_CMP_GT);
         generate_case(AST_NODE_TYPE_BINARY_OP_CMP_GE);
-        generate_case(AST_NODE_TYPE_BINARY_OP_CMP_GEQ);
         generate_case(AST_NODE_TYPE_BINARY_OP_CMP_EQ);
         generate_case(AST_NODE_TYPE_BINARY_OP_CMP_NEQ);
         generate_case(AST_NODE_TYPE_BINARY_OP_BAND);
@@ -1023,7 +1023,7 @@ i64 ast_node_ptr_slice_print(AST_node_ptr_slice ast_node_ptr_slice, FILE *file){
     return result;
 }
 
-Parse_result parser_parse(Arena *arena, Token_slice tokens){
+Parser_parse_result parser_parse(Arena *arena, Token_slice tokens){
     assert(arena && "<arena> is not nullable");
     assert(token_slice_is_valid(tokens));
 
@@ -1038,9 +1038,9 @@ Parse_result parser_parse(Arena *arena, Token_slice tokens){
 
     while (parser_state_parse_statement(&state))
         if (!vec_base_push_back(&ast_node_ptrs, state.alloc, &state.result.ast_node_ptr))
-            return (Parse_result){.error = PARSE_ERROR_OOM};
+            return (Parser_parse_result){.error = PARSE_ERROR_OOM};
     if (state.result.error != PARSE_ERROR_NONE)
-        return (Parse_result){.error_info = state.result.error_info, .error = state.result.error};
+        return (Parser_parse_result){.error_info = state.result.error_info, .error = state.result.error};
 
-    return (Parse_result){.ast_nodes = {.m_size = ast_node_ptrs.m_size, .m_data = ast_node_ptrs.m_data}, .error = PARSE_ERROR_NONE};
+    return (Parser_parse_result){.ast_nodes = {.m_size = ast_node_ptrs.m_size, .m_data = ast_node_ptrs.m_data}, .error = PARSE_ERROR_NONE};
 }

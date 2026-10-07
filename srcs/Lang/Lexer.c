@@ -39,22 +39,22 @@ typedef struct Lexer_state{
 
 #define U64_MAX_STRLEN 20
 
-static const char  MULTI_LINE_COMMENT_SYMBOL[] = "/*/";
-static const char SINGLE_LINE_COMMENT_SYMBOL[] = "//";
+static const char COMMENT_SYMBOL_BLOCK[] = "/*/";
+static const char COMMENT_SYMBOL_SINGLE_LINE[] = "//";
 
-#define  MULTI_LINE_COMMENT_SYMBOL_SIZE (array_size( MULTI_LINE_COMMENT_SYMBOL) - 1)
-#define SINGLE_LINE_COMMENT_SYMBOL_SIZE (array_size(SINGLE_LINE_COMMENT_SYMBOL) - 1)
+#define COMMENT_SYMBOL_BLOCK_SIZE (array_size(COMMENT_SYMBOL_BLOCK) - 1)
+#define COMMENT_SYMBOL_SINGLE_LINE_SIZE (array_size(COMMENT_SYMBOL_SINGLE_LINE) - 1)
 
-static const Lex_result OOM_ERROR = {.error = LEX_ERROR_OOM};
+static const Lexer_lex_result OOM_ERROR = {.error = LEX_ERROR_OOM};
 
 static void lexer_state_cleanup(Lexer_state *self){
     fclose(self->file);
 }
-static Lex_result lexer_state_oom_error(Lexer_state *self){
+static Lexer_lex_result lexer_state_oom_error(Lexer_state *self){
     lexer_state_cleanup(self);
     return OOM_ERROR;
 }
-static Lex_result lexer_state_syntax_error(Lexer_state *self, const char *fmt, ...){
+static Lexer_lex_result lexer_state_syntax_error(Lexer_state *self, const char *fmt, ...){
     va_list args;
     va_start(args, fmt);
     Str_base_result error_info = str_base_init_fmt_va_list(self->alloc, fmt, args);
@@ -73,7 +73,7 @@ static Lex_result lexer_state_syntax_error(Lexer_state *self, const char *fmt, .
 
     lexer_state_cleanup(self);
 
-    return (Lex_result){.error_info = error_info.result, .error = LEX_ERROR_SYNTAX};
+    return (Lexer_lex_result){.error_info = error_info.result, .error = LEX_ERROR_SYNTAX};
 }
 static bool lexer_state_token_push_back(Lexer_state *self, enum Token_type type, const char *id){
     Str_base_result temp = str_base_init_raw(self->alloc, id);
@@ -108,12 +108,12 @@ static const char* token_type_enum_to_str(enum Token_type token_type){
         generate_case(TOKEN_TYPE_ASTERISK1);
         generate_case(TOKEN_TYPE_SLASH);
         generate_case(TOKEN_TYPE_PERCENT);
-        generate_case(TOKEN_TYPE_LE2);
-        generate_case(TOKEN_TYPE_LE1_EQ1);
-        generate_case(TOKEN_TYPE_LE1);
-        generate_case(TOKEN_TYPE_GE2);
-        generate_case(TOKEN_TYPE_GE1_EQ1);
-        generate_case(TOKEN_TYPE_GE1);
+        generate_case(TOKEN_TYPE_LT2);
+        generate_case(TOKEN_TYPE_LT1_EQ1);
+        generate_case(TOKEN_TYPE_LT1);
+        generate_case(TOKEN_TYPE_GT2);
+        generate_case(TOKEN_TYPE_GT1_EQ1);
+        generate_case(TOKEN_TYPE_GT1);
         generate_case(TOKEN_TYPE_EQ2);
         generate_case(TOKEN_TYPE_EQ1);
         generate_case(TOKEN_TYPE_EXCL_EQ1);
@@ -168,12 +168,12 @@ const char* token_type_to_str(enum Token_type token_type){
         case TOKEN_TYPE_ASTERISK1: return "*";
         case TOKEN_TYPE_SLASH:     return "/";
         case TOKEN_TYPE_PERCENT:   return "%";
-        case TOKEN_TYPE_LE2:       return "<<";
-        case TOKEN_TYPE_LE1_EQ1:   return "<=";
-        case TOKEN_TYPE_LE1:       return "<";
-        case TOKEN_TYPE_GE2:       return ">>";
-        case TOKEN_TYPE_GE1_EQ1:   return ">=";
-        case TOKEN_TYPE_GE1:       return ">";
+        case TOKEN_TYPE_LT2:       return "<<";
+        case TOKEN_TYPE_LT1_EQ1:   return "<=";
+        case TOKEN_TYPE_LT1:       return "<";
+        case TOKEN_TYPE_GT2:       return ">>";
+        case TOKEN_TYPE_GT1_EQ1:   return ">=";
+        case TOKEN_TYPE_GT1:       return ">";
         case TOKEN_TYPE_EQ2:       return "==";
         case TOKEN_TYPE_EQ1:       return "=";
         case TOKEN_TYPE_EXCL_EQ1:  return "!=";
@@ -227,7 +227,7 @@ i64 token_slice_print(Token_slice tokens_slice, FILE *file){
     return chars_written;
 }
 
-Lex_result lexer_lex(Arena *arena, const char *path){
+Lexer_lex_result lexer_lex(Arena *arena, const char *path){
     assert(arena && "<arena> is not nullable");
     assert(path && "<path> is not nullable");
 
@@ -243,7 +243,7 @@ Lex_result lexer_lex(Arena *arena, const char *path){
 
     if (!state.file){
         Str_base_result error_info = str_base_init_fmt(state.alloc, "<%s>: %s", path, strerror(errno));
-        return (error_info.success) ? (Lex_result){.error_info = error_info.result, .error = LEX_ERROR_FILE} : OOM_ERROR;
+        return (error_info.success) ? (Lexer_lex_result){.error_info = error_info.result, .error = LEX_ERROR_FILE} : OOM_ERROR;
     }
 
     Str_base lines = {0};
@@ -267,7 +267,7 @@ Lex_result lexer_lex(Arena *arena, const char *path){
                 if (!error_info.success)
                     return oom_error();
                 lexer_state_cleanup(&state);
-                return (Lex_result){.error_info = error_info.result, .error = LEX_ERROR_FILE};
+                return (Lexer_lex_result){.error_info = error_info.result, .error = LEX_ERROR_FILE};
             }
         }
     }
@@ -282,25 +282,25 @@ Lex_result lexer_lex(Arena *arena, const char *path){
     ){
         if (str_view_trim_prefix_in_place(&sv, "\n"))
             state.pos = (Token_positiion_info){.m_row = state.pos.m_row + 1, .m_col = 1};
-        else if (str_view_trim_prefix_in_place(&sv, MULTI_LINE_COMMENT_SYMBOL)){
+        else if (str_view_trim_prefix_in_place(&sv, COMMENT_SYMBOL_BLOCK)){
             Token_positiion_info new_pos = state.pos;
-            new_pos.m_col += MULTI_LINE_COMMENT_SYMBOL_SIZE;
+            new_pos.m_col += COMMENT_SYMBOL_BLOCK_SIZE;
 
             usize i = 0;
-            for (; i < sv.m_size && !str_view_starts_with(str_view_trim_left(sv, i), MULTI_LINE_COMMENT_SYMBOL); ++i){
+            for (; i < sv.m_size && !str_view_starts_with(str_view_trim_left(sv, i), COMMENT_SYMBOL_BLOCK); ++i){
                 if (sv.m_str[i] == '\n')
                     new_pos = (Token_positiion_info){.m_row = new_pos.m_row + 1, .m_col = 0};
                 ++new_pos.m_col;
             }
             if (i >= sv.m_size)
-                return syntax_error("Unclosed multi line comment");
+                return syntax_error("Unclosed block comment");
 
             state.pos = new_pos;
-            state.pos.m_col += MULTI_LINE_COMMENT_SYMBOL_SIZE;
+            state.pos.m_col += COMMENT_SYMBOL_BLOCK_SIZE;
 
-            sv = str_view_trim_left(sv, i + MULTI_LINE_COMMENT_SYMBOL_SIZE);
+            sv = str_view_trim_left(sv, i + COMMENT_SYMBOL_BLOCK_SIZE);
         }
-        else if (str_view_starts_with(sv, SINGLE_LINE_COMMENT_SYMBOL))
+        else if (str_view_starts_with(sv, COMMENT_SYMBOL_SINGLE_LINE))
             sv = str_view_trim_left_while_not(sv, is_newline);
         else if (sv.m_str[0] == '\'' || sv.m_str[0] == '"'){
             char quote = sv.m_str[0];
@@ -467,12 +467,12 @@ Lex_result lexer_lex(Arena *arena, const char *path){
                 match_punct(TOKEN_TYPE_ASTERISK1) ||
                 match_punct(TOKEN_TYPE_SLASH    ) ||
                 match_punct(TOKEN_TYPE_PERCENT  ) ||
-                match_punct(TOKEN_TYPE_LE2      ) ||
-                match_punct(TOKEN_TYPE_LE1_EQ1  ) ||
-                match_punct(TOKEN_TYPE_LE1      ) ||
-                match_punct(TOKEN_TYPE_GE2      ) ||
-                match_punct(TOKEN_TYPE_GE1_EQ1  ) ||
-                match_punct(TOKEN_TYPE_GE1      ) ||
+                match_punct(TOKEN_TYPE_LT2      ) ||
+                match_punct(TOKEN_TYPE_LT1_EQ1  ) ||
+                match_punct(TOKEN_TYPE_LT1      ) ||
+                match_punct(TOKEN_TYPE_GT2      ) ||
+                match_punct(TOKEN_TYPE_GT1_EQ1  ) ||
+                match_punct(TOKEN_TYPE_GT1      ) ||
                 match_punct(TOKEN_TYPE_EQ2      ) ||
                 match_punct(TOKEN_TYPE_EQ1      ) ||
                 match_punct(TOKEN_TYPE_EXCL_EQ1 ) ||
@@ -559,5 +559,5 @@ Lex_result lexer_lex(Arena *arena, const char *path){
 
     lexer_state_cleanup(&state);
 
-    return (Lex_result){.tokens = {.m_size = state.tokens.m_size, .m_data = state.tokens.m_data}, .error = LEX_ERROR_NONE};
+    return (Lexer_lex_result){.tokens = {.m_size = state.tokens.m_size, .m_data = state.tokens.m_data}, .error = LEX_ERROR_NONE};
 }

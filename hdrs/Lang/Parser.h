@@ -40,7 +40,7 @@ enum AST_node_type{
     AST_NODE_TYPE_TYPE_INT,
     AST_NODE_TYPE_TYPE_FLOAT,
     AST_NODE_TYPE_TYPE_STR,
-    AST_NODE_TYPE_TYPE_QUALIFIER_LIST,
+    AST_NODE_TYPE_TYPE_MODIFIER_LIST,
 
     AST_NODE_TYPE_UNARY_OP_PLUS,
     AST_NODE_TYPE_UNARY_OP_MINUS,
@@ -58,10 +58,10 @@ enum AST_node_type{
     AST_NODE_TYPE_BINARY_OP_SUB,
     AST_NODE_TYPE_BINARY_OP_SHL,
     AST_NODE_TYPE_BINARY_OP_SHR,
+    AST_NODE_TYPE_BINARY_OP_CMP_LT,
     AST_NODE_TYPE_BINARY_OP_CMP_LE,
-    AST_NODE_TYPE_BINARY_OP_CMP_LEQ,
+    AST_NODE_TYPE_BINARY_OP_CMP_GT,
     AST_NODE_TYPE_BINARY_OP_CMP_GE,
-    AST_NODE_TYPE_BINARY_OP_CMP_GEQ,
     AST_NODE_TYPE_BINARY_OP_CMP_EQ,
     AST_NODE_TYPE_BINARY_OP_CMP_NEQ,
     AST_NODE_TYPE_BINARY_OP_BAND,
@@ -92,21 +92,21 @@ struct AST_node{
     const Token *m_token;
 };
 
-enum Parse_error{
+enum Parser_parse_error{
     PARSE_ERROR_NONE,
     PARSE_ERROR_OOM,
     PARSE_ERROR_SYNTAX
 };
 
-typedef struct Parse_result{
+typedef struct Parser_parse_result{
     union{
         AST_node_ptr_slice ast_nodes;
         Str_base error_info;
     };
-    enum Parse_error error;
-} Parse_result;
+    enum Parser_parse_error error;
+} Parser_parse_result;
 
-Parse_result parser_parse(Arena *arena, Token_slice tokens);
+Parser_parse_result parser_parse(Arena *arena, Token_slice tokens);
 
 #ifdef __cplusplus
 }
