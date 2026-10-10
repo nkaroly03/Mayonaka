@@ -39,7 +39,7 @@ add_expr : mul_expr ((PUNCT_PLUS | PUNCT_MINUS) mul_expr)* ;
 mul_expr : as_expr ((PUNCT_ASTERISK1 | PUNCT_SLASH | PUNCT_PERCENT) as_expr)* ;
 as_expr : unary_expr (KEYWORD_AS type unary_expr?)* ;
 unary_expr : (PUNCT_PLUS | PUNCT_MINUS | PUNCT_TILDE | KEYWORD_NOT)* exp_expr ;
-exp_expr : postfix_expr (PUNCT_ASTERISK2 postfix_expr)* ;
+exp_expr : postfix_expr (PUNCT_ASTERISK2 unary_expr)? ;
 postfix_expr : primary_expr (PUNCT_DOT1 IDENTIFIER | PUNCT_LBRACKET expr PUNCT_RBRACKET | PUNCT_LPAREN expr_list? PUNCT_RPAREN)* ;
 primary_expr : IDENTIFIER | literal | PUNCT_LPAREN expr PUNCT_RPAREN ;
 
