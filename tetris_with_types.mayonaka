@@ -315,10 +315,8 @@ fn tetris_run(self: Tetris) void {
         if (reached_end){
             while (true){
                 let y_start: int = 0;
-                while (y_start < TETRIS_HEIGHT) : (y_start = y_start + 1)
-                    if (tetris_row_is_full(self, y_start))
-                        break;
-
+                while (y_start < TETRIS_HEIGHT and not tetris_row_is_full(self, y_start))
+                    y_start = y_start + 1;
                 if (y_start >= TETRIS_HEIGHT)
                     break;
 
@@ -365,7 +363,6 @@ fn tetris_run(self: Tetris) void {
 
         nsleep(25000000);
     }
-
 }
 
 fn main() void {

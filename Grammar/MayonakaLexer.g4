@@ -43,10 +43,10 @@ PUNCT_SLASH     : '/'  ;
 PUNCT_PERCENT   : '%'  ;
 PUNCT_LT2       : '<<' ;
 PUNCT_LT1_EQ1   : '<=' ;
-PUNCT_L1        : '<'  ;
+PUNCT_LT1       : '<'  ;
 PUNCT_GT2       : '>>' ;
 PUNCT_GT1_EQ1   : '>=' ;
-PUNCT_G1        : '>'  ;
+PUNCT_GT1       : '>'  ;
 PUNCT_EQ2       : '==' ;
 PUNCT_EQ1       : '='  ;
 PUNCT_EXCL_EQ1  : '!=' ;
@@ -77,4 +77,4 @@ fragment Int_literal_dec : Digit ((Digit | '_')* Digit | Digit?) ;
 
 WS : [ \n\r\t]+ -> skip ;
 
-COMMENT : '/*/' .*? '/*/' | '//' ~[\r\n]* -> skip ;
+COMMENT : ('/*/' .*? '/*/' | '//' ~[\r\n]*) -> skip ;

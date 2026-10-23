@@ -60,10 +60,10 @@ typedef struct Shared_state{
     usize label_counter;
 } Shared_state;
 
-typedef struct While_label_info{
+typedef struct Label_info{
     const char *break_label_str, *continue_label_str;
-    usize id_count_stack_idx;
-} While_label_info;
+    usize type_info_stack_size;
+} Label_info;
 
 typedef struct IR_compiler_state{
     Allocator alloc;
@@ -138,7 +138,7 @@ static bool IR_compiler_state_init_in_place(IR_compiler_state *self, Allocator a
         .shared_state_ptr     = shared_state_ptr,
         .var_id_info_map      = ordered_umap_base_init(Str_base, Var_id_info),
         .type_info_stack      = vec_base_init(Type_info),
-        .while_label_info_map = ordered_umap_base_init(Str_base, While_label_info),
+        .while_label_info_map = ordered_umap_base_init(Str_base, Label_info),
         .fn_IRs               = {0},
         .result               = {.IR = {0}, .error = COMPILE_ERROR_NONE}
     };
@@ -238,6 +238,16 @@ static bool IR_compiler_state_add_type_conversion_instruction(IR_compiler_state 
     ;
 }
 #define add_type_conversion_instruction(dest_type_info) IR_compiler_state_add_type_conversion_instruction(self, (dest_type_info))
+
+static bool IR_compiler_state_add_fn_return_instruction(IR_compiler_state *self, enum Op_code ret_op_code){
+    usize type_info_stack_size = self->type_info_stack.m_size;
+    self->type_info_stack.m_size = ((Id_count*)vec_base_at(&self->id_count_stack, 0))->var_id_count;
+    if (!add_instruction("%s " USIZE_PFMT, op_code_to_str(ret_op_code), type_info_stack_size - self->type_info_stack.m_size))
+        return oom_error();
+    self->type_info_stack.m_size = type_info_stack_size;
+    return true;
+}
+#define add_fn_return_instruction(ret_op_code) IR_compiler_state_add_fn_return_instruction(self, (ret_op_code))
 
 static bool IR_compiler_state_pop_on_discarded_expression(IR_compiler_state *self, const AST_node *ast_node){
     if (ast_node->m_parent){
@@ -1106,19 +1116,10 @@ static bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *a
                 fn_id_info.return_type_info.m_tag == TYPE_INFO_TAG_VOID && (
                     fn_body_node->m_sub_nodes.m_size == 0 ||
                     fn_body_node->m_sub_nodes.m_data[fn_body_node->m_sub_nodes.m_size - 1]->m_type != AST_NODE_TYPE_STATEMENT_RETURN
-                )
-            ){
-                usize fn_IR_compiler_state_type_info_stack_size = fn_IR_compiler_state.type_info_stack.m_size;
-                fn_IR_compiler_state.type_info_stack.m_size = ((Id_count*)vec_base_at(&fn_IR_compiler_state.id_count_stack, 0))->var_id_count;
-                if (!IR_compiler_state_add_instruction(
-                    &fn_IR_compiler_state,
-                    "%s " USIZE_PFMT,
-                    op_code_to_str(OP_CODE_RETV),
-                    fn_IR_compiler_state_type_info_stack_size - fn_IR_compiler_state.type_info_stack.m_size
-                ))
-                    return oom_error();
-                fn_IR_compiler_state.type_info_stack.m_size = fn_IR_compiler_state_type_info_stack_size;
-            }
+                ) &&
+                !IR_compiler_state_add_fn_return_instruction(&fn_IR_compiler_state, OP_CODE_RETV)
+            )
+                return false;
 
             if (!(
                 str_base_append_str_base(&fn_IR_compiler_state.result.IR, self->alloc, &fn_IR_compiler_state.fn_IRs) &&
@@ -1335,10 +1336,10 @@ static bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *a
                 &self->while_label_info_map,
                 self->alloc,
                 &while_label_id_str,
-                &(While_label_info){
-                    .break_label_str    = break_label_str_buf,
-                    .continue_label_str = continue_label_str_buf,
-                    .id_count_stack_idx = self->id_count_stack.m_size
+                &(Label_info){
+                    .break_label_str      = break_label_str_buf,
+                    .continue_label_str   = continue_label_str_buf,
+                    .type_info_stack_size = self->type_info_stack.m_size
                 }
             );
             switch (label_insert_result.error){
@@ -1361,7 +1362,7 @@ static bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *a
                 return oom_error();
             if (
                 while_continue_expr_node && (
-                    ((While_label_info*)label_insert_result.result.m_value)->continue_label_str = cond_label_str_buf,
+                    ((Label_info*)label_insert_result.result.m_value)->continue_label_str = cond_label_str_buf,
                     !IR_compiler_state_compile(self, while_continue_expr_node)
                 )
             )
@@ -1377,18 +1378,16 @@ static bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *a
         case AST_NODE_TYPE_STATEMENT_CONTINUE:{
             if (self->while_label_info_map.m_keys.m_size == 0)
                 return syntax_error(ast_node, "<%s> must be used inside a loop", str_base_data_const(&ast_node->m_token->m_id));
-            While_label_info *while_label_info_ptr = ((ast_node->m_sub_nodes.m_size > 0)
+            Label_info *label_info_ptr = ((ast_node->m_sub_nodes.m_size > 0)
                 ? ordered_umap_base_at_key(&self->while_label_info_map, &ast_node->m_sub_nodes.m_data[0]->m_token->m_id)
                 : ordered_umap_base_at_idx(&self->while_label_info_map, self->while_label_info_map.m_keys.m_size - 1)
             ).m_value;
-            if (!while_label_info_ptr){
+            if (!label_info_ptr){
                 const AST_node *label_id_node = ast_node->m_sub_nodes.m_data[0];
                 return syntax_error(label_id_node, "Use of undeclared label identifier <%s>", str_base_data_const(&label_id_node->m_token->m_id));
             }
             usize type_info_stack_size = self->type_info_stack.m_size;
-            for (usize i = self->id_count_stack.m_size; i-- > while_label_info_ptr->id_count_stack_idx;)
-                for (usize var_id_count = ((Id_count*)vec_base_at(&self->id_count_stack, i))->var_id_count; var_id_count-- > 0;)
-                    --self->type_info_stack.m_size;
+            self->type_info_stack.m_size = label_info_ptr->type_info_stack_size;
             if (!(
                 (
                     self->type_info_stack.m_size == type_info_stack_size ||
@@ -1397,7 +1396,7 @@ static bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *a
                 add_instruction(
                     "%s %s",
                     op_code_to_str(OP_CODE_JMP),
-                    (ast_node->m_type == AST_NODE_TYPE_STATEMENT_BREAK) ? while_label_info_ptr->break_label_str : while_label_info_ptr->continue_label_str
+                    (ast_node->m_type == AST_NODE_TYPE_STATEMENT_BREAK) ? label_info_ptr->break_label_str : label_info_ptr->continue_label_str
                 )
             ))
                 return oom_error();
@@ -1454,11 +1453,8 @@ static bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *a
                 else if (ast_node->m_sub_nodes.m_size > 0)
                     return syntax_error(ast_node, "Function with return type <void> returning non-void");
 
-                usize type_info_stack_size = self->type_info_stack.m_size;
-                self->type_info_stack.m_size = ((Id_count*)vec_base_at(&self->id_count_stack, 0))->var_id_count;
-                if (!add_instruction("%s " USIZE_PFMT, op_code_to_str(ret_op_code), type_info_stack_size - self->type_info_stack.m_size))
-                    return oom_error();
-                self->type_info_stack.m_size = type_info_stack_size;
+                if (!add_fn_return_instruction(ret_op_code))
+                    return false;
             }
             break;
         }
