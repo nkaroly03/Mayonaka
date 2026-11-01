@@ -367,14 +367,40 @@ static bool IR_compiler_state_init_list_type_info_from_context(IR_compiler_state
                 return syntax_error(init_list_node, "Casting initializer list to non-list type in <as> expression");
             break;
         case AST_NODE_TYPE_BINARY_OP_ASSIGNMENT:{
-            usize i = 0;
             const AST_node *id_node = parent->m_sub_nodes.m_data[0];
-            while (id_node->m_type != AST_NODE_TYPE_ATOM_ID){
-                i += (id_node->m_type == AST_NODE_TYPE_BINARY_OP_SUBSCRIPT);
+            while (id_node->m_type != AST_NODE_TYPE_ATOM_ID)
                 id_node = id_node->m_sub_nodes.m_data[0];
-            }
             *out_init_list_type_info = ((Var_id_info*)ordered_umap_base_at_key(&self->var_id_info_map, &id_node->m_token->m_id).m_value)->type_info;
-            out_init_list_type_info->m_dimensions -= i;
+            while ((id_node = id_node->m_parent) != parent){
+                switch (id_node->m_type){
+                    case AST_NODE_TYPE_BINARY_OP_MEMBER_ACCESS:
+                        *out_init_list_type_info = (
+                            (Field_info*)ordered_umap_base_at_key_const(
+                                (
+                                    (Type_id_info*)ordered_umap_base_at_key(
+                                        &self->shared_state_ptr->type_id_info_maps.type_info_tag_as_i32_id_map,
+                                        &(i32){(i32)out_init_list_type_info->m_tag}
+                                    ).m_value
+                                )->field_info_map_ptr,
+                                &id_node->m_sub_nodes.m_data[1]->m_token->m_id
+                            ).m_value
+                        )->type_info;
+                        break;
+                    case AST_NODE_TYPE_BINARY_OP_SUBSCRIPT:
+                        --out_init_list_type_info->m_dimensions;
+                        break;
+                    case AST_NODE_TYPE_BINARY_OP_AS:
+                        if (!ast_node_to_type_info(parent->m_sub_nodes.m_data[1], out_init_list_type_info))
+                            return false;
+                        break;
+                    case AST_NODE_TYPE_BINARY_OP_ASSIGNMENT:
+                        break;
+                    default:
+                        unreachable();
+                }
+            }
+            if (out_init_list_type_info->m_dimensions == 0)
+                return syntax_error(init_list_node, "Assigning initializer list to non-list type");
             break;
         }
         case AST_NODE_TYPE_FN_CALL:{
@@ -412,8 +438,11 @@ static bool IR_compiler_state_init_list_type_info_from_context(IR_compiler_state
             const AST_node *obj_init_node = parent->m_parent;
             if (obj_init_node && obj_init_node->m_type == AST_NODE_TYPE_ATOM_OBJ_INIT){
                 *out_init_list_type_info = (
-                    (Field_info*)ordered_umap_base_at_key_const(
-                        ((Type_id_info*)ordered_umap_base_at_key(&self->shared_state_ptr->type_id_info_maps.str_id_map, &obj_init_node->m_token->m_id).m_value)->field_info_map_ptr,
+                    (Field_info*)ordered_umap_base_at_key_const((
+                        (Type_id_info*)ordered_umap_base_at_key(
+                            &self->shared_state_ptr->type_id_info_maps.str_id_map,
+                            &obj_init_node->m_token->m_id).m_value
+                        )->field_info_map_ptr,
                         &parent->m_token->m_id
                     ).m_value
                 )->type_info;

@@ -32,7 +32,6 @@ static int is_bin_digit(int c){
 
 typedef struct Lexer_state{
     Allocator alloc;
-    FILE *file;
     Token_positiion_info pos;
     Vec_base tokens;
 } Lexer_state;
@@ -47,13 +46,6 @@ static const char COMMENT_SYMBOL_SINGLE_LINE[] = "//";
 
 static const Lexer_lex_result OOM_ERROR = {.error = LEX_ERROR_OOM};
 
-static void lexer_state_cleanup(Lexer_state *self){
-    fclose(self->file);
-}
-static Lexer_lex_result lexer_state_oom_error(Lexer_state *self){
-    lexer_state_cleanup(self);
-    return OOM_ERROR;
-}
 static Lexer_lex_result lexer_state_syntax_error(Lexer_state *self, const char *fmt, ...){
     va_list args;
     va_start(args, fmt);
@@ -61,17 +53,15 @@ static Lexer_lex_result lexer_state_syntax_error(Lexer_state *self, const char *
     va_end(args);
 
     if (!error_info.success)
-        return lexer_state_oom_error(self);
+        return OOM_ERROR;
 
     Token_positiion_info pos = self->pos;
     if (pos.m_row > 0){
         Str_base_result temp = str_base_init_fmt(self->alloc, "<" USIZE_PFMT ":" USIZE_PFMT ">: %s", pos.m_row, pos.m_col, str_base_data(&error_info.result));
         if (!temp.success)
-            return lexer_state_oom_error(self);
+            return OOM_ERROR;
         error_info = temp;
     }
-
-    lexer_state_cleanup(self);
 
     return (Lexer_lex_result){.error_info = error_info.result, .error = LEX_ERROR_SYNTAX};
 }
@@ -232,43 +222,46 @@ Lexer_lex_result lexer_lex(Arena *arena, const char *path){
     assert(path && "<path> is not nullable");
 
     Lexer_state state = {
-        .alloc       = arena_allocator(arena),
-        .file        = fopen(path, "r"),
-        .pos         = {.m_row = 1, .m_col = 1},
-        .tokens      = vec_base_init(Token)
+        .alloc  = arena_allocator(arena),
+        .pos    = {.m_row = 1, .m_col = 1},
+        .tokens = vec_base_init(Token)
     };
-    #define oom_error() lexer_state_oom_error(&state)
     #define syntax_error(...) lexer_state_syntax_error(&state, __VA_ARGS__)
     #define token_push_back(token_type_val, token_type_id) lexer_state_token_push_back(&state, (token_type_val), (token_type_id))
-
-    if (!state.file){
-        Str_base_result error_info = str_base_init_fmt(state.alloc, "<%s>: %s", path, strerror(errno));
-        return (error_info.success) ? (Lexer_lex_result){.error_info = error_info.result, .error = LEX_ERROR_FILE} : OOM_ERROR;
-    }
 
     Str_base lines = {0};
 
     {
+        Str_base_result file_error_info;
+
+        FILE *file = fopen(path, "r");
+        if (!file){
+            file_error_info = str_base_init_fmt(state.alloc, "<%s>: %s", path, strerror(errno));
+            goto file_error;
+        }
+
         Str_base line = {0};
 
         enum Str_getline_error getline_error;
-        while ((getline_error = str_base_getline(&line, state.alloc, state.file)) == STR_GETLINE_ERROR_NONE)
-            if (!(str_base_append_str_base(&lines, state.alloc, &line) && str_base_push_back(&lines, state.alloc, '\n')))
-                return oom_error();
+        while ((getline_error = str_base_getline(&line, state.alloc, file)) == STR_GETLINE_ERROR_NONE){
+            if (!(str_base_append_str_base(&lines, state.alloc, &line) && str_base_push_back(&lines, state.alloc, '\n'))){
+                fclose(file);
+                return OOM_ERROR;
+            }
+        }
+
+        fclose(file);
 
         switch (getline_error){
             case STR_GETLINE_ERROR_NONE:
             case STR_GETLINE_ERROR_FEOF:
                 break;
             case STR_GETLINE_ERROR_OOM:
-                return oom_error();
-            case STR_GETLINE_ERROR_FERROR:{
-                Str_base_result error_info = str_base_init_raw(state.alloc, "<ferror> during tokenization");
-                if (!error_info.success)
-                    return oom_error();
-                lexer_state_cleanup(&state);
-                return (Lexer_lex_result){.error_info = error_info.result, .error = LEX_ERROR_FILE};
-            }
+                return OOM_ERROR;
+            case STR_GETLINE_ERROR_FERROR:
+                file_error_info = str_base_init_raw(state.alloc, "<ferror> during tokenization");
+            file_error:
+                return (file_error_info.success) ? (Lexer_lex_result){.error_info = file_error_info.result, .error = LEX_ERROR_FILE} : OOM_ERROR;
         }
     }
 
@@ -321,7 +314,7 @@ Lexer_lex_result lexer_lex(Arena *arena, const char *path){
             Str_base_unescape_result temp = str_base_unescape_str_view(state.alloc, quoted_sv);
             switch (temp.error){
                 case STR_UNESCAPE_ERROR_NONE:                break;
-                case STR_UNESCAPE_ERROR_OOM:                 return oom_error();
+                case STR_UNESCAPE_ERROR_OOM:                 return OOM_ERROR;
                 case STR_UNESCAPE_ERROR_BAD_ESCAPE_SEQUENCE: return syntax_error("<%s> literal is escaped incorrectly", type_str);
             }
 
@@ -333,7 +326,7 @@ Lexer_lex_result lexer_lex(Arena *arena, const char *path){
                 Token *last = vec_base_at(&state.tokens, state.tokens.m_size - 1);
                 str_base_pop_back(&last->m_id);
                 if (!str_base_append_str_view(&last->m_id, state.alloc, str_view_trim_left(quoted_sv, 1)))
-                    return oom_error();
+                    return OOM_ERROR;
             }
             else if (!(
                 str_base_assign_str_view(&temp.result, state.alloc, quoted_sv) &&
@@ -343,7 +336,7 @@ Lexer_lex_result lexer_lex(Arena *arena, const char *path){
                     &(Token){.m_type = (is_single_quote) ? TOKEN_TYPE_CHAR_LIT : TOKEN_TYPE_STR_LIT, .m_id = temp.result, .m_pos = state.pos}
                 )
             ))
-                return oom_error();
+                return OOM_ERROR;
 
             state.pos.m_col += quoted_sv.m_size;
             sv = str_view_trim_left(sv, quoted_sv.m_size);
@@ -386,7 +379,7 @@ Lexer_lex_result lexer_lex(Arena *arena, const char *path){
                 sprintf(int_buf, I64_PFMT, (i64)sum);
 
                 if (!token_push_back(TOKEN_TYPE_INT_LIT, int_buf))
-                    return oom_error();
+                    return OOM_ERROR;
 
                 state.pos.m_col += i;
                 sv = str_view_trim_left(sv, i);
@@ -406,7 +399,7 @@ Lexer_lex_result lexer_lex(Arena *arena, const char *path){
                                 return syntax_error("Invalid <float> literal");
                         }
                         if (!str_base_push_back(&decimal_buf, state.alloc, c))
-                            return oom_error();
+                            return OOM_ERROR;
                     }
                 }
 
@@ -432,7 +425,7 @@ Lexer_lex_result lexer_lex(Arena *arena, const char *path){
                 }
 
                 if (!token_push_back(literal_token_type, data))
-                    return oom_error();
+                    return OOM_ERROR;
 
                 state.pos.m_col += i;
                 sv = str_view_trim_left(sv, i);
@@ -481,7 +474,7 @@ Lexer_lex_result lexer_lex(Arena *arena, const char *path){
                 match_punct(TOKEN_TYPE_PIPE     )
             )){
                 Str_base_result temp = str_base_init_fmt(state.alloc, "Found unknown token <%c>", sv.m_str[0]);
-                return (temp.success) ? syntax_error(str_base_data(&temp.result)) : oom_error();
+                return (temp.success) ? syntax_error(str_base_data(&temp.result)) : OOM_ERROR;
             }
 
             lparen_count   += (punct_token_type == TOKEN_TYPE_LPAREN  );
@@ -492,7 +485,7 @@ Lexer_lex_result lexer_lex(Arena *arena, const char *path){
             rbrace_count   += (punct_token_type == TOKEN_TYPE_RBRACE  );
 
             if (!token_push_back(punct_token_type, punct_token_id))
-                return oom_error();
+                return OOM_ERROR;
 
             usize punct_token_id_len = (usize)strlen(punct_token_id);
             state.pos.m_col += punct_token_id_len;
@@ -536,12 +529,12 @@ Lexer_lex_result lexer_lex(Arena *arena, const char *path){
                 match_keyword(TOKEN_TYPE_RETURN  )
             ){
                 if (!token_push_back(keyword_token_type, keyword_token_sv.m_str))
-                    return oom_error();
+                    return OOM_ERROR;
             }
             else{
                 Str_base_result id = str_base_init_str_view(state.alloc, id_sv);
                 if (!(id.success && vec_base_push_back(&state.tokens, state.alloc, &(Token){.m_type = TOKEN_TYPE_ID, .m_id = id.result, .m_pos = state.pos})))
-                    return oom_error();
+                    return OOM_ERROR;
             }
 
             state.pos.m_col += id_sv.m_size;
@@ -556,8 +549,6 @@ Lexer_lex_result lexer_lex(Arena *arena, const char *path){
         return syntax_error("Number of opening and closing brackets must match");
     if (lbrace_count != rbrace_count)
         return syntax_error("Number of opening and closing braces must match");
-
-    lexer_state_cleanup(&state);
 
     return (Lexer_lex_result){.tokens = {.m_size = state.tokens.m_size, .m_data = state.tokens.m_data}, .error = LEX_ERROR_NONE};
 }

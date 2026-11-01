@@ -16,7 +16,6 @@
 #include "../../hdrs/Data_structure/Vec_base.h"
 #include "../../hdrs/Utils/Cmp.h"
 #include "../../hdrs/Utils/Num.h"
-#include "../../hdrs/Utils/Utils.h"
 
 #include "../../hdrs/Lang/Builtin_fn.h"
 #include "../../hdrs/Lang/Bytecode_compiler.h"
@@ -46,21 +45,6 @@ static int is_alnum_or_underscore(int c){
 static int is_plus_or_minus(int c){
     return c == '+' || c == '-';
 }
-
-typedef union I64_u8s_union{
-    i64 as_i64;
-    u8 as_u8s[sizeof(i64)];
-} I64_u8s_union;
-
-typedef union F64_u8s_union{
-    f64 as_f64;
-    u8 as_u8s[sizeof(f64)];
-} F64_u8s_union;
-
-typedef union Usize_u8s_union{
-    usize as_usize;
-    u8 as_u8s[sizeof(usize)];
-} Usize_u8s_union;
 
 typedef struct Jmp_info{
     Str_base label;
@@ -95,9 +79,9 @@ static Bytecode_compiler_compile_result bytecode_compiler_syntax_error(Bytecode_
 #define syntax_error(...) bytecode_compiler_syntax_error(self, __VA_ARGS__)
 
 static Bytecode_compiler_compile_result bytecode_compiler_state_arg_bp(Bytecode_compiler_state *self, Str_view rhs){
-    Usize_u8s_union bp_offset;
+    usize bp_offset;
 
-    if (errno = 0, sscanf(rhs.m_str, BP_SYMBOL " [" USIZE_SFMT " ]", &bp_offset.as_usize) != 1)
+    if (errno = 0, sscanf(rhs.m_str, BP_SYMBOL " [" USIZE_SFMT " ]", &bp_offset) != 1)
         return syntax_error("<" BP_SYMBOL "> must be followed by [<val>], where <val> is an integer");
     if (errno != 0)
         return syntax_error("<" BP_SYMBOL "> offset is not representable by <usize>");
@@ -106,16 +90,16 @@ static Bytecode_compiler_compile_result bytecode_compiler_state_arg_bp(Bytecode_
     if (rhs.m_size > 0 && rhs.m_str[0] != ';')
         return syntax_error("Invalid or more than 1 argument");
 
-    for (usize i = 0; i < array_size(bp_offset.as_u8s); ++i)
-        if (!vec_base_push_back(&self->bytecode, self->alloc, &bp_offset.as_u8s[i]))
+    for (usize i = 0; i < sizeof(bp_offset); ++i)
+        if (!vec_base_push_back(&self->bytecode, self->alloc, (u8*)&bp_offset + i))
             return OOM_ERROR;
 
     return NO_ERROR;
 }
 static Bytecode_compiler_compile_result bytecode_compiler_state_arg_sp(Bytecode_compiler_state *self, Str_view rhs){
-    Usize_u8s_union sp_offset;
+    usize sp_offset;
 
-    if (errno = 0, sscanf(rhs.m_str, SP_SYMBOL " [ - " USIZE_SFMT " ]", &sp_offset.as_usize) != 1)
+    if (errno = 0, sscanf(rhs.m_str, SP_SYMBOL " [ - " USIZE_SFMT " ]", &sp_offset) != 1)
         return syntax_error("<" SP_SYMBOL "> must be followed by [-<val>], where <val> is an integer");
     if (errno != 0)
         return syntax_error("<" SP_SYMBOL "> offset is not representable by <usize>");
@@ -124,8 +108,8 @@ static Bytecode_compiler_compile_result bytecode_compiler_state_arg_sp(Bytecode_
     if (rhs.m_size > 0 && rhs.m_str[0] != ';')
         return syntax_error("Invalid or more than 1 argument");
 
-    for (usize i = 0; i < array_size(sp_offset.as_u8s); ++i)
-        if (!vec_base_push_back(&self->bytecode, self->alloc, &sp_offset.as_u8s[i]))
+    for (usize i = 0; i < sizeof(sp_offset); ++i)
+        if (!vec_base_push_back(&self->bytecode, self->alloc, (u8*)&sp_offset + i))
             return OOM_ERROR;
 
     return NO_ERROR;
@@ -192,7 +176,7 @@ static Bytecode_compiler_compile_result bytecode_compiler_state_compile(Bytecode
         Str_view sv = *(Str_view*)vec_base_at(&self->instruction_views, self->instruction_idx);
 
         if (sv.m_size > 0 && sv.m_str[0] != ';'){
-            if (!str_view_starts_with(sv, LOCAL_LABEL_PREFIX_SYMBOL) && !is_alpha_or_underscore(sv.m_str[0]))
+            if (!(str_view_starts_with(sv, LOCAL_LABEL_PREFIX_SYMBOL) || is_alpha_or_underscore(sv.m_str[0])))
                 return syntax_error("Op code starting with <%c>", sv.m_str[0]);
 
             Str_view lhs = str_view_trim_right(sv, str_view_trim_left_while(sv, is_alnum_or_underscore).m_size);
@@ -262,10 +246,10 @@ static Bytecode_compiler_compile_result bytecode_compiler_state_compile(Bytecode
                             if (unquoted_sv.m_size == 0 || str_base_size(&unescaped.result) > 1)
                                 return syntax_error("<char> literal must represent 1 character");
                             
-                            if (
-                                !vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)OP_CODE_ARG_TAG_CHAR}) ||
-                                !vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)str_base_data(&unescaped.result)[0]})
-                            )
+                            if (!(
+                                vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)OP_CODE_ARG_TAG_CHAR}) &&
+                                vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)str_base_data(&unescaped.result)[0]})
+                            ))
                                 return OOM_ERROR;
                         }
                         else{
@@ -291,14 +275,14 @@ static Bytecode_compiler_compile_result bytecode_compiler_state_compile(Bytecode
                             return syntax_error("Invalid numeric literal");
 
                         if (str_view_all_of(rhs_temp, isdigit)){
-                            I64_u8s_union int_literal = {.as_i64 = (errno = 0, (i64)strtoll(rhs.m_str, NULL, 10))};
+                            i64 int_literal = (errno = 0, (i64)strtoll(rhs.m_str, NULL, 10));
                             if (errno != 0)
                                 return syntax_error("<int> literal out of range");
 
                             if (!vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)OP_CODE_ARG_TAG_INT}))
                                 return OOM_ERROR;
-                            for (usize i = 0; i < array_size(int_literal.as_u8s); ++i)
-                                if (!vec_base_push_back(&self->bytecode, self->alloc, &int_literal.as_u8s[i]))
+                            for (usize i = 0; i < sizeof(int_literal); ++i)
+                                if (!vec_base_push_back(&self->bytecode, self->alloc, (u8*)&int_literal + i))
                                     return OOM_ERROR;
                         }
                         else{
@@ -309,14 +293,14 @@ static Bytecode_compiler_compile_result bytecode_compiler_state_compile(Bytecode
                                     return syntax_error("Invalid <float> literal");
                             }
 
-                            F64_u8s_union float_literal = {.as_f64 = (errno = 0, (f64)strtod(rhs.m_str, NULL))};
+                            f64 float_literal = (errno = 0, (f64)strtod(rhs.m_str, NULL));
                             if (errno != 0)
                                 return syntax_error("<float> literal out of range");
 
                             if (!vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)OP_CODE_ARG_TAG_FLOAT}))
                                 return OOM_ERROR;
-                            for (usize i = 0; i < array_size(float_literal.as_u8s); ++i)
-                                if (!vec_base_push_back(&self->bytecode, self->alloc, &float_literal.as_u8s[i]))
+                            for (usize i = 0; i < sizeof(float_literal); ++i)
+                                if (!vec_base_push_back(&self->bytecode, self->alloc, (u8*)&float_literal + i))
                                     return OOM_ERROR;
                         }
                     }
@@ -347,10 +331,10 @@ static Bytecode_compiler_compile_result bytecode_compiler_state_compile(Bytecode
                         if (rhs.m_size > 0 && rhs.m_str[0] != ';')
                             return syntax_error("Invalid or more than 1 argument");
 
-                        if (
-                            !vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)OP_CODE_ARG_TAG_BOOL}) ||
-                            !vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)bool_val})
-                        )
+                        if (!(
+                            vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)OP_CODE_ARG_TAG_BOOL}) &&
+                            vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)bool_val})
+                        ))
                             return OOM_ERROR;
                     }
                     else
@@ -360,10 +344,10 @@ static Bytecode_compiler_compile_result bytecode_compiler_state_compile(Bytecode
                     if (!vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)op_code}))
                         return OOM_ERROR;
 
-                    if (
-                        (arg_tag = OP_CODE_ARG_TAG_BP, !str_view_starts_with(rhs, BP_SYMBOL)) &&
-                        (arg_tag = OP_CODE_ARG_TAG_SP, !str_view_starts_with(rhs, SP_SYMBOL))
-                    )
+                    if (!(
+                        (arg_tag = OP_CODE_ARG_TAG_BP, str_view_starts_with(rhs, BP_SYMBOL)) ||
+                        (arg_tag = OP_CODE_ARG_TAG_SP, str_view_starts_with(rhs, SP_SYMBOL))
+                    ))
                         return syntax_error("Op code <%s> must be followed by <" BP_SYMBOL "> or <" SP_SYMBOL ">", op_code_str);
 
                     if (!vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)arg_tag}))
@@ -399,10 +383,10 @@ static Bytecode_compiler_compile_result bytecode_compiler_state_compile(Bytecode
                         ))
                             return OOM_ERROR;
 
-                        Usize_u8s_union label_bytecode_offset = {.as_usize = 0};
+                        usize label_bytecode_offset = 0;
 
-                        for (usize i = 0; i < array_size(label_bytecode_offset.as_u8s); ++i)
-                            if (!vec_base_push_back(&self->bytecode, self->alloc, &label_bytecode_offset.as_u8s[i]))
+                        for (usize i = 0; i < sizeof(label_bytecode_offset); ++i)
+                            if (!vec_base_push_back(&self->bytecode, self->alloc, (u8*)&label_bytecode_offset + i))
                                 return OOM_ERROR;
                     }
                 }
@@ -414,12 +398,12 @@ static Bytecode_compiler_compile_result bytecode_compiler_state_compile(Bytecode
                     if (!vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)op_code}))
                         return OOM_ERROR;
 
-                    Usize_u8s_union pop_count = {.as_usize = (errno = 0, (usize)strtoull(rhs.m_str, NULL, 10))};
+                    usize pop_count = (errno = 0, (usize)strtoull(rhs.m_str, NULL, 10));
                     if (errno != 0)
                         return syntax_error("<int> literal out of range");
 
-                    for (usize i = 0; i < array_size(pop_count.as_u8s); ++i)
-                        if (!vec_base_push_back(&self->bytecode, self->alloc, &pop_count.as_u8s[i]))
+                    for (usize i = 0; i < sizeof(pop_count); ++i)
+                        if (!vec_base_push_back(&self->bytecode, self->alloc, (u8*)&pop_count + i))
                             return OOM_ERROR;
                 }
                 else if (match_op_code(OP_CODE_JMP) || match_op_code(OP_CODE_JMPZ)){
@@ -432,20 +416,20 @@ static Bytecode_compiler_compile_result bytecode_compiler_state_compile(Bytecode
                     if (label_to_str_result.error != COMPILE_ERROR_NONE)
                         return label_to_str_result;
 
-                    if (
-                        !vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)op_code}) ||
-                        !vec_base_push_back(
+                    if (!(
+                        vec_base_push_back(&self->bytecode, self->alloc, &(u8){(u8)op_code}) &&
+                        vec_base_push_back(
                             &self->jmp_infos,
                             self->alloc,
                             &(Jmp_info){.label = label_str, .bytecode_offset = self->bytecode.m_size, .instruction_idx = self->instruction_idx}
                         )
-                    )
+                    ))
                         return OOM_ERROR;
                     
-                    Usize_u8s_union label_bytecode_offset = {.as_usize = 0};
+                    usize label_bytecode_offset = 0;
 
-                    for (usize i = 0; i < array_size(label_bytecode_offset.as_u8s); ++i)
-                        if (!vec_base_push_back(&self->bytecode, self->alloc, &label_bytecode_offset.as_u8s[i]))
+                    for (usize i = 0; i < sizeof(label_bytecode_offset); ++i)
+                        if (!vec_base_push_back(&self->bytecode, self->alloc, (u8*)&label_bytecode_offset + i))
                             return OOM_ERROR;
                 }
                 else if (
@@ -497,9 +481,7 @@ static Bytecode_compiler_compile_result bytecode_compiler_state_compile(Bytecode
             return syntax_error("Use of undeclared label <%s>", str_base_data(&jmp_info->label));
         }
 
-        Usize_u8s_union label_bytecode_offset = {.as_usize = *label_offset};
-
-        memcpy(vec_base_at(&self->bytecode, jmp_info->bytecode_offset), label_bytecode_offset.as_u8s, sizeof(label_bytecode_offset.as_u8s));
+        memcpy(vec_base_at(&self->bytecode, jmp_info->bytecode_offset), label_offset, sizeof(*label_offset));
     }
 
     return (Bytecode_compiler_compile_result){.bytecode = {.m_size = self->bytecode.m_size, .m_data = self->bytecode.m_data}, .error = COMPILE_ERROR_NONE};
