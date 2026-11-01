@@ -65,8 +65,8 @@ static Lexer_lex_result lexer_state_syntax_error(Lexer_state *self, const char *
 
     return (Lexer_lex_result){.error_info = error_info.result, .error = LEX_ERROR_SYNTAX};
 }
-static bool lexer_state_token_push_back(Lexer_state *self, enum Token_type type, const char *id){
-    Str_base_result temp = str_base_init_raw(self->alloc, id);
+static bool lexer_state_token_push_back(Lexer_state *self, enum Token_type type, const char *token_type_id){
+    Str_base_result temp = str_base_init_raw(self->alloc, token_type_id);
     return temp.success && vec_base_push_back(&self->tokens, self->alloc, &(Token){.m_type = type, .m_id = temp.result, .m_pos = self->pos});
 }
 
@@ -227,7 +227,7 @@ Lexer_lex_result lexer_lex(Arena *arena, const char *path){
         .tokens = vec_base_init(Token)
     };
     #define syntax_error(...) lexer_state_syntax_error(&state, __VA_ARGS__)
-    #define token_push_back(token_type_val, token_type_id) lexer_state_token_push_back(&state, (token_type_val), (token_type_id))
+    #define token_push_back(token_type_val, token_type_id_val) lexer_state_token_push_back(&state, (token_type_val), (token_type_id_val))
 
     Str_base lines = {0};
 
