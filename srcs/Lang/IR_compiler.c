@@ -476,11 +476,55 @@ static bool IR_compiler_state_init_list_type_info_from_context(IR_compiler_state
 #define init_list_type_info_from_context(init_list_node_val, out_init_list_type_info_val) \
     IR_compiler_state_init_list_type_info_from_context(self, (init_list_node_val), (out_init_list_type_info_val))
 
+static bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *ast_node);
+#define compile(ast_node_val) IR_compiler_state_compile(self, (ast_node_val))
+
+static bool IR_compiler_state_binary_op_member_access_no_deref(IR_compiler_state *self, const AST_node *member_access_node, Type_info *out_field_type_info){
+    const AST_node *lhs_node = member_access_node->m_sub_nodes.m_data[0];
+    const AST_node *rhs_node = member_access_node->m_sub_nodes.m_data[1];
+
+    if (!compile(lhs_node))
+        return false;
+
+    Type_info obj_type_info = *(Type_info*)vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1);
+
+    Type_id_info *type_id_info_ptr = ordered_umap_base_at_key(
+        &self->shared_state_ptr->type_id_info_maps.type_info_tag_as_i32_id_map,
+        &(i32){(i32)obj_type_info.m_tag}
+    ).m_value;
+
+    if (obj_type_info.m_dimensions > 0 || !type_id_info_ptr){
+        Str_base type_info_str;
+        return (type_info_to_str_base(obj_type_info, &type_info_str))
+            ? syntax_error(member_access_node, "Member access on type <%s>", str_base_data(&type_info_str))
+            : false
+        ;
+    }
+
+    if (rhs_node->m_type != AST_NODE_TYPE_ATOM_ID)
+        return syntax_error(rhs_node, "Member access with non-identifier");
+
+    const Field_info *field_info_ptr = ordered_umap_base_at_key_const(type_id_info_ptr->field_info_map_ptr, &rhs_node->m_token->m_id).m_value;
+    if (!field_info_ptr)
+        return syntax_error(rhs_node, "Use of undeclared field identifier <%s>", str_base_data_const(&rhs_node->m_token->m_id));
+
+    if (!vec_base_push_back(&self->type_info_stack, self->alloc, &TYPE_INFO_INT))
+        return oom_error();
+    if (!add_instruction("%s " USIZE_PFMT, op_code_to_str(OP_CODE_PUSH), field_info_ptr->idx))
+        return false;
+
+    *out_field_type_info = field_info_ptr->type_info;
+
+    return true;
+}
+#define binary_op_member_access_no_deref(member_access_node_val, out_field_type_info_val) \
+    IR_compiler_state_binary_op_member_access_no_deref(self, (member_access_node_val), (out_field_type_info_val))
+
 #define JMP_LABEL_SYMBOL "L"
 #define JMP_LABEL_FMT LOCAL_LABEL_PREFIX_SYMBOL JMP_LABEL_SYMBOL USIZE_PFMT
 #define JMP_LABEL_BUFSIZE array_size(LOCAL_LABEL_PREFIX_SYMBOL JMP_LABEL_SYMBOL "18446744073709551615")
 
-static bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *ast_node){
+bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *ast_node){
     enum Unary_op un_op;
     enum Binary_op bin_op;
     enum Op_code bin_op_code;
@@ -564,7 +608,7 @@ static bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *a
                 Type_info field_type_info = field_info_ptr->type_info;
                 if (!vec_base_push_back(&self->type_info_stack, self->alloc, &field_type_info))
                     return oom_error();
-                if (!(add_instruction("%s " SP_SYMBOL "[-1]", op_code_to_str(OP_CODE_PUSH)) && IR_compiler_state_compile(self, field_expr_node)))
+                if (!(add_instruction("%s " SP_SYMBOL "[-1]", op_code_to_str(OP_CODE_PUSH)) && compile(field_expr_node)))
                     return false;
 
                 Type_info last_type_info = *(Type_info*)vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1);
@@ -598,7 +642,7 @@ static bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *a
             for (usize i = 0; i < ast_node->m_sub_nodes.m_size; ++i){
                 if (!vec_base_push_back(&self->type_info_stack, self->alloc, &init_list_type_info))
                     return oom_error();
-                if (!(add_instruction("%s " SP_SYMBOL "[-1]", op_code_to_str(OP_CODE_PUSH)) && IR_compiler_state_compile(self, ast_node->m_sub_nodes.m_data[i])))
+                if (!(add_instruction("%s " SP_SYMBOL "[-1]", op_code_to_str(OP_CODE_PUSH)) && compile(ast_node->m_sub_nodes.m_data[i])))
                     return false;
 
                 if (
@@ -632,7 +676,7 @@ static bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *a
         case AST_NODE_TYPE_UNARY_OP_BNEG:  un_op = UNARY_OP_BNEG;  goto un_op_case;
         case AST_NODE_TYPE_UNARY_OP_NOT:   un_op = UNARY_OP_NOT;
         un_op_case:{
-            if (!IR_compiler_state_compile(self, ast_node->m_sub_nodes.m_data[0]))
+            if (!compile(ast_node->m_sub_nodes.m_data[0]))
                 return false;
 
             Type_info *last_type_info_ptr = vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1);
@@ -666,40 +710,13 @@ static bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *a
         }
 
         case AST_NODE_TYPE_BINARY_OP_MEMBER_ACCESS:{
-            const AST_node *lhs_node = ast_node->m_sub_nodes.m_data[0];
-            const AST_node *rhs_node = ast_node->m_sub_nodes.m_data[1];
-
-            if (!IR_compiler_state_compile(self, lhs_node))
+            Type_info field_type_info;
+            if (!binary_op_member_access_no_deref(ast_node, &field_type_info))
                 return false;
-
-            Type_info obj_type_info = *(Type_info*)vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1);
-
-            Type_id_info *type_id_info_ptr = ordered_umap_base_at_key(
-                &self->shared_state_ptr->type_id_info_maps.type_info_tag_as_i32_id_map,
-                &(i32){(i32)obj_type_info.m_tag}
-            ).m_value;
-
-            if (obj_type_info.m_dimensions > 0 || !type_id_info_ptr){
-                Str_base type_info_str;
-                return (type_info_to_str_base(obj_type_info, &type_info_str))
-                    ? syntax_error(ast_node, "Member access on type <%s>", str_base_data(&type_info_str))
-                    : false
-                ;
-            }
-
-            if (rhs_node->m_type != AST_NODE_TYPE_ATOM_ID)
-                return syntax_error(rhs_node, "Member access with non-identifier");
-
-            const Field_info *field_info_ptr = ordered_umap_base_at_key_const(type_id_info_ptr->field_info_map_ptr, &rhs_node->m_token->m_id).m_value;
-            if (!field_info_ptr)
-                return syntax_error(rhs_node, "Use of undeclared field identifier <%s>", str_base_data_const(&rhs_node->m_token->m_id));
-
-            if (!vec_base_push_back(&self->type_info_stack, self->alloc, &TYPE_INFO_INT))
-                return oom_error();
+            vec_base_pop_back_discard(&self->type_info_stack);
             if (!(
-                add_instruction("%s " USIZE_PFMT, op_code_to_str(OP_CODE_PUSH), field_info_ptr->idx) &&
-                (vec_base_pop_back_discard(&self->type_info_stack), add_instruction("%s", op_code_to_str(OP_CODE_DEREF))) && (
-                    *(Type_info*)vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1) = field_info_ptr->type_info,
+                add_instruction("%s", op_code_to_str(OP_CODE_DEREF)) && (
+                    *(Type_info*)vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1) = field_type_info,
                     pop_on_discarded_expression(ast_node)
                 )
             ))
@@ -729,7 +746,7 @@ static bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *a
             const AST_node *lhs_node = ast_node->m_sub_nodes.m_data[0];
             const AST_node *rhs_node = ast_node->m_sub_nodes.m_data[1];
 
-            if (!(IR_compiler_state_compile(self, lhs_node) && IR_compiler_state_compile(self, rhs_node)))
+            if (!(compile(lhs_node) && compile(rhs_node)))
                 return false;
 
             Type_info *lhs_type_info_ptr = vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 2);
@@ -751,7 +768,7 @@ static bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *a
             const AST_node *lhs_node = ast_node->m_sub_nodes.m_data[0];
             const AST_node *rhs_node = ast_node->m_sub_nodes.m_data[1];
 
-            if (!IR_compiler_state_compile(self, lhs_node))
+            if (!compile(lhs_node))
                 return false;
 
             Type_info *last_type_info_ptr = vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1);
@@ -777,7 +794,7 @@ static bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *a
             char and_or_label_str_buf[JMP_LABEL_BUFSIZE];
             sprintf(and_or_label_str_buf, JMP_LABEL_FMT, self->shared_state_ptr->label_counter++);
 
-            if (!IR_compiler_state_compile(self, lhs_node))
+            if (!compile(lhs_node))
                 return false;
 
             Type_info lhs_type_info = *(Type_info*)vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1);
@@ -796,7 +813,7 @@ static bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *a
             ))
                 return false;
 
-            if (!IR_compiler_state_compile(self, rhs_node))
+            if (!compile(rhs_node))
                 return false;
 
             Type_info rhs_type_info = *(Type_info*)vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1);
@@ -841,7 +858,7 @@ static bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *a
                 if (!var_id_info_ptr)
                     return syntax_error(lhs_node, "Use of undeclared identifier <%s>", str_base_data_const(&lhs_node->m_token->m_id));
 
-                if (!IR_compiler_state_compile(self, rhs_node))
+                if (!compile(rhs_node))
                     return false;
 
                 Type_info lhs_type_info = var_id_info_ptr->type_info;
@@ -858,7 +875,7 @@ static bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *a
                 else if (!add_instruction("%s " SP_SYMBOL "[-" USIZE_PFMT "]", op_code_to_str(OP_CODE_MOV), self->type_info_stack.m_size - var_id_info_ptr->stack_idx + 1))
                     return false;
 
-                if (push_back_after_assignment && !IR_compiler_state_compile(self, lhs_node))
+                if (push_back_after_assignment && !compile(lhs_node))
                     return false;
             }
             else{
@@ -879,49 +896,16 @@ static bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *a
                 }
 
                 Type_info lhs_bin_op_type_info;
-                Type_info rhs_type_info;
 
                 if (lhs_node->m_type == AST_NODE_TYPE_BINARY_OP_MEMBER_ACCESS){
-                    const AST_node *member_access_lhs_node = lhs_node->m_sub_nodes.m_data[0];
-                    const AST_node *member_access_rhs_node = lhs_node->m_sub_nodes.m_data[1];
-
-                    if (!IR_compiler_state_compile(self, member_access_lhs_node))
+                    if (!binary_op_member_access_no_deref(lhs_node, &lhs_bin_op_type_info))
                         return false;
-
-                    Type_info obj_type_info = *(Type_info*)vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1);
-
-                    Type_id_info *type_id_info_ptr = ordered_umap_base_at_key(
-                        &self->shared_state_ptr->type_id_info_maps.type_info_tag_as_i32_id_map,
-                        &(i32){(i32)obj_type_info.m_tag}
-                    ).m_value;
-
-                    if (obj_type_info.m_dimensions > 0 || !type_id_info_ptr){
-                        Str_base type_info_str;
-                        return (type_info_to_str_base(obj_type_info, &type_info_str))
-                            ? syntax_error(member_access_lhs_node, "Member access on type <%s>", str_base_data(&type_info_str))
-                            : false
-                        ;
-                    }
-
-                    if (member_access_rhs_node->m_type != AST_NODE_TYPE_ATOM_ID)
-                        return syntax_error(member_access_rhs_node, "Member access with non-identifier");
-
-                    const Field_info *field_info_ptr = ordered_umap_base_at_key_const(type_id_info_ptr->field_info_map_ptr, &member_access_rhs_node->m_token->m_id).m_value;
-                    if (!field_info_ptr)
-                        return syntax_error(member_access_rhs_node, "Use of undeclared field identifier <%s>", str_base_data_const(&member_access_rhs_node->m_token->m_id));
-
-                    if (!vec_base_push_back(&self->type_info_stack, self->alloc, &TYPE_INFO_INT))
-                        return oom_error();
-                    if (!add_instruction("%s " USIZE_PFMT, op_code_to_str(OP_CODE_PUSH), field_info_ptr->idx))
-                        return false;
-
-                    lhs_bin_op_type_info = field_info_ptr->type_info;
                 }
                 else{
                     const AST_node *subscript_lhs_node = lhs_node->m_sub_nodes.m_data[0];
                     const AST_node *subscript_rhs_node = lhs_node->m_sub_nodes.m_data[1];
 
-                    if (!(IR_compiler_state_compile(self, subscript_lhs_node) && IR_compiler_state_compile(self, subscript_rhs_node)))
+                    if (!(compile(subscript_lhs_node) && compile(subscript_rhs_node)))
                         return false;
 
                     Type_info subscript_lhs_type_info = *(Type_info*)vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 2);
@@ -943,10 +927,10 @@ static bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *a
                         return false;
                 }
 
-                if (!IR_compiler_state_compile(self, rhs_node))
+                if (!compile(rhs_node))
                     return false;
 
-                rhs_type_info = *(Type_info*)vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1);
+                Type_info rhs_type_info = *(Type_info*)vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1);
                 if (binary_op_type_info_result(BINARY_OP_ASSIGNMENT, lhs_bin_op_type_info, rhs_type_info).m_tag == TYPE_INFO_TAG_NONE)
                     return binary_op_error(ast_node, lhs_bin_op_type_info, rhs_type_info);
 
@@ -981,7 +965,7 @@ static bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *a
                 if (fn_arg_nodes.m_size > 0){
                     for (usize i = 0; i < fn_arg_nodes.m_size; ++i){
                         if (!(
-                            IR_compiler_state_compile(self, fn_arg_nodes.m_data[i]) &&
+                            compile(fn_arg_nodes.m_data[i]) &&
                             add_type_conversion_instruction(*(Type_info*)vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1))
                         ))
                             return false;
@@ -1016,7 +1000,7 @@ static bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *a
                     return syntax_error(ast_node, "Function <%s> called with wrong number of arguments", fn_id);
 
                 for (usize i = 0; i < fn_arg_nodes.m_size; ++i){
-                    if (!IR_compiler_state_compile(self, fn_arg_nodes.m_data[i]))
+                    if (!compile(fn_arg_nodes.m_data[i]))
                         return false;
 
                     Type_info  arg_type_info = fn_id_info_ptr->arg_type_infos.m_data[i];
@@ -1190,7 +1174,7 @@ static bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *a
             const AST_node *expr_node = ast_node->m_sub_nodes.m_data[2];
 
             Type_info id_type_info;
-            if (!(ast_node_to_type_info(type_node, &id_type_info) && IR_compiler_state_compile(self, expr_node) && push_back_var_id(id_node, id_type_info)))
+            if (!(ast_node_to_type_info(type_node, &id_type_info) && compile(expr_node) && push_back_var_id(id_node, id_type_info)))
                 return false;
 
             Type_info *last_type_info_ptr = vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1);
@@ -1288,7 +1272,7 @@ static bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *a
             if (!vec_base_push_back(&self->id_count_stack, self->alloc, &(Id_count){0}))
                 return oom_error();
             for (usize i = 0; i < ast_node->m_sub_nodes.m_size; ++i)
-                if (!IR_compiler_state_compile(self, ast_node->m_sub_nodes.m_data[i]))
+                if (!compile(ast_node->m_sub_nodes.m_data[i]))
                     return false;
             if (!pop_ids_in_current_scope())
                 return false;
@@ -1309,7 +1293,7 @@ static bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *a
             if (else_body_node)
                 sprintf(else_end_label_str_buf, JMP_LABEL_FMT, (*label_counter_ptr)++);
 
-            if (!IR_compiler_state_compile(self, if_cond_node))
+            if (!compile(if_cond_node))
                 return false;
 
             Type_info last_type_info;
@@ -1325,7 +1309,7 @@ static bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *a
                 if (if_body_node){
                     if (!vec_base_push_back(&self->id_count_stack, self->alloc, &(Id_count){0}))
                         return oom_error();
-                    if (!(IR_compiler_state_compile(self, if_body_node) && pop_ids_in_current_scope() && (else_body_node || add_label(if_end_label_str_buf))))
+                    if (!(compile(if_body_node) && pop_ids_in_current_scope() && (else_body_node || add_label(if_end_label_str_buf))))
                         return false;
                 }
                 if (else_body_node){
@@ -1333,7 +1317,7 @@ static bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *a
                         return false;
                     if (!vec_base_push_back(&self->id_count_stack, self->alloc, &(Id_count){0}))
                         return oom_error();
-                    if (!(IR_compiler_state_compile(self, else_body_node) && pop_ids_in_current_scope() && add_label(else_end_label_str_buf)))
+                    if (!(compile(else_body_node) && pop_ids_in_current_scope() && add_label(else_end_label_str_buf)))
                         return false;
                 }
             }
@@ -1358,7 +1342,7 @@ static bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *a
             sprintf(   break_label_str_buf, JMP_LABEL_FMT, (*label_counter_ptr)++);
             sprintf(continue_label_str_buf, JMP_LABEL_FMT, (*label_counter_ptr)++);
 
-            if (!(add_label(cond_label_str_buf) && IR_compiler_state_compile(self, while_cond_node)))
+            if (!(add_label(cond_label_str_buf) && compile(while_cond_node)))
                 return false;
 
             Type_info last_type_info;
@@ -1396,14 +1380,14 @@ static bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *a
             if (while_body_node){
                 if (!vec_base_push_back(&self->id_count_stack, self->alloc, &(Id_count){0}))
                     return oom_error();
-                if (!(IR_compiler_state_compile(self, while_body_node) && pop_ids_in_current_scope()))
+                if (!(compile(while_body_node) && pop_ids_in_current_scope()))
                     return false;
             }
             if (
                 !add_label(continue_label_str_buf) || (
                     while_continue_expr_node && (
                         ((Label_info*)label_insert_result.result.m_value)->continue_label_str = cond_label_str_buf,
-                        !IR_compiler_state_compile(self, while_continue_expr_node)
+                        !compile(while_continue_expr_node)
                     )
                 )
             )
@@ -1450,7 +1434,7 @@ static bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *a
                 if (ast_node->m_sub_nodes.m_size != 1)
                     return syntax_error(ast_node, "The program must return a non-void value on exit");
 
-                if (!IR_compiler_state_compile(self, ast_node->m_sub_nodes.m_data[0]))
+                if (!compile(ast_node->m_sub_nodes.m_data[0]))
                     return false;
 
                 Type_info_slice args = {.m_size = 1, .m_data = vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1)};
@@ -1479,7 +1463,7 @@ static bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *a
 
                     ret_op_code = OP_CODE_RET;
 
-                    if (!IR_compiler_state_compile(self, ast_node->m_sub_nodes.m_data[0]))
+                    if (!compile(ast_node->m_sub_nodes.m_data[0]))
                         return false;
 
                     Type_info last_type_info = *(Type_info*)vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1);
