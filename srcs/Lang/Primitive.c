@@ -9,6 +9,7 @@
 #include "../../hdrs/Allocator/Allocator.h"
 #include "../../hdrs/Data_structure/Str_base.h"
 #include "../../hdrs/Data_structure/Str_view.h"
+#include "../../hdrs/Data_structure/Umap_vec.h"
 #include "../../hdrs/Data_structure/Vec_base.h"
 #include "../../hdrs/Utils/Cmp.h"
 #include "../../hdrs/Utils/Num.h"
@@ -438,14 +439,14 @@ static Primitive_op_result primitive_bin_op(Primitive *self, const Primitive *ot
 
 // ------------------------------------------------------------------------------------------------
 
-Primitive_result primitive_init_str(Ordered_umap *alloc_infos, Str_base *data){
+Primitive_result primitive_init_str(Umap_vec *alloc_infos, Str_base *data){
     assert(alloc_infos && "<alloc_infos> is not nullable");
     assert(data && "<data> is not nullable");
 
     Primitive temp = {.m_alloc_infos_ptr = alloc_infos, .m_tag = PRIMITIVE_TAG_STR, .m_str_data_ptr = allocator_alloc(alloc_infos->m_alloc, Primitive_str_data, 1)};
     if (!temp.m_str_data_ptr)
         goto oom_error;
-    if (ordered_umap_push_back(alloc_infos, &(usize){(usize)temp.m_str_data_ptr}, &temp.m_tag).error != UMAP_INSERT_ERROR_NONE){
+    if (umap_vec_push_back(alloc_infos, &(usize){(usize)temp.m_str_data_ptr}, &temp.m_tag).error != UMAP_INSERT_ERROR_NONE){
         allocator_free(alloc_infos->m_alloc, temp.m_str_data_ptr, 1);
         goto oom_error;
     }
@@ -456,14 +457,14 @@ Primitive_result primitive_init_str(Ordered_umap *alloc_infos, Str_base *data){
 oom_error:
     return (Primitive_result){0};
 }
-Primitive_result primitive_init_list(Ordered_umap *alloc_infos, Vec_base *data){
+Primitive_result primitive_init_list(Umap_vec *alloc_infos, Vec_base *data){
     assert(alloc_infos && "<alloc_infos> is not nullable");
     assert(data && "<data> is not nullable");
 
     Primitive temp = {.m_alloc_infos_ptr = alloc_infos, .m_tag = PRIMITIVE_TAG_LIST, .m_list_data_ptr = allocator_alloc(alloc_infos->m_alloc, Primitive_list_data, 1)};
     if (!temp.m_list_data_ptr)
         goto oom_error;
-    if (ordered_umap_push_back(alloc_infos, &(usize){(usize)temp.m_list_data_ptr}, &temp.m_tag).error != UMAP_INSERT_ERROR_NONE){
+    if (umap_vec_push_back(alloc_infos, &(usize){(usize)temp.m_list_data_ptr}, &temp.m_tag).error != UMAP_INSERT_ERROR_NONE){
         allocator_free(alloc_infos->m_alloc, temp.m_list_data_ptr, 1);
         goto oom_error;
     }
@@ -477,7 +478,7 @@ oom_error:
 void primitive_deinit(const Primitive *self){
     assert(self && "<self> is never null");
 
-    Ordered_umap *alloc_infos_ptr = self->m_alloc_infos_ptr;
+    Umap_vec *alloc_infos_ptr = self->m_alloc_infos_ptr;
     Allocator alloc = alloc_infos_ptr->m_alloc;
 
     usize data_ptr_as_usize;
@@ -493,7 +494,7 @@ void primitive_deinit(const Primitive *self){
                 str_base_deinit(&self->m_str_data_ptr->m_data, alloc);
                 data_ptr_as_usize = (usize)self->m_str_data_ptr;
                 allocator_free(alloc, self->m_str_data_ptr, 1);
-                bool erase_result = ordered_umap_erase_key_discard(alloc_infos_ptr, &data_ptr_as_usize);
+                bool erase_result = umap_vec_erase_key_discard(alloc_infos_ptr, &data_ptr_as_usize);
                 (void)erase_result;
                 assert(erase_result);
             }
@@ -506,7 +507,7 @@ void primitive_deinit(const Primitive *self){
                 vec_base_deinit(&self->m_list_data_ptr->m_data, alloc);
                 data_ptr_as_usize = (usize)self->m_list_data_ptr;
                 allocator_free(alloc, self->m_list_data_ptr, 1);
-                bool erase_result = ordered_umap_erase_key_discard(alloc_infos_ptr, &data_ptr_as_usize);
+                bool erase_result = umap_vec_erase_key_discard(alloc_infos_ptr, &data_ptr_as_usize);
                 (void)erase_result;
                 assert(erase_result);
             }
@@ -688,7 +689,7 @@ Primitive_op_result primitive_to_str(Primitive *self){
     if (tag == PRIMITIVE_TAG_LIST)
         return runtime_error("Trying to convert <list> to <str>");
 
-    Ordered_umap *alloc_infos_ptr = self->m_alloc_infos_ptr;
+    Umap_vec *alloc_infos_ptr = self->m_alloc_infos_ptr;
     Allocator alloc = alloc_infos_ptr->m_alloc;
 
     Primitive temp;
@@ -834,7 +835,7 @@ Primitive_op_result primitive_add(Primitive *self, const Primitive *other){
     if (self->m_tag == PRIMITIVE_TAG_LIST || other->m_tag == PRIMITIVE_TAG_LIST)
         return runtime_error("Trying to use addition on <list>");
 
-    Ordered_umap *alloc_infos_ptr = self->m_alloc_infos_ptr;
+    Umap_vec *alloc_infos_ptr = self->m_alloc_infos_ptr;
     Allocator alloc = alloc_infos_ptr->m_alloc;
 
     Primitive_result primitive_init_result;

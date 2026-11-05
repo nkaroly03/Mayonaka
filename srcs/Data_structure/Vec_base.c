@@ -35,6 +35,15 @@ static void* vec_base_at_unchecked(const Vec_base *self, usize idx){
     return (u8*)self->m_data + self->m_data_size * idx;
 }
 
+static const void* vec_base_double_capacity_correct_data_ptr(Vec_base *self, Allocator alloc, const void *data){
+    usize offset = (usize)data - (usize)self->m_data;
+
+    if (!vec_base_realloc(self, alloc, self->m_capacity * 2 + (self->m_capacity == 0)))
+        return NULL;
+
+    return (offset < self->m_data_size * self->m_size) ? (u8*)self->m_data + offset : data;
+}
+
 // ------------------------------------------------------------------------------------------------
 
 Vec_base vec_base_init_(usize data_alignment, usize data_size){
@@ -89,7 +98,7 @@ void* vec_base_push_back(Vec_base *self, Allocator alloc, const void *data){
 
     void *ptr = NULL;
 
-    if (self->m_size < self->m_capacity || vec_base_realloc(self, alloc, self->m_capacity * 2 + (self->m_capacity == 0))){
+    if (self->m_size < self->m_capacity || (data = vec_base_double_capacity_correct_data_ptr(self, alloc, data))){
         ptr = vec_base_at_unchecked(self, self->m_size++);
         memcpy(ptr, data, self->m_data_size);
     }
@@ -103,10 +112,11 @@ void* vec_base_insert(Vec_base *self, Allocator alloc, usize idx, const void *da
 
     void *ptr = NULL;
 
-    if (self->m_size < self->m_capacity || vec_base_realloc(self, alloc, self->m_capacity * 2 + (self->m_capacity == 0))){
+    if (self->m_size < self->m_capacity || (data = vec_base_double_capacity_correct_data_ptr(self, alloc, data))){
         ptr = vec_base_at_unchecked(self, idx);
         memmove((u8*)ptr + self->m_data_size, ptr, self->m_data_size * (self->m_size++ - idx));
-        memcpy(ptr, data, self->m_data_size);
+        if (ptr != data)
+            memcpy(ptr, data, self->m_data_size);
     }
 
     return ptr;

@@ -7,8 +7,6 @@ extern "C"{
 
 #include <stdbool.h>
 
-#include "Type_info.h"
-
 enum Builtin_fn_tag{
     BUILTIN_FN_TAG_NONE,
     BUILTIN_FN_TAG_GET_ARGV,
@@ -31,13 +29,6 @@ enum Builtin_fn_tag{
 enum Builtin_fn_tag builtin_fn_tag_init(const char *str);
 
 const char* builtin_fn_tag_to_str(enum Builtin_fn_tag tag);
-
-typedef struct Builtin_fn_tag_call_result{
-    Type_info m_return_type_info;
-    bool m_is_callable;
-} Builtin_fn_tag_call_result;
-
-Builtin_fn_tag_call_result builtin_fn_tag_call(enum Builtin_fn_tag tag, Type_info_slice args);
 
 #ifdef __cplusplus
 }

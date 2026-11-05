@@ -221,7 +221,7 @@ static Bytecode_compiler_compile_result bytecode_compiler_state_compile(Bytecode
                     if (rhs.m_str[0] == '\'' || rhs.m_str[0] == '"'){
                         char quote = rhs.m_str[0];
                         bool is_single_quote = (quote == '\'');
-                        const char *quoted_lit_type_str = (is_single_quote) ? "char" : "str";
+                        const char *quoted_lit_type_str = token_type_to_str((is_single_quote) ? TOKEN_TYPE_CHAR : TOKEN_TYPE_STR);
                         
                         usize quote_end_pos = 0;
                         while (++quote_end_pos < rhs.m_size && rhs.m_str[quote_end_pos] != quote)

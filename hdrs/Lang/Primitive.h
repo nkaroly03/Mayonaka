@@ -9,8 +9,8 @@ extern "C"{
 #include <stdio.h>
 
 #include "../Allocator/Allocator.h"
-#include "../Data_structure/Ordered_umap.h"
 #include "../Data_structure/Str_base.h"
+#include "../Data_structure/Umap_vec.h"
 #include "../Data_structure/Vec_base.h"
 #include "../Utils/Num.h"
 
@@ -34,7 +34,7 @@ typedef struct Primitive_list_data{
 } Primitive_list_data;
 
 typedef struct Primitive{
-    Ordered_umap *m_alloc_infos_ptr;
+    Umap_vec *m_alloc_infos_ptr;
     enum Primitive_tag m_tag;
     union{
         bool m_bool_data;
@@ -61,8 +61,8 @@ typedef struct Primitive_result{
     bool success;
 } Primitive_result;
 
-Primitive_result primitive_init_str(Ordered_umap *alloc_infos, Str_base *data);
-Primitive_result primitive_init_list(Ordered_umap *alloc_infos, Vec_base *data);
+Primitive_result primitive_init_str(Umap_vec *alloc_infos, Str_base *data);
+Primitive_result primitive_init_list(Umap_vec *alloc_infos, Vec_base *data);
 void primitive_deinit(const Primitive *self);
 
 enum Primitive_print_error{

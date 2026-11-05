@@ -16,8 +16,6 @@
 #include "hdrs/Allocator/Arena.h"
 #include "hdrs/Allocator/Page.h"
 #include "hdrs/Allocator/Raw_malloc.h"
-#include "hdrs/Data_structure/Ordered_umap.h"
-#include "hdrs/Data_structure/Ordered_umap_base.h"
 #include "hdrs/Data_structure/Slist.h"
 #include "hdrs/Data_structure/Slist_base.h"
 #include "hdrs/Data_structure/Str.h"
@@ -25,6 +23,8 @@
 #include "hdrs/Data_structure/Str_view.h"
 #include "hdrs/Data_structure/Umap.h"
 #include "hdrs/Data_structure/Umap_base.h"
+#include "hdrs/Data_structure/Umap_vec.h"
+#include "hdrs/Data_structure/Umap_vec_base.h"
 #include "hdrs/Data_structure/Vec.h"
 #include "hdrs/Data_structure/Vec_base.h"
 #include "hdrs/Random/Splitmix64.h"
@@ -41,7 +41,6 @@
 #include "hdrs/Lang/Lexer.h"
 #include "hdrs/Lang/Parser.h"
 #include "hdrs/Lang/Primitive.h"
-#include "hdrs/Lang/Type_info.h"
 
 int main(const int argc, const char *const *const argv){
     if (argc < 2){

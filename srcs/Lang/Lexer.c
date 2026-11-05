@@ -298,7 +298,17 @@ Lexer_lex_result lexer_lex(Arena *arena, const char *path){
         else if (sv.m_str[0] == '\'' || sv.m_str[0] == '"'){
             char quote = sv.m_str[0];
             bool is_single_quote = (quote == '\'');
-            const char *type_str = (is_single_quote) ? "char" : "str";
+
+            enum Token_type literal_token_type;
+            const char *type_str;
+            if (is_single_quote){
+                literal_token_type = TOKEN_TYPE_CHAR_LIT;
+                type_str = token_type_to_str(TOKEN_TYPE_CHAR);
+            }
+            else{
+                literal_token_type = TOKEN_TYPE_STR_LIT;
+                type_str = token_type_to_str(TOKEN_TYPE_STR);
+            }
 
             usize quote_end_pos = 0;
             while (++quote_end_pos < sv.m_size && sv.m_str[quote_end_pos] != quote){
@@ -333,7 +343,7 @@ Lexer_lex_result lexer_lex(Arena *arena, const char *path){
                 vec_base_push_back(
                     &state.tokens,
                     state.alloc,
-                    &(Token){.m_type = (is_single_quote) ? TOKEN_TYPE_CHAR_LIT : TOKEN_TYPE_STR_LIT, .m_id = temp.result, .m_pos = state.pos}
+                    &(Token){.m_type = literal_token_type, .m_id = temp.result, .m_pos = state.pos}
                 )
             ))
                 return OOM_ERROR;

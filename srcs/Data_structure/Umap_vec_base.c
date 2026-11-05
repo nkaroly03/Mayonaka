@@ -4,9 +4,9 @@
 #include <stddef.h>
 
 #include "../../hdrs/Allocator/Allocator.h"
-#include "../../hdrs/Data_structure/Ordered_umap_base.h"
 #include "../../hdrs/Data_structure/Slist_base.h"
 #include "../../hdrs/Data_structure/Umap_base.h"
+#include "../../hdrs/Data_structure/Umap_vec_base.h"
 #include "../../hdrs/Utils/Num.h"
 #include "../../hdrs/Utils/Utils.h"
 
@@ -14,7 +14,7 @@
 
 typedef struct Snode Snode;
 
-static void ordered_umap_base_erase_key_from_keys(Ordered_umap_base *self, const void *key){
+static void umap_vec_base_erase_key_from_keys(Umap_vec_base *self, const void *key){
     usize i = 0;
     vec_base_for_each(self->m_keys, it){
         if (self->m_pairs.m_cmp_eq(key, it)){
@@ -27,7 +27,7 @@ static void ordered_umap_base_erase_key_from_keys(Ordered_umap_base *self, const
 }
 
 #ifndef NDEBUG
-static bool ordered_umap_base_contains_node(const Ordered_umap_base *self, const struct Snode *node){
+static bool umap_vec_base_contains_node(const Umap_vec_base *self, const struct Snode *node){
     for (usize i = 0; i < self->m_pairs.m_bucket_count; ++i)
         for (const struct Snode *it = self->m_pairs.m_buckets[i].m_next; it; it = it->m_next)
             if (it == node)
@@ -39,7 +39,7 @@ static bool ordered_umap_base_contains_node(const Ordered_umap_base *self, const
 
 // ------------------------------------------------------------------------------------------------
 
-Ordered_umap_base ordered_umap_base_init_(
+Umap_vec_base umap_vec_base_init_(
     usize key_alignment,
     usize key_size,
     usize value_alignment,
@@ -57,74 +57,74 @@ Ordered_umap_base ordered_umap_base_init_(
     node_alignment = max(node_alignment, key_alignment);
     node_alignment = max(node_alignment, value_alignment);
 
-    return (Ordered_umap_base){
-        .m_keys  = vec_base_init_(key_alignment, key_size),
+    return (Umap_vec_base){
+        .m_keys  =  vec_base_init_(key_alignment, key_size),
         .m_pairs = umap_base_init_(key_alignment, key_size, value_alignment, value_size, hash, cmp_eq)
     };
 }
-void ordered_umap_base_deinit(const Ordered_umap_base *self, Allocator alloc){
+void umap_vec_base_deinit(const Umap_vec_base *self, Allocator alloc){
     assert(self && "<self> is never null");
 
     umap_base_deinit(&self->m_pairs, alloc);
     vec_base_deinit(&self->m_keys, alloc);
 }
 
-bool ordered_umap_base_empty(const Ordered_umap_base *self){
+bool umap_vec_base_empty(const Umap_vec_base *self){
     assert(self && "<self> is never null");
 
     return self->m_keys.m_size == 0;
 }
-usize ordered_umap_base_size(const Ordered_umap_base *self){
+usize umap_vec_base_size(const Umap_vec_base *self){
     assert(self && "<self> is never null");
 
     return self->m_keys.m_size;
 }
-usize ordered_umap_base_bucket_count(const Ordered_umap_base *self){
+usize umap_vec_base_bucket_count(const Umap_vec_base *self){
     assert(self && "<self> is never null");
 
     return self->m_pairs.m_bucket_count;
 }
 
-Umap_pair ordered_umap_base_at_idx(Ordered_umap_base *self, usize idx){
+Umap_pair umap_vec_base_at_idx(Umap_vec_base *self, usize idx){
     assert(self && "<self> is never null");
     assert(idx < self->m_keys.m_size && "<idx> out of range");
 
     return umap_base_at_key(&self->m_pairs, vec_base_at(&self->m_keys, idx));
 }
-Umap_pair_const ordered_umap_base_at_idx_const(const Ordered_umap_base *self, usize idx){
+Umap_pair_const umap_vec_base_at_idx_const(const Umap_vec_base *self, usize idx){
     assert(self && "<self> is never null");
     assert(idx < self->m_keys.m_size && "<idx> out of range");
 
     return umap_base_at_key_const(&self->m_pairs, vec_base_at_const(&self->m_keys, idx));
 }
-Umap_pair ordered_umap_base_at_key(Ordered_umap_base *self, const void *key){
+Umap_pair umap_vec_base_at_key(Umap_vec_base *self, const void *key){
     assert(self && "<self> is never null");
     assert(key && "<key> is not nullable");
 
     return umap_base_at_key(&self->m_pairs, key);
 }
-Umap_pair_const ordered_umap_base_at_key_const(const Ordered_umap_base *self, const void *key){
+Umap_pair_const umap_vec_base_at_key_const(const Umap_vec_base *self, const void *key){
     assert(self && "<self> is never null");
     assert(key && "<key> is not nullable");
 
     return umap_base_at_key_const(&self->m_pairs, key);
 }
-Umap_pair ordered_umap_base_at_node(Ordered_umap_base *self, const struct Snode *node){
+Umap_pair umap_vec_base_at_node(Umap_vec_base *self, const struct Snode *node){
     assert(self && "<self> is never null");
     assert(node && "<node> is not nullable");
-    assert(ordered_umap_base_contains_node(self, node) && "<self> doesn't contain <node>");
+    assert(umap_vec_base_contains_node(self, node) && "<self> doesn't contain <node>");
 
     return umap_base_at_node(&self->m_pairs, node);
 }
-Umap_pair_const ordered_umap_base_at_node_const(const Ordered_umap_base *self, const struct Snode *node){
+Umap_pair_const umap_vec_base_at_node_const(const Umap_vec_base *self, const struct Snode *node){
     assert(self && "<self> is never null");
     assert(node && "<node> is not nullable");
-    assert(ordered_umap_base_contains_node(self, node) && "<self> doesn't contain <node>");
+    assert(umap_vec_base_contains_node(self, node) && "<self> doesn't contain <node>");
 
     return umap_base_at_node_const(&self->m_pairs, node);
 }
 
-Umap_insert_result ordered_umap_base_push_back(Ordered_umap_base *self, Allocator alloc, const void *key, const void *value){
+Umap_insert_result umap_vec_base_push_back(Umap_vec_base *self, Allocator alloc, const void *key, const void *value){
     assert(self && "<self> is never null");
     assert(key && "<key> is not nullable");
     assert(value && "<value> is not nullable");
@@ -137,7 +137,7 @@ Umap_insert_result ordered_umap_base_push_back(Ordered_umap_base *self, Allocato
 
     return ires;
 }
-Umap_insert_result ordered_umap_base_insert(Ordered_umap_base *self, Allocator alloc, usize idx, const void *key, const void *value){
+Umap_insert_result umap_vec_base_insert(Umap_vec_base *self, Allocator alloc, usize idx, const void *key, const void *value){
     assert(self && "<self> is never null");
     assert(idx <= self->m_keys.m_size && "<idx> out of range");
     assert(key && "<key> is not nullable");
@@ -152,14 +152,14 @@ Umap_insert_result ordered_umap_base_insert(Ordered_umap_base *self, Allocator a
     return ires;
 }
 
-void ordered_umap_base_pop_back_discard(Ordered_umap_base *self, Allocator alloc){
+void umap_vec_base_pop_back_discard(Umap_vec_base *self, Allocator alloc){
     assert(self && "<self> is never null");
     assert(self->m_keys.m_size > 0 && "<self> is empty");
 
     umap_base_erase_key_discard(&self->m_pairs, alloc, vec_base_at(&self->m_keys, self->m_keys.m_size - 1));
     vec_base_pop_back_discard(&self->m_keys);
 }
-void ordered_umap_base_pop_back_to(Ordered_umap_base *self, Allocator alloc, void *key_dest, void *value_dest){
+void umap_vec_base_pop_back_to(Umap_vec_base *self, Allocator alloc, void *key_dest, void *value_dest){
     assert(self && "<self> is never null");
     assert(self->m_keys.m_size > 0 && "<self> is empty");
     assert(key_dest && "<key_dest> is not nullable");
@@ -168,14 +168,14 @@ void ordered_umap_base_pop_back_to(Ordered_umap_base *self, Allocator alloc, voi
     umap_base_erase_key_to(&self->m_pairs, alloc, vec_base_at(&self->m_keys, self->m_keys.m_size - 1), key_dest, value_dest);
     vec_base_pop_back_discard(&self->m_keys);
 }
-void ordered_umap_base_erase_idx_discard(Ordered_umap_base *self, Allocator alloc, usize idx){
+void umap_vec_base_erase_idx_discard(Umap_vec_base *self, Allocator alloc, usize idx){
     assert(self && "<self> is never null");
     assert(idx < self->m_keys.m_size && "<idx> out of range");
 
     umap_base_erase_key_discard(&self->m_pairs, alloc, vec_base_at(&self->m_keys, idx));
     vec_base_erase_discard(&self->m_keys, idx);
 }
-void ordered_umap_base_erase_idx_to(Ordered_umap_base *self, Allocator alloc, usize idx, void *key_dest, void *value_dest){
+void umap_vec_base_erase_idx_to(Umap_vec_base *self, Allocator alloc, usize idx, void *key_dest, void *value_dest){
     assert(self && "<self> is never null");
     assert(idx < self->m_keys.m_size && "<idx> out of range");
     assert(key_dest && "<key_dest> is not nullable");
@@ -184,18 +184,18 @@ void ordered_umap_base_erase_idx_to(Ordered_umap_base *self, Allocator alloc, us
     umap_base_erase_key_to(&self->m_pairs, alloc, vec_base_at(&self->m_keys, idx), key_dest, value_dest);
     vec_base_erase_discard(&self->m_keys, idx);
 }
-bool ordered_umap_base_erase_key_discard(Ordered_umap_base *self, Allocator alloc, const void *key){
+bool umap_vec_base_erase_key_discard(Umap_vec_base *self, Allocator alloc, const void *key){
     assert(self && "<self> is never null");
     assert(key && "<key> is not nullable");
 
     bool result = umap_base_erase_key_discard(&self->m_pairs, alloc, key);
 
     if (result)
-        ordered_umap_base_erase_key_from_keys(self, key);
+        umap_vec_base_erase_key_from_keys(self, key);
 
     return result;
 }
-bool ordered_umap_base_erase_key_to(Ordered_umap_base *self, Allocator alloc, const void *key, void *key_dest, void *value_dest){
+bool umap_vec_base_erase_key_to(Umap_vec_base *self, Allocator alloc, const void *key, void *key_dest, void *value_dest){
     assert(self && "<self> is never null");
     assert(key && "<key> is not nullable");
     assert(key_dest && "<key_dest> is not nullable");
@@ -204,23 +204,23 @@ bool ordered_umap_base_erase_key_to(Ordered_umap_base *self, Allocator alloc, co
     bool result = umap_base_erase_key_to(&self->m_pairs, alloc, key, key_dest, value_dest);
 
     if (result)
-        ordered_umap_base_erase_key_from_keys(self, key);
+        umap_vec_base_erase_key_from_keys(self, key);
 
     return result;
 }
 
-void ordered_umap_base_clear(Ordered_umap_base *self, Allocator alloc){
+void umap_vec_base_clear(Umap_vec_base *self, Allocator alloc){
     assert(self && "<self> is never null");
 
     umap_base_clear(&self->m_pairs, alloc);
     vec_base_clear(&self->m_keys);
 }
-void ordered_umap_base_reverse(Ordered_umap_base *self){
+void umap_vec_base_reverse(Umap_vec_base *self){
     assert(self && "<self> is never null");
     
     vec_base_reverse(&self->m_keys);
 }
-void ordered_umap_base_sort(Ordered_umap_base *self, int (*cmp_fn)(const void*, const void*)){
+void umap_vec_base_sort(Umap_vec_base *self, int (*cmp_fn)(const void*, const void*)){
     assert(self && "<self> is never null");
     assert(cmp_fn && "<cmp_fn> is not nullable");
 

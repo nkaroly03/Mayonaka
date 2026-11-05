@@ -16,9 +16,9 @@
 #endif // _WIN32
 
 #include "../../hdrs/Allocator/Allocator.h"
-#include "../../hdrs/Data_structure/Ordered_umap.h"
-#include "../../hdrs/Data_structure/Ordered_umap_base.h"
 #include "../../hdrs/Data_structure/Str_base.h"
+#include "../../hdrs/Data_structure/Umap_vec.h"
+#include "../../hdrs/Data_structure/Umap_vec_base.h"
 #include "../../hdrs/Data_structure/Vec_base.h"
 #include "../../hdrs/Random/Xoshiro256.h"
 #include "../../hdrs/Utils/Num.h"
@@ -48,14 +48,14 @@ typedef struct File_info{
 } File_info;
 
 typedef struct Interpreter_state{
-    Ordered_umap alloc_infos;
+    Umap_vec alloc_infos;
     Xoshiro256 rand;
     int argc;
     const char *const *argv;
     i64 errno_val;
     U8_slice bytecode;
     usize pc;
-    Ordered_umap_base file_infos;
+    Umap_vec_base file_infos;
     Vec_base data_stack;
     Vec_base return_address_stack;
 } Interpreter_state;
@@ -92,10 +92,10 @@ static void interpreter_state_gc(Interpreter_state *self){
     vec_base_for_each(*data_stack_ptr, it){
         primitive_tag_reachable(it);
     }
-    Ordered_umap *alloc_infos_ptr = &self->alloc_infos;
+    Umap_vec *alloc_infos_ptr = &self->alloc_infos;
     Allocator alloc = alloc_infos_ptr->m_alloc;
     for (usize i = 0; i < alloc_infos_ptr->m_base.m_keys.m_size; ++i){
-        Umap_pair p = ordered_umap_at_idx(alloc_infos_ptr, i);
+        Umap_pair p = umap_vec_at_idx(alloc_infos_ptr, i);
         usize *ref_count_ptr = (usize*)*(const usize*)p.m_key;
         if ((*ref_count_ptr & USIZE_MSB) != 0)
             *ref_count_ptr &= ~USIZE_MSB;
@@ -112,7 +112,7 @@ static void interpreter_state_gc(Interpreter_state *self){
                 default:
                     unreachable();
             }
-            ordered_umap_erase_idx_discard(alloc_infos_ptr, i--);
+            umap_vec_erase_idx_discard(alloc_infos_ptr, i--);
         }
     }
 }
@@ -125,13 +125,13 @@ static void interpreter_state_deinit(Interpreter_state *self){
     vec_base_deinit(&self->data_stack, alloc);
     while (self->file_infos.m_keys.m_size > 0){
         usize key;
-        ordered_umap_base_pop_back_to(&self->file_infos, alloc, &key, &(File_info){0});
+        umap_vec_base_pop_back_to(&self->file_infos, alloc, &key, &(File_info){0});
         FILE *file = (FILE*)key;
         if (file != stdin && file != stdout && file != stderr)
             fclose(file);
     }
-    ordered_umap_base_deinit(&self->file_infos, alloc);
-    ordered_umap_deinit(&self->alloc_infos);
+    umap_vec_base_deinit(&self->file_infos, alloc);
+    umap_vec_deinit(&self->alloc_infos);
 }
 
 static Interpreter_run_result interpreter_state_oom_error(Interpreter_state *self){
@@ -202,21 +202,21 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
                         if (idx >= self->data_stack.m_size)
                             return runtime_error("<%s> instruction references an out of range element on the stack", op_code_str);
 
-                        Primitive temp = *(Primitive*)vec_base_at(&self->data_stack, idx);
-                        if (!vec_base_push_back(&self->data_stack, self->alloc_infos.m_alloc, &temp))
+                        Primitive *temp = vec_base_at(&self->data_stack, idx);
+                        if (!vec_base_push_back(&self->data_stack, self->alloc_infos.m_alloc, temp))
                             return oom_error();
 
-                        switch (temp.m_tag){
+                        switch (temp->m_tag){
                             case PRIMITIVE_TAG_BOOL:
                             case PRIMITIVE_TAG_CHAR:
                             case PRIMITIVE_TAG_INT:
                             case PRIMITIVE_TAG_FLOAT:
                                 break;
                             case PRIMITIVE_TAG_STR:
-                                ++temp.m_str_data_ptr->m_ref_count;
+                                ++temp->m_str_data_ptr->m_ref_count;
                                 break;
                             case PRIMITIVE_TAG_LIST:
-                                ++temp.m_list_data_ptr->m_ref_count;
+                                ++temp->m_list_data_ptr->m_ref_count;
                                 break;
                         }
                         break;
@@ -439,7 +439,7 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
 
                         usize file_as_usize = (usize)file->m_int_data;
 
-                        File_info *file_info = ordered_umap_base_at_key(&self->file_infos, &file_as_usize).m_value;
+                        File_info *file_info = umap_vec_base_at_key(&self->file_infos, &file_as_usize).m_value;
                         if (!file_info)
                             return runtime_error("Builtin function <%s> called on bad file ptr", bfn_tag_str);
                         if (file_info->open_mode == FILE_INFO_OPEN_MODE_READ)
@@ -474,7 +474,7 @@ static Interpreter_run_result interpreter_state_run(Interpreter_state *self){
 
                         usize file_as_usize = (usize)file->m_int_data;
 
-                        File_info *file_info = ordered_umap_base_at_key(&self->file_infos, &file_as_usize).m_value;
+                        File_info *file_info = umap_vec_base_at_key(&self->file_infos, &file_as_usize).m_value;
                         if (!file_info)
                             return runtime_error("Builtin function <%s> called on bad file ptr", bfn_tag_str);
                         if (file_info->open_mode == FILE_INFO_OPEN_MODE_WRITE || file_info->open_mode == FILE_INFO_OPEN_MODE_APPEND)
@@ -827,14 +827,14 @@ Interpreter_run_result interpreter_run(Allocator alloc, U8_slice bytecode, int a
     assert((argv || argc == 0) && "<argv> is only nullable if <argc> == 0");
 
     Interpreter_state state = {
-        .alloc_infos          = ordered_umap_init(usize, enum Primitive_tag, alloc),
+        .alloc_infos          = umap_vec_init(usize, enum Primitive_tag, alloc),
         .rand                 = xoshiro256_init((u64)time(NULL)),
         .argc                 = argc,
         .argv                 = argv,
         .errno_val            = 0,
         .bytecode             = bytecode,
         .pc                   = 0,
-        .file_infos           = ordered_umap_base_init(usize, File_info),
+        .file_infos           = umap_vec_base_init(usize, File_info),
         .data_stack           = vec_base_init(Primitive),
         .return_address_stack = vec_base_init(usize)
     };
@@ -842,19 +842,19 @@ Interpreter_run_result interpreter_run(Allocator alloc, U8_slice bytecode, int a
     static_assert(sizeof(i64) == sizeof(usize), "");
 
     if (
-        ordered_umap_base_push_back(
+        umap_vec_base_push_back(
             &state.file_infos,
             state.alloc_infos.m_alloc,
             &(usize){(usize)stdin},
             &(File_info){.open_mode = FILE_INFO_OPEN_MODE_READ}
         ).error != UMAP_INSERT_ERROR_NONE ||
-        ordered_umap_base_push_back(
+        umap_vec_base_push_back(
             &state.file_infos,
             state.alloc_infos.m_alloc,
             &(usize){(usize)stdout},
             &(File_info){.open_mode = FILE_INFO_OPEN_MODE_WRITE}
         ).error != UMAP_INSERT_ERROR_NONE ||
-        ordered_umap_base_push_back(
+        umap_vec_base_push_back(
             &state.file_infos,
             state.alloc_infos.m_alloc,
             &(usize){(usize)stderr},
