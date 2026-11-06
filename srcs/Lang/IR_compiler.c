@@ -50,7 +50,8 @@ enum Type_info_tag{
     TYPE_INFO_TAG_CHAR,
     TYPE_INFO_TAG_INT,
     TYPE_INFO_TAG_FLOAT,
-    TYPE_INFO_TAG_STR
+    TYPE_INFO_TAG_STR,
+    TYPE_INFO_TAG_OBJ
 };
 
 static bool type_info_tag_is_int_like(enum Type_info_tag tag){
@@ -59,12 +60,12 @@ static bool type_info_tag_is_int_like(enum Type_info_tag tag){
 static bool type_info_tag_is_arithmetic(enum Type_info_tag tag){
     return tag >= TYPE_INFO_TAG_BOOL && tag <= TYPE_INFO_TAG_FLOAT;
 }
-static bool type_info_tag_is_type_id(enum Type_info_tag tag){
-    return tag < TYPE_INFO_TAG_VOID || tag > TYPE_INFO_TAG_STR;
-}
 
 typedef struct Type_info{
     enum Type_info_tag tag;
+    union{
+        Umap_pair_const str_base_type_id_info_pair;
+    };
     usize dimensions;
 } Type_info;
 
@@ -81,8 +82,8 @@ typedef struct Type_info_slice{
 } Type_info_slice;
 
 typedef struct Id_count{
-    usize fn_id_count;
-    usize var_id_count;
+    usize   fn_id_count;
+    usize  var_id_count;
     usize type_id_count;
 } Id_count;
 
@@ -104,19 +105,12 @@ typedef struct Field_info{
 } Field_info;
 
 typedef struct Type_id_info{
-    Str_base str_id;
-    enum Type_info_tag type_info_tag_id;
     const Umap_vec_base *field_info_map_ptr;
 } Type_id_info;
 
-typedef struct Type_id_info_maps{
-    Umap_vec_base str_id_map;
-    Umap_vec_base type_info_tag_as_i32_id_map;
-} Type_id_info_maps;
-
 typedef struct Shared_state{
     Umap_vec_base fn_id_info_map;
-    Type_id_info_maps type_id_info_maps;
+    Umap_vec_base type_id_info_map;
     usize label_counter;
 } Shared_state;
 
@@ -178,16 +172,11 @@ static bool IR_compiler_state_type_info_to_str_base(IR_compiler_state *self, con
         case TYPE_INFO_TAG_STR:
             type_info_tag_str = token_type_to_str((enum Token_type)(TOKEN_TYPE_VOID + (type_info->tag - TYPE_INFO_TAG_VOID)));
             break;
-        default:
-            type_info_tag_str = str_base_data(
-                &(
-                    (Type_id_info*)umap_vec_base_at_key(
-                        &self->shared_state_ptr->type_id_info_maps.type_info_tag_as_i32_id_map,
-                        &(i32){(i32)type_info->tag}
-                    ).m_value
-                )->str_id
-            );
+        case TYPE_INFO_TAG_OBJ:
+            type_info_tag_str = str_base_data_const((const Str_base*)type_info->str_base_type_id_info_pair.m_key);
             break;
+        default:
+            unreachable();
     }
 
     if (!str_base_append_raw(&result, self->alloc, type_info_tag_str))
@@ -259,9 +248,6 @@ static bool IR_compiler_state_binary_op_type_info_result(
     const Type_info *rhs_type_info,
     Type_info *out_opt_type_info
 ){
-    if (!(lhs_type_info->tag != TYPE_INFO_TAG_VOID && rhs_type_info->tag != TYPE_INFO_TAG_VOID))
-        goto binary_op_error;
-
     Type_info result;
 
     switch (bin_op_node->m_type){
@@ -271,7 +257,12 @@ static bool IR_compiler_state_binary_op_type_info_result(
                 rhs_type_info->dimensions > 0 || !type_info_tag_is_int_like(rhs_type_info->tag)
             )
                 goto binary_op_error;
-            result = (lhs_type_info->dimensions > 0) ? (Type_info){.tag = lhs_type_info->tag, .dimensions = lhs_type_info->dimensions - 1} : TYPE_INFO_CHAR;
+            if (lhs_type_info->dimensions > 0){
+                result = *lhs_type_info;
+                --result.dimensions;
+            }
+            else
+                result = TYPE_INFO_CHAR;
             break;
 
         case AST_NODE_TYPE_BINARY_OP_POW:
@@ -346,13 +337,18 @@ static bool IR_compiler_state_binary_op_type_info_result(
 
         case AST_NODE_TYPE_BINARY_OP_ASSIGNMENT:
             if (lhs_type_info->dimensions > 0 || rhs_type_info->dimensions > 0){
-                if (lhs_type_info->dimensions != rhs_type_info->dimensions || lhs_type_info->tag != rhs_type_info->tag)
+                if (
+                    lhs_type_info->dimensions != rhs_type_info->dimensions ||
+                    lhs_type_info->tag != rhs_type_info->tag ||
+                    (lhs_type_info->tag == TYPE_INFO_TAG_OBJ && lhs_type_info->str_base_type_id_info_pair.m_key != rhs_type_info->str_base_type_id_info_pair.m_key)
+                )
                     goto binary_op_error;
             }
-            else if (type_info_tag_is_type_id(lhs_type_info->tag) || type_info_tag_is_type_id(rhs_type_info->tag)){
-                if (lhs_type_info->tag != rhs_type_info->tag)
-                    goto binary_op_error;
-            }
+            else if (
+                (lhs_type_info->tag == TYPE_INFO_TAG_OBJ || rhs_type_info->tag == TYPE_INFO_TAG_OBJ) &&
+                (lhs_type_info->tag != rhs_type_info->tag || lhs_type_info->str_base_type_id_info_pair.m_key != rhs_type_info->str_base_type_id_info_pair.m_key)
+            )
+                goto binary_op_error;
             result = *lhs_type_info;
             break;
 
@@ -389,64 +385,101 @@ binary_op_error:
 #define binary_op_type_info_result(bin_op_node_val, lhs_type_info_val, rhs_type_info_val, out_opt_type_info_val) \
     IR_compiler_state_binary_op_type_info_result(self, (bin_op_node_val), (lhs_type_info_val), (rhs_type_info_val), (out_opt_type_info_val))
 
-typedef struct Builtin_fn_tag_call_result{
-    Type_info return_type_info;
-    bool is_callable;
-} Builtin_fn_tag_call_result;
+static bool IR_compiler_state_builtin_fn_call(
+    IR_compiler_state *self,
+    const AST_node *ast_node,
+    enum Builtin_fn_tag bfn_tag,
+    Type_info_slice arg_type_infos,
+    Type_info *out_return_type_info
+){
+    Type_info result;
 
-static Builtin_fn_tag_call_result builtin_fn_tag_call(enum Builtin_fn_tag tag, Type_info_slice args){
-    switch (tag){
+    switch (bfn_tag){
         case BUILTIN_FN_TAG_GET_ARGV:
-            return (Builtin_fn_tag_call_result){.return_type_info = {.tag = TYPE_INFO_TAG_STR, .dimensions = 1}, .is_callable = (args.size == 0)};
+            if (arg_type_infos.size > 0)
+                goto builtin_fn_call_error;
+            result = (Type_info){.tag = TYPE_INFO_TAG_STR, .dimensions = 1};
+            break;
         case BUILTIN_FN_TAG_EXIT:
         case BUILTIN_FN_TAG_NSLEEP:
         case BUILTIN_FN_TAG_SET_ERRNO:
-            return (Builtin_fn_tag_call_result){
-                .return_type_info = TYPE_INFO_VOID,
-                .is_callable      = (args.size == 1 && args.data[0].tag == TYPE_INFO_TAG_INT && args.data[0].dimensions == 0)
-            };
+            if (arg_type_infos.size != 1 || arg_type_infos.data[0].tag != TYPE_INFO_TAG_INT || arg_type_infos.data[0].dimensions > 0)
+                goto builtin_fn_call_error;
+            result = TYPE_INFO_VOID;
+            break;
         case BUILTIN_FN_TAG_GET_ERRNO:
         case BUILTIN_FN_TAG_STDIN:
         case BUILTIN_FN_TAG_STDOUT:
         case BUILTIN_FN_TAG_STDERR:
         case BUILTIN_FN_TAG_RAND:
-            return (Builtin_fn_tag_call_result){.return_type_info = TYPE_INFO_INT, .is_callable = (args.size == 0)};
+            if (arg_type_infos.size > 0)
+                goto builtin_fn_call_error;
+            result = TYPE_INFO_INT;
+            break;
         case BUILTIN_FN_TAG_PRINT:
-            return (Builtin_fn_tag_call_result){
-                .return_type_info = TYPE_INFO_INT,
-                .is_callable      = (
-                    args.size == 3 &&
-                    args.data[0].tag == TYPE_INFO_TAG_INT  && args.data[0].dimensions == 0 &&
-                    args.data[1].tag >= TYPE_INFO_TAG_BOOL && args.data[1].tag <= TYPE_INFO_TAG_STR && args.data[1].dimensions == 0 &&
-                    args.data[2].tag == TYPE_INFO_TAG_BOOL && args.data[2].dimensions == 0
-                )
-            };
+            if (
+                arg_type_infos.size != 3 ||
+                arg_type_infos.data[0].tag != TYPE_INFO_TAG_INT  || arg_type_infos.data[0].dimensions > 0 ||
+                arg_type_infos.data[1].tag <  TYPE_INFO_TAG_BOOL || arg_type_infos.data[1].tag > TYPE_INFO_TAG_STR || arg_type_infos.data[1].dimensions > 0 ||
+                arg_type_infos.data[2].tag != TYPE_INFO_TAG_BOOL || arg_type_infos.data[2].dimensions > 0
+            )
+                goto builtin_fn_call_error;
+            result = TYPE_INFO_INT;
+            break;
         case BUILTIN_FN_TAG_SCAN:
-            return (Builtin_fn_tag_call_result){
-                .return_type_info = TYPE_INFO_STR,
-                .is_callable      = (args.size == 1 && args.data[0].tag == TYPE_INFO_TAG_INT && args.data[0].dimensions == 0)
-            };
+            if (arg_type_infos.size != 1 || arg_type_infos.data[0].tag != TYPE_INFO_TAG_INT || arg_type_infos.data[0].dimensions > 0)
+                goto builtin_fn_call_error;
+            result = TYPE_INFO_STR;
+            break;
         case BUILTIN_FN_TAG_POLL_KEYPRESS:
-            return (Builtin_fn_tag_call_result){.return_type_info = {.tag = TYPE_INFO_TAG_CHAR, .dimensions = 0}, .is_callable = (args.size == 0)};
+            if (arg_type_infos.size > 0)
+                goto builtin_fn_call_error;
+            result = TYPE_INFO_CHAR;
+            break;
         case BUILTIN_FN_TAG_LEN:
-            return (Builtin_fn_tag_call_result){
-                .return_type_info = TYPE_INFO_INT,
-                .is_callable      = (args.size == 1 && (args.data[0].tag == TYPE_INFO_TAG_STR || args.data[0].dimensions > 0))
-            };
+            if (arg_type_infos.size != 1 || (arg_type_infos.data[0].tag != TYPE_INFO_TAG_STR && arg_type_infos.data[0].dimensions == 0))
+                goto builtin_fn_call_error;
+            result = TYPE_INFO_INT;
+            break;
         case BUILTIN_FN_TAG_PUSH_BACK:
-            return (Builtin_fn_tag_call_result){
-                .return_type_info = TYPE_INFO_VOID,
-                .is_callable      = (args.size == 2 && args.data[0].tag == args.data[1].tag && args.data[0].dimensions - 1 == args.data[1].dimensions)
-            };
+            if (
+                arg_type_infos.size != 2 ||
+                arg_type_infos.data[0].tag != arg_type_infos.data[1].tag ||
+                arg_type_infos.data[0].dimensions - 1 != arg_type_infos.data[1].dimensions
+            )
+                goto builtin_fn_call_error;
+            result = TYPE_INFO_VOID;
+            break;
         case BUILTIN_FN_TAG_POP_BACK:
-            return (Builtin_fn_tag_call_result){
-                .return_type_info = TYPE_INFO_VOID,
-                .is_callable      = (args.size == 1 && args.data[0].dimensions > 0)
-            };
+            if (arg_type_infos.size != 1 || arg_type_infos.data[0].dimensions == 0)
+                goto builtin_fn_call_error;
+            result = TYPE_INFO_VOID;
+            break;
         default:
-            return (Builtin_fn_tag_call_result){.is_callable = false};
+            unreachable();
     }
+
+    if (out_return_type_info)
+        *out_return_type_info = result;
+
+    return true;
+
+    Str_base type_info_list_str;
+    const char *bfn_id;
+
+builtin_fn_call_error:
+    
+    bfn_id = builtin_fn_tag_to_str(bfn_tag);
+    if (arg_type_infos.size > 0){
+        return (type_info_slice_to_str_base(arg_type_infos, &type_info_list_str))
+            ? syntax_error(ast_node, "Builtin function <%s> is not callable with types <%s>", bfn_id, str_base_data(&type_info_list_str))
+            : false
+        ;
+    }
+    return syntax_error(ast_node, "Builtin function <%s> is not callable without arguments", bfn_id);
 }
+#define builtin_fn_call(ast_node_val, tag_val, args_val, out_return_type_info_val) \
+    IR_compiler_state_builtin_fn_call(self, (ast_node_val), (tag_val), (args_val), (out_return_type_info_val))
 
 static bool IR_compiler_state_init_in_place(IR_compiler_state *self, Allocator arena_alloc, Shared_state *shared_state_ptr){
     *self = (IR_compiler_state){
@@ -487,10 +520,17 @@ static bool IR_compiler_state_add_type_conversion_instruction(
 	const Type_info *src_type_info
 ){
     if (dest_type_info->dimensions > 0 || src_type_info->dimensions > 0){
-        if (dest_type_info->dimensions != src_type_info->dimensions || dest_type_info->tag != src_type_info->tag)
+        if (
+            dest_type_info->dimensions != src_type_info->dimensions ||
+            dest_type_info->tag != src_type_info->tag ||
+            (dest_type_info->tag == TYPE_INFO_TAG_OBJ && dest_type_info->str_base_type_id_info_pair.m_key != src_type_info->str_base_type_id_info_pair.m_key)
+        )
             goto type_conversion_error;
     }
-    else if ((type_info_tag_is_type_id(dest_type_info->tag) || type_info_tag_is_type_id(src_type_info->tag)) && dest_type_info->tag != src_type_info->tag)
+    else if (
+        (dest_type_info->tag == TYPE_INFO_TAG_OBJ || src_type_info->tag == TYPE_INFO_TAG_OBJ) &&
+        (dest_type_info->tag != src_type_info->tag || dest_type_info->str_base_type_id_info_pair.m_key != src_type_info->str_base_type_id_info_pair.m_key)
+    )
         goto type_conversion_error;
 
     return (dest_type_info->dimensions == 0 && dest_type_info->tag >= TYPE_INFO_TAG_BOOL && dest_type_info->tag <= TYPE_INFO_TAG_STR)
@@ -566,20 +606,15 @@ static bool IR_compiler_state_pop_ids_in_current_scope(IR_compiler_state *self){
 
     Shared_state *shared_state_ptr = self->shared_state_ptr;
 
-    Umap_vec_base *fn_id_info_map_ptr    = &shared_state_ptr->fn_id_info_map;
-    Type_id_info_maps *type_id_info_maps_ptr = &shared_state_ptr->type_id_info_maps;
-
-    Umap_vec_base *type_info_tag_as_i32_id_map_ptr = &type_id_info_maps_ptr->type_info_tag_as_i32_id_map;
-    Umap_vec_base *str_id_map_ptr                  = &type_id_info_maps_ptr->str_id_map;
+    Umap_vec_base *fn_id_info_map_ptr   = &shared_state_ptr->fn_id_info_map;
+    Umap_vec_base *type_id_info_map_ptr = &shared_state_ptr->type_id_info_map;
 
     Umap_vec_base *var_ids_ptr = &self->var_id_info_map;
 
     Vec_base *type_info_stack_ptr = &self->type_info_stack;
 
-    for (usize i = id_count.type_id_count; i-- > 0;){
-        umap_vec_base_pop_back_discard(type_info_tag_as_i32_id_map_ptr, alloc);
-        umap_vec_base_pop_back_discard(str_id_map_ptr, alloc);
-    }
+    for (usize i = id_count.type_id_count; i-- > 0;)
+        umap_vec_base_pop_back_discard(type_id_info_map_ptr, alloc);
     while (id_count.fn_id_count-- > 0)
         umap_vec_base_pop_back_discard(fn_id_info_map_ptr, alloc);
     for (usize i = id_count.var_id_count; i-- > 0;){
@@ -596,10 +631,11 @@ static bool IR_compiler_state_ast_node_to_type_info(IR_compiler_state *self, con
     if (type_node->m_type != AST_NODE_TYPE_TYPE_ID)
         result.tag = (enum Type_info_tag)(TYPE_INFO_TAG_VOID + (type_node->m_type - AST_NODE_TYPE_TYPE_VOID));
     else{
-        Type_id_info *type_id_info_ptr = umap_vec_base_at_key(&self->shared_state_ptr->type_id_info_maps.str_id_map, &type_node->m_token->m_id).m_value;
-        if (!type_id_info_ptr)
+        Umap_pair_const str_base_type_id_info_pair = umap_vec_base_at_key_const(&self->shared_state_ptr->type_id_info_map, &type_node->m_token->m_id);
+        if (!str_base_type_id_info_pair.m_key)
             return syntax_error(type_node, "Use of undeclared type identifier <%s>", str_base_data_const(&type_node->m_token->m_id));
-        result.tag = type_id_info_ptr->type_info_tag_id;
+        result.tag = TYPE_INFO_TAG_OBJ;
+        result.str_base_type_id_info_pair = str_base_type_id_info_pair;
     }
     *out_type_info = result;
     return true;
@@ -635,12 +671,7 @@ static bool IR_compiler_state_init_list_type_info_from_context(IR_compiler_state
                     case AST_NODE_TYPE_BINARY_OP_MEMBER_ACCESS:
                         *out_init_list_type_info = (
                             (const Field_info*)umap_vec_base_at_key_const(
-                                (
-                                    (Type_id_info*)umap_vec_base_at_key(
-                                        &self->shared_state_ptr->type_id_info_maps.type_info_tag_as_i32_id_map,
-                                        &(i32){(i32)out_init_list_type_info->tag}
-                                    ).m_value
-                                )->field_info_map_ptr,
+                                ((const Type_id_info*)out_init_list_type_info->str_base_type_id_info_pair.m_value)->field_info_map_ptr,
                                 &id_node->m_sub_nodes.m_data[1]->m_token->m_id
                             ).m_value
                         )->type_info;
@@ -684,10 +715,7 @@ static bool IR_compiler_state_init_list_type_info_from_context(IR_compiler_state
             if (!fn_node)
                 return syntax_error(init_list_node, "Returning an initializer list is only allowed inside a user-defined function");
             *out_init_list_type_info = (
-                (Fn_id_info*)umap_vec_base_at_key(
-                    &self->shared_state_ptr->fn_id_info_map,
-                    &fn_node->m_sub_nodes.m_data[0]->m_token->m_id
-                ).m_value
+                (Fn_id_info*)umap_vec_base_at_key(&self->shared_state_ptr->fn_id_info_map, &fn_node->m_sub_nodes.m_data[0]->m_token->m_id).m_value
             )->return_type_info;
             if (out_init_list_type_info->dimensions == 0)
                 return syntax_error(init_list_node, "Returning an initializer list from function where a non-list type was expected");
@@ -697,11 +725,8 @@ static bool IR_compiler_state_init_list_type_info_from_context(IR_compiler_state
             const AST_node *obj_init_node = parent->m_parent;
             if (obj_init_node && obj_init_node->m_type == AST_NODE_TYPE_ATOM_OBJ_INIT){
                 *out_init_list_type_info = (
-                    (const Field_info*)umap_vec_base_at_key_const((
-                        (Type_id_info*)umap_vec_base_at_key(
-                            &self->shared_state_ptr->type_id_info_maps.str_id_map,
-                            &obj_init_node->m_token->m_id).m_value
-                        )->field_info_map_ptr,
+                    (const Field_info*)umap_vec_base_at_key_const(
+                        ((Type_id_info*)umap_vec_base_at_key(&self->shared_state_ptr->type_id_info_map, &obj_init_node->m_token->m_id).m_value)->field_info_map_ptr,
                         &parent->m_token->m_id
                     ).m_value
                 )->type_info;
@@ -731,12 +756,7 @@ static bool IR_compiler_state_binary_op_member_access_no_deref(IR_compiler_state
 
     Type_info obj_type_info = *(Type_info*)vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1);
 
-    Type_id_info *type_id_info_ptr = umap_vec_base_at_key(
-        &self->shared_state_ptr->type_id_info_maps.type_info_tag_as_i32_id_map,
-        &(i32){(i32)obj_type_info.tag}
-    ).m_value;
-
-    if (obj_type_info.dimensions > 0 || !type_id_info_ptr){
+    if (obj_type_info.dimensions > 0 || obj_type_info.tag != TYPE_INFO_TAG_OBJ){
         Str_base type_info_str;
         return (type_info_to_str_base(&obj_type_info, &type_info_str))
             ? syntax_error(member_access_node, "Member access on type <%s>", str_base_data(&type_info_str))
@@ -747,7 +767,10 @@ static bool IR_compiler_state_binary_op_member_access_no_deref(IR_compiler_state
     if (rhs_node->m_type != AST_NODE_TYPE_ATOM_ID)
         return syntax_error(rhs_node, "Member access with non-identifier");
 
-    const Field_info *field_info_ptr = umap_vec_base_at_key_const(type_id_info_ptr->field_info_map_ptr, &rhs_node->m_token->m_id).m_value;
+    const Field_info *field_info_ptr = umap_vec_base_at_key_const(
+        ((const Type_id_info*)obj_type_info.str_base_type_id_info_pair.m_value)->field_info_map_ptr,
+        &rhs_node->m_token->m_id
+    ).m_value;
     if (!field_info_ptr)
         return syntax_error(rhs_node, "Use of undeclared field identifier <%s>", str_base_data_const(&rhs_node->m_token->m_id));
 
@@ -808,14 +831,20 @@ bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *ast_node
                 return false;
             break;
         case AST_NODE_TYPE_ATOM_OBJ_INIT:{
-            Type_id_info *type_id_info_ptr = umap_vec_base_at_key(&self->shared_state_ptr->type_id_info_maps.str_id_map, &ast_node->m_token->m_id).m_value;
+            Umap_pair_const str_base_type_id_info_pair = umap_vec_base_at_key_const(&self->shared_state_ptr->type_id_info_map, &ast_node->m_token->m_id);
+
+            const Type_id_info *type_id_info_ptr = str_base_type_id_info_pair.m_value;
             if (!type_id_info_ptr)
                 return syntax_error(ast_node, "Use of undeclared type identifier <%s>", str_base_data_const(&ast_node->m_token->m_id));
 
             if (ast_node->m_sub_nodes.m_size != type_id_info_ptr->field_info_map_ptr->m_keys.m_size)
                 return syntax_error(ast_node, "Must initialize every field exactly once");
             
-            if (!vec_base_push_back(&self->type_info_stack, self->alloc, &(Type_info){.tag = type_id_info_ptr->type_info_tag_id, .dimensions = 0}))
+            if (!vec_base_push_back(
+                &self->type_info_stack,
+                self->alloc,
+                &(Type_info){.tag = TYPE_INFO_TAG_OBJ, .str_base_type_id_info_pair = str_base_type_id_info_pair, .dimensions = 0}
+            ))
                 return oom_error();
             if (!add_instruction("%s []", op_code_to_str(OP_CODE_PUSH)))
                 return false;
@@ -831,7 +860,7 @@ bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *ast_node
                     return syntax_error(
                         field_id_node,
                         "<%s> doesn't contain a field with the name <%s>",
-                        str_base_data(&type_id_info_ptr->str_id),
+                        str_base_data_const(str_base_type_id_info_pair.m_key),
                         str_base_data_const(&field_id_node->m_token->m_id)
                     );
                 }
@@ -875,12 +904,12 @@ bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *ast_node
                 if (!(add_instruction("%s " SP_SYMBOL "[-1]", op_code_to_str(OP_CODE_PUSH)) && compile(ast_node->m_sub_nodes.m_data[i])))
                     return false;
 
-                if (
-                    !builtin_fn_tag_call(
-                        BUILTIN_FN_TAG_PUSH_BACK,
-                        (Type_info_slice){.size = 2, .data = vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 2)}
-                    ).is_callable
-                ){
+                if (!builtin_fn_call(
+                    ast_node,
+                    BUILTIN_FN_TAG_PUSH_BACK,
+                    ((Type_info_slice){.size = 2, .data = vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 2)}),
+                    NULL
+                )){
                     --init_list_type_info.dimensions;
                     Str_base type_info_str;
                     return (type_info_to_str_base(&init_list_type_info, &type_info_str))
@@ -1166,8 +1195,6 @@ bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *ast_node
 
             enum Builtin_fn_tag bfn_tag = builtin_fn_tag_init(fn_id);
             if (bfn_tag != BUILTIN_FN_TAG_NONE){
-                Builtin_fn_tag_call_result bfn_call_result;
-
                 if (fn_arg_nodes.m_size > 0){
                     for (usize i = 0; i < fn_arg_nodes.m_size; ++i){
                         const AST_node *arg_node = fn_arg_nodes.m_data[i];
@@ -1177,24 +1204,16 @@ bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *ast_node
                         if (!add_type_conversion_instruction(arg_node, last_type_info_ptr, last_type_info_ptr))
                             return false;
                     }
-
-                    Type_info_slice arg_type_infos = {
-                        .size = fn_arg_nodes.m_size,
-                        .data = vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - fn_arg_nodes.m_size)
-                    };
-                    bfn_call_result = builtin_fn_tag_call(bfn_tag, arg_type_infos);
-                    if (!bfn_call_result.is_callable){
-                        Str_base type_info_list_str;
-                        return (type_info_slice_to_str_base(arg_type_infos, &type_info_list_str))
-                            ? syntax_error(ast_node, "Builtin function <%s> is not callable with types <%s>", fn_id, str_base_data(&type_info_list_str))
-                            : false
-                        ;
-                    }
+                    if (!builtin_fn_call(
+                        ast_node,
+                        bfn_tag,
+                        ((Type_info_slice){.size = fn_arg_nodes.m_size, .data = vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - fn_arg_nodes.m_size)}),
+                        &return_type_info
+                    ))
+                        return false;
                 }
-                else if (!(bfn_call_result = builtin_fn_tag_call(bfn_tag, (Type_info_slice){0})).is_callable)
-                    return syntax_error(ast_node, "Builtin function <%s> is not callable without arguments", fn_id);
-
-                return_type_info = bfn_call_result.return_type_info;
+                else if (!builtin_fn_call(ast_node, bfn_tag, (Type_info_slice){0}, &return_type_info))
+                    return false;
             }
             else{
                 Fn_id_info *fn_id_info_ptr = umap_vec_base_at_key(&self->shared_state_ptr->fn_id_info_map, &ast_node->m_sub_nodes.m_data[0]->m_token->m_id).m_value;
@@ -1379,8 +1398,7 @@ bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *ast_node
         case AST_NODE_TYPE_DECL_TYPE:{
             const AST_node *type_id_node = ast_node->m_sub_nodes.m_data[0];
             
-            Type_id_info_maps *type_id_info_maps_ptr = &self->shared_state_ptr->type_id_info_maps;
-            enum Type_info_tag type_id_type_info_tag = (enum Type_info_tag)(TYPE_INFO_TAG_STR + 1 + type_id_info_maps_ptr->str_id_map.m_keys.m_size);
+            Umap_vec_base *type_id_info_map_ptr = &self->shared_state_ptr->type_id_info_map;
 
             Umap_vec_base *field_info_map_ptr = allocator_alloc(self->alloc, Umap_vec_base, 1);
             if (!field_info_map_ptr)
@@ -1388,14 +1406,10 @@ bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *ast_node
             *field_info_map_ptr = umap_vec_base_init(Str_base, Field_info);
 
             Umap_insert_result type_insert_result = umap_vec_base_push_back(
-                &type_id_info_maps_ptr->str_id_map,
+                type_id_info_map_ptr,
                 self->alloc,
                 &type_id_node->m_token->m_id,
-                &(Type_id_info){
-                    .str_id             = type_id_node->m_token->m_id,
-                    .type_info_tag_id   = type_id_type_info_tag,
-                    .field_info_map_ptr = field_info_map_ptr
-                }
+                &(Type_id_info){.field_info_map_ptr = field_info_map_ptr}
             );
             switch (type_insert_result.error){
                 case UMAP_INSERT_ERROR_NONE:
@@ -1405,15 +1419,6 @@ bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *ast_node
                 case UMAP_INSERT_ERROR_ALREADY_INSERTED:
                     return syntax_error(type_id_node, "Type identifier <%s> is already in use", str_base_data_const(&type_id_node->m_token->m_id));
             }
-            if (
-                umap_vec_base_push_back(
-                    &type_id_info_maps_ptr->type_info_tag_as_i32_id_map,
-                    self->alloc,
-                    &(i32){(i32)type_id_type_info_tag},
-                    type_insert_result.result.m_value
-                ).error != UMAP_INSERT_ERROR_NONE
-            )
-                return oom_error();
 
             for (usize i = 1; i < ast_node->m_sub_nodes.m_size; ++i){
                 const AST_node *field_id_node = ast_node->m_sub_nodes.m_data[i];
@@ -1422,7 +1427,11 @@ bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *ast_node
                 Type_info field_type_info;
                 if (!ast_node_to_type_info(field_type_node, &field_type_info))
                     return false;
-                if (field_type_info.tag == type_id_type_info_tag && field_type_info.dimensions == 0)
+                if (
+                    field_type_info.tag == TYPE_INFO_TAG_OBJ &&
+                    field_type_info.str_base_type_id_info_pair.m_key == type_insert_result.result.m_key &&
+                    field_type_info.dimensions == 0
+                )
                     return syntax_error(field_type_node, "Type containing itself directly");
 
                 enum Umap_insert_error field_insert_error = umap_vec_base_push_back(
@@ -1600,25 +1609,16 @@ bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *ast_node
             if (!fn_node){
                 if (ast_node->m_sub_nodes.m_size != 1)
                     return syntax_error(ast_node, "The program must return a non-void value on exit");
-
-                const AST_node *expr_node = ast_node->m_sub_nodes.m_data[0];
-                if (!compile(expr_node))
-                    return false;
-
-                Type_info_slice args = {.size = 1, .data = vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1)};
-
-                const char *bfn_exit_str = builtin_fn_tag_to_str(BUILTIN_FN_TAG_EXIT);
-
-                if (!builtin_fn_tag_call(BUILTIN_FN_TAG_EXIT, args).is_callable){
-                    Str_base type_info_list_str;
-                    return (type_info_slice_to_str_base(args, &type_info_list_str))
-                        ? syntax_error(ast_node, "Builtin function <%s> is not callable with types <%s>", bfn_exit_str, str_base_data(&type_info_list_str))
-                        : false
-                    ;
-                }
-
-                vec_base_pop_back_discard(&self->type_info_stack);
-                if (!add_instruction("%s %s", op_code_to_str(OP_CODE_CALL), bfn_exit_str))
+                if (!(
+                    compile(ast_node->m_sub_nodes.m_data[0]) &&
+                    builtin_fn_call(
+                        ast_node,
+                        BUILTIN_FN_TAG_EXIT,
+                        ((Type_info_slice){.size = 1, .data = vec_base_at(&self->type_info_stack, self->type_info_stack.m_size - 1)}),
+                        NULL
+                    ) &&
+                    (vec_base_pop_back_discard(&self->type_info_stack), add_instruction("%s %s", op_code_to_str(OP_CODE_CALL), builtin_fn_tag_to_str(BUILTIN_FN_TAG_EXIT)))
+                ))
                     return false;
             }
             else{
@@ -1710,9 +1710,9 @@ IR_compiler_compile_result IR_compiler_compile(Arena *arena, AST_node_ptr_slice 
 
     Allocator alloc = arena_allocator(arena);
     Shared_state shared_state = {
-        .fn_id_info_map    = umap_vec_base_init(Str_base, Fn_id_info),
-        .type_id_info_maps = {.str_id_map = umap_vec_base_init(Str_base, Type_id_info), .type_info_tag_as_i32_id_map = umap_vec_base_init(i32, Type_id_info)},
-        .label_counter     = 0
+        .fn_id_info_map   = umap_vec_base_init(Str_base, Fn_id_info),
+        .type_id_info_map = umap_vec_base_init(Str_base, Type_id_info),
+        .label_counter    = 0
     };
 
     IR_compiler_state state;
