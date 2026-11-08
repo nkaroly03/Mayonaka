@@ -93,10 +93,10 @@ typedef struct Token_slice{
 i64 token_slice_print(Token_slice tokens_slice, FILE *file);
 
 enum Lexer_lex_error{
-    LEX_ERROR_NONE,
-    LEX_ERROR_OOM,
-    LEX_ERROR_SYNTAX,
-    LEX_ERROR_FILE
+    LEXER_LEX_ERROR_NONE,
+    LEXER_LEX_ERROR_OOM,
+    LEXER_LEX_ERROR_SYNTAX,
+    LEXER_LEX_ERROR_FILE
 };
 
 typedef struct Lexer_lex_result{

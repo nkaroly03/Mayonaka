@@ -54,10 +54,10 @@ int main(const int argc, const char *const *const argv){
 
     Lexer_lex_result lexer_lex_result = lexer_lex(&arena, argv[1]);
     switch (lexer_lex_result.error){
-        case LEX_ERROR_NONE:   break;
-        case LEX_ERROR_OOM:    goto oom_error;
-        case LEX_ERROR_FILE:   error_info = lexer_lex_result.error_info; goto file_error;
-        case LEX_ERROR_SYNTAX: error_info = lexer_lex_result.error_info; goto syntax_error;
+        case LEXER_LEX_ERROR_NONE:   break;
+        case LEXER_LEX_ERROR_OOM:    goto oom_error;
+        case LEXER_LEX_ERROR_FILE:   error_info = lexer_lex_result.error_info; goto file_error;
+        case LEXER_LEX_ERROR_SYNTAX: error_info = lexer_lex_result.error_info; goto syntax_error;
     }
 
     token_slice_print(lexer_lex_result.tokens, stderr);

@@ -44,7 +44,7 @@ static const char COMMENT_SYMBOL_SINGLE_LINE[] = "//";
 #define COMMENT_SYMBOL_BLOCK_SIZE (array_size(COMMENT_SYMBOL_BLOCK) - 1)
 #define COMMENT_SYMBOL_SINGLE_LINE_SIZE (array_size(COMMENT_SYMBOL_SINGLE_LINE) - 1)
 
-static const Lexer_lex_result OOM_ERROR = {.error = LEX_ERROR_OOM};
+static const Lexer_lex_result OOM_ERROR = {.error = LEXER_LEX_ERROR_OOM};
 
 static Lexer_lex_result lexer_state_syntax_error(Lexer_state *self, const char *fmt, ...){
     va_list args;
@@ -63,7 +63,7 @@ static Lexer_lex_result lexer_state_syntax_error(Lexer_state *self, const char *
         error_info = temp;
     }
 
-    return (Lexer_lex_result){.error_info = error_info.result, .error = LEX_ERROR_SYNTAX};
+    return (Lexer_lex_result){.error_info = error_info.result, .error = LEXER_LEX_ERROR_SYNTAX};
 }
 static bool lexer_state_token_push_back(Lexer_state *self, enum Token_type type, const char *token_type_id){
     Str_base_result temp = str_base_init_raw(self->alloc, token_type_id);
@@ -261,7 +261,7 @@ Lexer_lex_result lexer_lex(Arena *arena, const char *path){
             case STR_GETLINE_ERROR_FERROR:
                 file_error_info = str_base_init_raw(state.alloc, "<ferror> during tokenization");
             file_error:
-                return (file_error_info.success) ? (Lexer_lex_result){.error_info = file_error_info.result, .error = LEX_ERROR_FILE} : OOM_ERROR;
+                return (file_error_info.success) ? (Lexer_lex_result){.error_info = file_error_info.result, .error = LEXER_LEX_ERROR_FILE} : OOM_ERROR;
         }
     }
 
@@ -560,5 +560,5 @@ Lexer_lex_result lexer_lex(Arena *arena, const char *path){
     if (lbrace_count != rbrace_count)
         return syntax_error("Number of opening and closing braces must match");
 
-    return (Lexer_lex_result){.tokens = {.m_size = state.tokens.m_size, .m_data = state.tokens.m_data}, .error = LEX_ERROR_NONE};
+    return (Lexer_lex_result){.tokens = {.m_size = state.tokens.m_size, .m_data = state.tokens.m_data}, .error = LEXER_LEX_ERROR_NONE};
 }

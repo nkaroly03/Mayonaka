@@ -61,13 +61,20 @@ static bool type_info_tag_is_arithmetic(enum Type_info_tag tag){
     return tag >= TYPE_INFO_TAG_BOOL && tag <= TYPE_INFO_TAG_FLOAT;
 }
 
-typedef struct Type_info{
+typedef struct Type_info Type_info;
+
+typedef struct Type_info_slice{
+    usize size;
+    const Type_info *data;
+} Type_info_slice;
+
+struct Type_info{
     enum Type_info_tag tag;
     union{
         Umap_pair_const str_base_type_id_info_pair;
     };
     usize dimensions;
-} Type_info;
+};
 
 static const Type_info TYPE_INFO_VOID  = {.tag = TYPE_INFO_TAG_VOID,  .dimensions = 0};
 static const Type_info TYPE_INFO_BOOL  = {.tag = TYPE_INFO_TAG_BOOL,  .dimensions = 0};
@@ -75,11 +82,6 @@ static const Type_info TYPE_INFO_CHAR  = {.tag = TYPE_INFO_TAG_CHAR,  .dimension
 static const Type_info TYPE_INFO_INT   = {.tag = TYPE_INFO_TAG_INT,   .dimensions = 0};
 static const Type_info TYPE_INFO_FLOAT = {.tag = TYPE_INFO_TAG_FLOAT, .dimensions = 0};
 static const Type_info TYPE_INFO_STR   = {.tag = TYPE_INFO_TAG_STR,   .dimensions = 0};
-
-typedef struct Type_info_slice{
-    usize size;
-    const Type_info *data;
-} Type_info_slice;
 
 typedef struct Id_count{
     usize   fn_id_count;
@@ -153,7 +155,7 @@ static bool IR_compiler_state_syntax_error(IR_compiler_state *self, const AST_no
 
     return oom_error();
 }
-#define syntax_error(ast_node_val, ...) IR_compiler_state_syntax_error(self, (ast_node_val), __VA_ARGS__)
+#define syntax_error(ast_node, ...) IR_compiler_state_syntax_error(self, (ast_node), __VA_ARGS__)
 
 static bool IR_compiler_state_type_info_to_str_base(IR_compiler_state *self, const Type_info *type_info, Str_base *out_type_info_str){
     Str_base result = {0};
@@ -186,7 +188,7 @@ static bool IR_compiler_state_type_info_to_str_base(IR_compiler_state *self, con
 
     return true;
 }
-#define type_info_to_str_base(type_info_val, out_type_info_str_val) IR_compiler_state_type_info_to_str_base(self, (type_info_val), (out_type_info_str_val))
+#define type_info_to_str_base(type_info, out_type_info_str) IR_compiler_state_type_info_to_str_base(self, (type_info), (out_type_info_str))
 
 static bool IR_compiler_state_type_info_slice_to_str_base(IR_compiler_state *self, Type_info_slice type_info_slice, Str_base *out_type_info_str){
     Str_base result = {0};
@@ -202,8 +204,8 @@ static bool IR_compiler_state_type_info_slice_to_str_base(IR_compiler_state *sel
     *out_type_info_str = result;
     return true;
 }
-#define type_info_slice_to_str_base(type_info_slice_val, out_type_info_str_val) \
-    IR_compiler_state_type_info_slice_to_str_base(self, (type_info_slice_val), (out_type_info_str_val))
+#define type_info_slice_to_str_base(type_info_slice, out_type_info_str) \
+    IR_compiler_state_type_info_slice_to_str_base(self, (type_info_slice), (out_type_info_str))
 
 static bool IR_compiler_state_unary_op_type_info_result(IR_compiler_state *self, const AST_node *un_op_node, const Type_info *type_info, Type_info *out_type_info){
     if (type_info->dimensions > 0)
@@ -238,8 +240,8 @@ static bool IR_compiler_state_unary_op_type_info_result(IR_compiler_state *self,
 
     return true;
 }
-#define unary_op_type_info_result(un_op_node, type_info_val, out_type_info_val) \
-    IR_compiler_state_unary_op_type_info_result(self, (un_op_node), (type_info_val), (out_type_info_val))
+#define unary_op_type_info_result(un_op_node, type_info, out_type_info) \
+    IR_compiler_state_unary_op_type_info_result(self, (un_op_node), (type_info), (out_type_info))
 
 static bool IR_compiler_state_binary_op_type_info_result(
     IR_compiler_state *self,
@@ -382,15 +384,15 @@ binary_op_error:
         str_base_data(&rhs_type_info_str)
     );
 }
-#define binary_op_type_info_result(bin_op_node_val, lhs_type_info_val, rhs_type_info_val, out_opt_type_info_val) \
-    IR_compiler_state_binary_op_type_info_result(self, (bin_op_node_val), (lhs_type_info_val), (rhs_type_info_val), (out_opt_type_info_val))
+#define binary_op_type_info_result(bin_op_node, lhs_type_info, rhs_type_info, out_opt_type_info) \
+    IR_compiler_state_binary_op_type_info_result(self, (bin_op_node), (lhs_type_info), (rhs_type_info), (out_opt_type_info))
 
 static bool IR_compiler_state_builtin_fn_call(
     IR_compiler_state *self,
     const AST_node *ast_node,
     enum Builtin_fn_tag bfn_tag,
     Type_info_slice arg_type_infos,
-    Type_info *out_return_type_info
+    Type_info *out_opt_return_type_info
 ){
     Type_info result;
 
@@ -459,8 +461,8 @@ static bool IR_compiler_state_builtin_fn_call(
             unreachable();
     }
 
-    if (out_return_type_info)
-        *out_return_type_info = result;
+    if (out_opt_return_type_info)
+        *out_opt_return_type_info = result;
 
     return true;
 
@@ -478,8 +480,8 @@ builtin_fn_call_error:
     }
     return syntax_error(ast_node, "Builtin function <%s> is not callable without arguments", bfn_id);
 }
-#define builtin_fn_call(ast_node_val, tag_val, args_val, out_return_type_info_val) \
-    IR_compiler_state_builtin_fn_call(self, (ast_node_val), (tag_val), (args_val), (out_return_type_info_val))
+#define builtin_fn_call(ast_node, tag, args, out_return_type_info) \
+    IR_compiler_state_builtin_fn_call(self, (ast_node), (tag), (args), (out_return_type_info))
 
 static bool IR_compiler_state_init_in_place(IR_compiler_state *self, Allocator arena_alloc, Shared_state *shared_state_ptr){
     *self = (IR_compiler_state){
@@ -515,9 +517,9 @@ static bool IR_compiler_state_add_instruction(IR_compiler_state *self, const cha
 
 static bool IR_compiler_state_add_type_conversion_instruction(
     IR_compiler_state *self,
-	const AST_node *ast_node,
-	const Type_info *dest_type_info,
-	const Type_info *src_type_info
+    const AST_node *ast_node,
+    const Type_info *dest_type_info,
+    const Type_info *src_type_info
 ){
     if (dest_type_info->dimensions > 0 || src_type_info->dimensions > 0){
         if (
@@ -548,8 +550,8 @@ type_conversion_error:
         : false
     ;
 }
-#define add_type_conversion_instruction(ast_node_val, dest_type_info_val, src_type_info_val) \
-    IR_compiler_state_add_type_conversion_instruction(self, (ast_node_val), (dest_type_info_val), (src_type_info_val))
+#define add_type_conversion_instruction(ast_node, dest_type_info, src_type_info) \
+    IR_compiler_state_add_type_conversion_instruction(self, (ast_node), (dest_type_info), (src_type_info))
 
 static bool IR_compiler_state_add_fn_return_instruction(IR_compiler_state *self, enum Op_code ret_op_code){
     usize type_info_stack_size = self->type_info_stack.m_size;
@@ -559,17 +561,17 @@ static bool IR_compiler_state_add_fn_return_instruction(IR_compiler_state *self,
     self->type_info_stack.m_size = type_info_stack_size;
     return true;
 }
-#define add_fn_return_instruction(ret_op_code_val) IR_compiler_state_add_fn_return_instruction(self, (ret_op_code_val))
+#define add_fn_return_instruction(ret_op_code) IR_compiler_state_add_fn_return_instruction(self, (ret_op_code))
 
 static bool IR_compiler_state_add_label(IR_compiler_state *self, const char *label){
     return str_base_append_raw(&self->result.IR, self->alloc, label) && str_base_append_raw(&self->result.IR, self->alloc, ":\n");
 }
-#define add_label(label_val) IR_compiler_state_add_label(self, (label_val))
+#define add_label(label) IR_compiler_state_add_label(self, (label))
 
 static bool IR_compiler_state_pop_on_expr_statement(IR_compiler_state *self, const AST_node *ast_node){
     return (ast_node_expr_is_statement(ast_node)) ? (vec_base_pop_back_discard(&self->type_info_stack), add_instruction("%s 1", op_code_to_str(OP_CODE_POP))) : true;
 }
-#define pop_on_expr_statement(ast_node_val) IR_compiler_state_pop_on_expr_statement(self, (ast_node_val))
+#define pop_on_expr_statement(ast_node) IR_compiler_state_pop_on_expr_statement(self, (ast_node))
 
 static bool IR_compiler_state_push_back_var_id(IR_compiler_state *self, const AST_node *id_node, const Type_info *id_type_info){
     assert(id_node->m_parent->m_type == AST_NODE_TYPE_DECL_FN || id_node->m_parent->m_type == AST_NODE_TYPE_DECL_VAR);
@@ -596,7 +598,7 @@ static bool IR_compiler_state_push_back_var_id(IR_compiler_state *self, const AS
 
     return true;
 }
-#define push_back_var_id(id_node_val, id_type_info_val) IR_compiler_state_push_back_var_id(self, (id_node_val), (id_type_info_val))
+#define push_back_var_id(id_node, id_type_info) IR_compiler_state_push_back_var_id(self, (id_node), (id_type_info))
 
 static bool IR_compiler_state_pop_ids_in_current_scope(IR_compiler_state *self){
     Id_count id_count;
@@ -640,7 +642,7 @@ static bool IR_compiler_state_ast_node_to_type_info(IR_compiler_state *self, con
     *out_type_info = result;
     return true;
 }
-#define ast_node_to_type_info(type_node_val, out_type_info_val) IR_compiler_state_ast_node_to_type_info(self, (type_node_val), (out_type_info_val))
+#define ast_node_to_type_info(type_node, out_type_info) IR_compiler_state_ast_node_to_type_info(self, (type_node), (out_type_info))
 
 static bool IR_compiler_state_init_list_type_info_from_context(IR_compiler_state *self, const AST_node *init_list_node, Type_info *out_init_list_type_info){
     if (!init_list_node->m_parent)
@@ -741,11 +743,11 @@ static bool IR_compiler_state_init_list_type_info_from_context(IR_compiler_state
 
     return true;
 }
-#define init_list_type_info_from_context(init_list_node_val, out_init_list_type_info_val) \
-    IR_compiler_state_init_list_type_info_from_context(self, (init_list_node_val), (out_init_list_type_info_val))
+#define init_list_type_info_from_context(init_list_node, out_init_list_type_info) \
+    IR_compiler_state_init_list_type_info_from_context(self, (init_list_node), (out_init_list_type_info))
 
 static bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *ast_node);
-#define compile(ast_node_val) IR_compiler_state_compile(self, (ast_node_val))
+#define compile(ast_node) IR_compiler_state_compile(self, (ast_node))
 
 static bool IR_compiler_state_binary_op_member_access_no_deref(IR_compiler_state *self, const AST_node *member_access_node, Type_info *out_field_type_info){
     const AST_node *lhs_node = member_access_node->m_sub_nodes.m_data[0];
@@ -783,8 +785,8 @@ static bool IR_compiler_state_binary_op_member_access_no_deref(IR_compiler_state
 
     return true;
 }
-#define binary_op_member_access_no_deref(member_access_node_val, out_field_type_info_val) \
-    IR_compiler_state_binary_op_member_access_no_deref(self, (member_access_node_val), (out_field_type_info_val))
+#define binary_op_member_access_no_deref(member_access_node, out_field_type_info) \
+    IR_compiler_state_binary_op_member_access_no_deref(self, (member_access_node), (out_field_type_info))
 
 #define JMP_LABEL_SYMBOL "L"
 #define JMP_LABEL_FMT LOCAL_LABEL_PREFIX_SYMBOL JMP_LABEL_SYMBOL USIZE_PFMT
@@ -1275,8 +1277,8 @@ bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *ast_node
             else if (!str_base_assign_raw(&id_mangled, self->alloc, fn_id))
                 return oom_error();
 
-            Vec_base fn_arg_type_infos = vec_base_init(Type_info);
-            if (!vec_base_reserve(&fn_arg_type_infos, self->alloc, fn_arg_nodes.m_size))
+            Type_info *fn_arg_type_infos_data = allocator_alloc(self->alloc, Type_info, fn_arg_nodes.m_size);
+            if (fn_arg_nodes.m_size > 0 && !fn_arg_type_infos_data)
                 return oom_error();
 
             Type_info return_type_info;
@@ -1285,7 +1287,7 @@ bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *ast_node
 
             Fn_id_info fn_id_info = {
                 .id_mangled       = id_mangled,
-                .arg_type_infos   = {.size = fn_arg_nodes.m_size, .data = fn_arg_type_infos.m_data},
+                .arg_type_infos   = {.size = fn_arg_nodes.m_size, .data = fn_arg_type_infos_data},
                 .return_type_info = return_type_info
             };
 
@@ -1336,11 +1338,8 @@ bool IR_compiler_state_compile(IR_compiler_state *self, const AST_node *ast_node
                     return false;
                 }
 
-                (void)vec_base_push_back(&fn_arg_type_infos, self->alloc, &arg_type_info);
+                fn_arg_type_infos_data[i] = arg_type_info;
             }
-
-            assert(fn_arg_type_infos.m_size == fn_id_info.arg_type_infos.size);
-            assert(fn_arg_type_infos.m_size == fn_arg_type_infos.m_capacity);
 
             const AST_node *fn_body_last_node = fn_body_node;
             if (fn_id_info.return_type_info.tag != TYPE_INFO_TAG_VOID){
